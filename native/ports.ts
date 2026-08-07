@@ -5,10 +5,143 @@
 
 import { run } from "./run"
 
+/** Registered / user ports (excludes well-known and dynamic/ephemeral). */
+export const USER_PORT_MIN = 1024
+export const USER_PORT_MAX = 49151
+
+export type ListeningProcess = {
+  port: number
+  pid: number
+  name: string
+}
+
 /** Local port from `host:port` / `[ipv6]:port` / `*:port`. */
 function parseLocalPort(address: string): number | null {
   const match = address.match(/:(\d+)$/)
   return match ? Number(match[1]) : null
+}
+
+function isUserPort(port: number): boolean {
+  return port >= USER_PORT_MIN && port <= USER_PORT_MAX
+}
+
+/** Deduplicate by port+pid; sort by port then pid. */
+function finalizeEntries(entries: ListeningProcess[]): ListeningProcess[] {
+  const seen = new Set<string>()
+  const out: ListeningProcess[] = []
+  for (const entry of entries) {
+    if (!isUserPort(entry.port) || entry.pid <= 0) continue
+    const key = `${entry.port}:${entry.pid}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(entry)
+  }
+  out.sort((a, b) => a.port - b.port || a.pid - b.pid)
+  return out
+}
+
+async function windowsProcessNames(
+  pids: Iterable<number>
+): Promise<Map<number, string>> {
+  const wanted = new Set(pids)
+  const names = new Map<number, string>()
+  if (wanted.size === 0) return names
+
+  const { stdout, code } = await run(["tasklist", "/FO", "CSV", "/NH"])
+  if (code !== 0 && !stdout.trim()) return names
+
+  for (const line of stdout.split(/\r?\n/)) {
+    // "name.exe","1234","Session","1","12,345 K"
+    const match = line.match(/^"([^"]+)","(\d+)"/)
+    if (!match) continue
+    const pid = Number(match[2])
+    if (!wanted.has(pid)) continue
+    names.set(pid, match[1] ?? "Unknown")
+  }
+  return names
+}
+
+async function listListeningProcessesWin(): Promise<ListeningProcess[]> {
+  // `netstat -ano -p TCP` — local address col 2, state col 4, PID last.
+  const { stdout } = await run(["netstat", "-ano", "-p", "TCP"])
+  const raw: Array<{ port: number; pid: number }> = []
+
+  for (const line of stdout.split(/\r?\n/)) {
+    const parts = line.trim().split(/\s+/)
+    if (parts.length < 5 || parts[0] !== "TCP") continue
+    if (parts[3] !== "LISTENING") continue
+    const port = parseLocalPort(parts[1] ?? "")
+    const pid = Number(parts[4])
+    if (port == null || !Number.isInteger(pid)) continue
+    raw.push({ port, pid })
+  }
+
+  const names = await windowsProcessNames(raw.map((r) => r.pid))
+  return finalizeEntries(
+    raw.map(({ port, pid }) => ({
+      port,
+      pid,
+      name: names.get(pid) ?? "Unknown",
+    }))
+  )
+}
+
+async function listListeningProcessesUnix(): Promise<ListeningProcess[]> {
+  // Prefer lsof — includes COMMAND and PID.
+  const lsof = await run(["lsof", "-nP", "-iTCP", "-sTCP:LISTEN"])
+  if (lsof.code === 0 || lsof.stdout.trim()) {
+    const entries: ListeningProcess[] = []
+    for (const line of lsof.stdout.split(/\r?\n/).slice(1)) {
+      const parts = line.trim().split(/\s+/)
+      if (parts.length < 9) continue
+      const name = parts[0] ?? "Unknown"
+      const pid = Number(parts[1])
+      const addr = parts.at(-1)?.replace(/\s*\(.*\)$/, "") ?? ""
+      const port = parseLocalPort(addr)
+      if (port == null || !Number.isInteger(pid)) continue
+      entries.push({ port, pid, name })
+    }
+    if (entries.length > 0 || lsof.code === 0) {
+      return finalizeEntries(entries)
+    }
+  }
+
+  // ss -lntp: users:(("node",pid=123,fd=23))
+  const ss = await run(["ss", "-lntp"])
+  if (ss.code === 0 || ss.stdout.trim()) {
+    const entries: ListeningProcess[] = []
+    for (const line of ss.stdout.split(/\r?\n/)) {
+      const parts = line.trim().split(/\s+/)
+      if (!parts[0]?.startsWith("LISTEN") && parts[0] !== "tcp") continue
+      const local =
+        parts.find((p) => /:\d+$/.test(p)) ??
+        parts[3] ??
+        parts[4]
+      const port = local ? parseLocalPort(local) : null
+      const users = line.match(/users:\(\("([^"]*)",pid=(\d+)/)
+      const pid = users ? Number(users[2]) : NaN
+      const name = users?.[1] || "Unknown"
+      if (port == null || !Number.isInteger(pid)) continue
+      entries.push({ port, pid, name })
+    }
+    if (entries.length > 0 || ss.code === 0) {
+      return finalizeEntries(entries)
+    }
+  }
+
+  throw new Error(
+    "Could not list listening processes (need netstat on Windows, or lsof/ss on Unix)"
+  )
+}
+
+/**
+ * Listening TCP sockets on user ports (1024–49151), with owning process name.
+ */
+export async function listListeningProcesses(): Promise<ListeningProcess[]> {
+  if (process.platform === "win32") {
+    return listListeningProcessesWin()
+  }
+  return listListeningProcessesUnix()
 }
 
 /** Listening TCP ports currently held on this machine. */

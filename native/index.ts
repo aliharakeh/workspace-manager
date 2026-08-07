@@ -7,8 +7,15 @@ export {
   type NativePickResult,
 } from "./dialog"
 export { isStandaloneBinary, openBrowser } from "./browser"
-export { findAvailablePort } from "./ports"
 export {
+  findAvailablePort,
+  listListeningProcesses,
+  USER_PORT_MAX,
+  USER_PORT_MIN,
+  type ListeningProcess,
+} from "./ports"
+export {
+  killPid,
   killProcess,
   mergeSpawnEnv,
   spawnShell,
