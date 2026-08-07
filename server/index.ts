@@ -1,22 +1,103 @@
+import "./db"
+import { findAvailablePort } from "../scripts/ports"
 import { health } from "./routes/health"
+import { handleWorkspaces } from "./routes/workspaces"
+import { handleApps } from "./routes/apps"
+import { handleFs } from "./routes/fs"
+import { handleEnvVars } from "./routes/env-vars"
+import { handleTemplates } from "./routes/templates"
+import { handleRunConfigs } from "./routes/run-configs"
+import { handleRunner } from "./routes/runner"
+import { hasFrontendBuild, serveStatic } from "./static"
 
-const port = Number(process.env.PORT) || 3000
+const portFromEnv = process.env.PORT || process.env.API_PORT
+const preferredPort = Number(portFromEnv) || 3000
+// When a launcher already reserved PORT, bind that exact port.
+// Otherwise (direct `bun server/index.ts`) pick the next free port.
+const port = portFromEnv
+  ? preferredPort
+  : await findAvailablePort(preferredPort)
+
+if (!portFromEnv && port !== preferredPort) {
+  console.log(`Port ${preferredPort} is in use — falling back to ${port}`)
+}
+
+const servingFrontend = hasFrontendBuild()
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Last-Event-ID",
+}
+
+function withCors(res: Response): Response {
+  const headers = new Headers(res.headers)
+  for (const [key, value] of Object.entries(corsHeaders)) {
+    if (!headers.has(key)) headers.set(key, value)
+  }
+  return new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers,
+  })
+}
 
 const server = Bun.serve({
   port,
-  fetch(req) {
+  idleTimeout: 255,
+  async fetch(req) {
     const { pathname } = new URL(req.url)
 
+    if (req.method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders })
+    }
+
     if (req.method === "GET" && pathname === "/api/health") {
-      return health()
+      return withCors(health())
+    }
+
+    const handlers = [
+      handleWorkspaces,
+      handleApps,
+      handleFs,
+      handleEnvVars,
+      handleTemplates,
+      handleRunConfigs,
+      handleRunner,
+    ]
+
+    for (const handler of handlers) {
+      const res = await handler(req, pathname)
+      if (res) return withCors(res)
     }
 
     if (pathname.startsWith("/api/")) {
-      return Response.json({ error: "Not found" }, { status: 404 })
+      return withCors(Response.json({ error: "Not found" }, { status: 404 }))
     }
 
-    return Response.json({ error: "Not found" }, { status: 404 })
+    if (req.method === "GET" || req.method === "HEAD") {
+      const staticRes = await serveStatic(pathname)
+      if (staticRes) return staticRes
+    }
+
+    return withCors(
+      Response.json(
+        {
+          error: servingFrontend
+            ? "Not found"
+            : "Frontend not built. Run `bun run build` or use `bun run start`.",
+        },
+        { status: 404 }
+      )
+    )
   },
 })
 
-console.log(`API listening on http://localhost:${server.port}`)
+if (servingFrontend) {
+  console.log(`App listening on http://localhost:${server.port}`)
+} else {
+  console.log(`API listening on http://localhost:${server.port}`)
+  console.log(
+    `(No dist/ build found — API only. Use bun run start for production.)`
+  )
+}
