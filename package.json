@@ -8,6 +8,7 @@
     "dev:web": "bun run scripts/dev-web.ts",
     "dev:server": "bun run scripts/dev-server.ts",
     "build": "tsc -b && vite build",
+    "compile": "bun run scripts/compile.ts",
     "start": "bun run scripts/start.ts",
     "start:server": "bun run server/index.ts",
     "lint": "eslint .",

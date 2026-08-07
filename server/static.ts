@@ -1,9 +1,12 @@
 import { existsSync } from "node:fs"
 import { join, normalize, sep } from "node:path"
+import { staticFiles } from "./embedded-assets"
 
 const DIST_DIR = join(process.cwd(), "dist")
+const hasEmbeds = Object.keys(staticFiles).length > 0
 
 export function hasFrontendBuild() {
+  if (hasEmbeds) return "index.html" in staticFiles
   return existsSync(join(DIST_DIR, "index.html"))
 }
 
@@ -23,9 +26,28 @@ function resolveSafe(pathname: string): string | null {
   return full
 }
 
-/** Serve Vite production assets from `dist/`, with SPA fallback to index.html. */
+function embedKey(pathname: string): string {
+  if (pathname === "/" || pathname === "") return "index.html"
+  return decodeURIComponent(pathname.replace(/^\/+/, ""))
+}
+
+/** Serve Vite production assets (embedded or from `dist/`), with SPA fallback. */
 export async function serveStatic(pathname: string): Promise<Response | null> {
   if (!hasFrontendBuild()) return null
+
+  if (hasEmbeds) {
+    const key = embedKey(pathname)
+    const embedded = staticFiles[key]
+    if (embedded) return new Response(Bun.file(embedded))
+
+    const index = staticFiles["index.html"]
+    if (index) {
+      return new Response(Bun.file(index), {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      })
+    }
+    return null
+  }
 
   const filePath = resolveSafe(pathname)
   if (!filePath) {
@@ -37,7 +59,6 @@ export async function serveStatic(pathname: string): Promise<Response | null> {
     return new Response(file)
   }
 
-  // Client-side routing fallback
   const index = Bun.file(join(DIST_DIR, "index.html"))
   if (await index.exists()) {
     return new Response(index, {
