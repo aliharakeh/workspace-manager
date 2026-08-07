@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# App Runner local data
+data/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
