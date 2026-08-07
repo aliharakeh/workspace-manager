@@ -1,6 +1,7 @@
 import { AppWindowIcon, PlusIcon } from "lucide-react"
 import type { App, StatusEvent, Workspace } from "@/lib/types"
 import { AppRunControls, AppStatusDot } from "@/components/app-run-controls"
+import { ConfigSetPicker } from "@/components/config-set-picker"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,6 +20,7 @@ type WorkspaceDetailProps = {
   onSelectApp: (appId: number) => void
   onCreateApp: () => void
   onStatus: (status: StatusEvent) => void
+  onAppChange: (app: App) => void
 }
 
 export function WorkspaceDetail({
@@ -28,6 +30,7 @@ export function WorkspaceDetail({
   onSelectApp,
   onCreateApp,
   onStatus,
+  onAppChange,
 }: WorkspaceDetailProps) {
   const runningCount = apps.filter(
     (app) => statusByAppId[app.id]?.running
@@ -115,11 +118,18 @@ export function WorkspaceDetail({
                     <p className="mt-1 text-xs text-destructive">{status.error}</p>
                   ) : null}
                 </button>
-                <AppRunControls
-                  appId={app.id}
-                  running={running}
-                  onStatus={onStatus}
-                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <ConfigSetPicker
+                    app={app}
+                    onAppChange={onAppChange}
+                    stopPropagation
+                  />
+                  <AppRunControls
+                    appId={app.id}
+                    running={running}
+                    onStatus={onStatus}
+                  />
+                </div>
               </div>
             </li>
           )

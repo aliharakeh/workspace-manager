@@ -157,8 +157,8 @@ export function DeleteAppDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete app?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete “{app?.name}” and its env vars,
-            templates, and run config.
+            This will permanently delete “{app?.name}” and all of its config
+            sets (env vars, templates, and run configs).
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

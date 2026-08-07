@@ -1,5 +1,6 @@
 import type {
   App,
+  ConfigSet,
   EnvVar,
   RunConfig,
   RunMode,
@@ -73,6 +74,45 @@ export const api = {
       }),
     delete: (id: number) =>
       request<void>(`/api/apps/${id}`, { method: "DELETE" }),
+  },
+
+  configSets: {
+    list: (appId: number) =>
+      request<ConfigSet[]>(`/api/apps/${appId}/config-sets`),
+    create: (
+      appId: number,
+      body: {
+        name: string
+        copy_from_id?: number
+        activate?: boolean
+        parts?: { env?: boolean; templates?: boolean; run?: boolean }
+      }
+    ) =>
+      request<ConfigSet>(`/api/apps/${appId}/config-sets`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    update: (id: number, body: { name: string }) =>
+      request<ConfigSet>(`/api/config-sets/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    delete: (id: number) =>
+      request<void>(`/api/config-sets/${id}`, { method: "DELETE" }),
+    activate: (id: number) =>
+      request<{ id: number; app_id: number; name: string; app: App }>(
+        `/api/config-sets/${id}/activate`,
+        { method: "POST" }
+      ),
+    copyFrom: (
+      id: number,
+      sourceId: number,
+      parts?: { env?: boolean; templates?: boolean; run?: boolean }
+    ) =>
+      request<ConfigSet>(`/api/config-sets/${id}/copy-from`, {
+        method: "POST",
+        body: JSON.stringify({ source_id: sourceId, parts }),
+      }),
   },
 
   envVars: {

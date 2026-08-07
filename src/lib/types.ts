@@ -11,13 +11,23 @@ export type App = {
   workspace_id: number
   name: string
   project_path: string
+  active_config_set_id: number | null
+  active_config_set_name: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ConfigSet = {
+  id: number
+  app_id: number
+  name: string
   created_at: string
   updated_at: string
 }
 
 export type EnvVar = {
   id: number
-  app_id: number
+  config_set_id: number
   key: string
   value: string
   created_at: string
@@ -26,7 +36,7 @@ export type EnvVar = {
 
 export type Template = {
   id: number
-  app_id: number
+  config_set_id: number
   file_path: string
   content: string
   created_at: string
@@ -47,7 +57,7 @@ export type RunCommand = {
 
 export type RunConfig = {
   id: number
-  app_id: number
+  config_set_id: number
   mode: RunMode
   created_at: string
   updated_at: string

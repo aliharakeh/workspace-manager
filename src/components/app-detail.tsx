@@ -3,6 +3,7 @@ import { PencilIcon, Trash2Icon } from "lucide-react"
 import type { App, StatusEvent } from "@/lib/types"
 import type { LogLine } from "@/hooks/use-runner-logs"
 import { AppRunControls } from "@/components/app-run-controls"
+import { ConfigSetSwitcher } from "@/components/config-set-switcher"
 import { EnvVarsPanel } from "@/components/env-vars-panel"
 import { TemplatesPanel } from "@/components/templates-panel"
 import { RunConfigPanel } from "@/components/run-config-panel"
@@ -20,6 +21,7 @@ type AppDetailProps = {
   onEdit: () => void
   onDelete: () => void
   onStatus: (status: StatusEvent) => void
+  onAppChange: (app: App) => void
 }
 
 export function AppDetail({
@@ -30,14 +32,23 @@ export function AppDetail({
   onEdit,
   onDelete,
   onStatus,
+  onAppChange,
 }: AppDetailProps) {
   const running = !!status?.running
   const [tab, setTab] = useState("env")
+  const [panelEpoch, setPanelEpoch] = useState(0)
 
   function handleStatus(next: StatusEvent) {
     onStatus(next)
     if (next.running) setTab("logs")
   }
+
+  function handleAppChange(next: App) {
+    onAppChange(next)
+    setPanelEpoch((n) => n + 1)
+  }
+
+  const panelKey = `${app.active_config_set_id ?? "none"}-${panelEpoch}`
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 md:p-6">
@@ -54,6 +65,9 @@ export function AppDetail({
           <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
             {app.project_path}
           </p>
+          <div className="mt-3">
+            <ConfigSetSwitcher app={app} onAppChange={handleAppChange} />
+          </div>
           {status?.error ? (
             <p className="mt-2 text-sm text-destructive">{status.error}</p>
           ) : null}
@@ -90,13 +104,13 @@ export function AppDetail({
           <TabsTrigger value="logs">Logs</TabsTrigger>
         </TabsList>
         <TabsContent value="env" className="mt-4">
-          <EnvVarsPanel appId={app.id} />
+          <EnvVarsPanel key={panelKey} appId={app.id} />
         </TabsContent>
         <TabsContent value="templates" className="mt-4 min-h-0">
-          <TemplatesPanel appId={app.id} />
+          <TemplatesPanel key={panelKey} appId={app.id} />
         </TabsContent>
         <TabsContent value="run" className="mt-4">
-          <RunConfigPanel appId={app.id} />
+          <RunConfigPanel key={panelKey} appId={app.id} />
         </TabsContent>
         <TabsContent value="logs" className="mt-4">
           <LogsPanel status={status} logs={logs} connected={connected} />

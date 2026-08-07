@@ -206,6 +206,17 @@ export function App() {
               }}
               onDelete={() => setDeletingApp(selectedApp)}
               onStatus={handleStatus}
+              onAppChange={(app) => {
+                setAppsByWorkspace((prev) => {
+                  const list = prev[app.workspace_id] ?? []
+                  return {
+                    ...prev,
+                    [app.workspace_id]: list.map((a) =>
+                      a.id === app.id ? app : a
+                    ),
+                  }
+                })
+              }}
             />
           ) : selectedWorkspace ? (
             <WorkspaceDetail
@@ -221,6 +232,17 @@ export function App() {
                 setAppDialogOpen(true)
               }}
               onStatus={handleStatus}
+              onAppChange={(app) => {
+                setAppsByWorkspace((prev) => {
+                  const list = prev[app.workspace_id] ?? []
+                  return {
+                    ...prev,
+                    [app.workspace_id]: list.map((a) =>
+                      a.id === app.id ? app : a
+                    ),
+                  }
+                })
+              }}
             />
           ) : (
             <div className="flex flex-1 items-center justify-center p-6">
