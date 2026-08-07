@@ -4,7 +4,9 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "bun run scripts/dev.ts",
+    "dev:web": "vite",
+    "dev:server": "bun run --hot server/index.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
