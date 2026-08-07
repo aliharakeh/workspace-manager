@@ -9,6 +9,7 @@ import { configSetsRepo } from "../db/config-sets"
 import { envVarsRepo } from "../db/env-vars"
 import { runConfigsRepo } from "../db/run-configs"
 import type { RunCommand, RunMode } from "../db/types"
+import { stripAnsi } from "../lib/ansi"
 import { applyTemplates, restoreTemplates } from "./templates"
 
 export type ProcessStatus = "pending" | "running" | "exited" | "killed" | "error"
@@ -130,27 +131,36 @@ async function pipeStream(
   if (!stream) return
   const reader = stream.getReader()
   const decoder = new TextDecoder()
+  // Keep the raw buffer so partial ESC sequences are never stripped mid-chunk.
+  let pending = ""
   try {
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
-      const text = decoder.decode(value, { stream: true })
-      if (!text) continue
-      emit(session, {
-        type: "log",
-        commandId,
-        stream: kind,
-        text,
-        ts: Date.now(),
-      })
+      const chunk = decoder.decode(value, { stream: true })
+      if (!chunk) continue
+      pending += chunk
+      const parts = pending.split(/\r?\n/)
+      pending = parts.pop() ?? ""
+      for (const line of parts) {
+        const text = stripAnsi(line)
+        emit(session, {
+          type: "log",
+          commandId,
+          stream: kind,
+          text: `${text}\n`,
+          ts: Date.now(),
+        })
+      }
     }
-    const rest = decoder.decode()
+    pending += decoder.decode()
+    const rest = stripAnsi(pending)
     if (rest) {
       emit(session, {
         type: "log",
         commandId,
         stream: kind,
-        text: rest,
+        text: rest.endsWith("\n") ? rest : `${rest}\n`,
         ts: Date.now(),
       })
     }
@@ -372,10 +382,9 @@ export const runner = {
         processState.status = "killed"
       }
     }
-    for (const child of session.children.values()) {
-      killProcess(child)
-    }
+    const children = [...session.children.values()]
     session.children.clear()
+    await Promise.all(children.map((child) => killProcess(child)))
     session.running = false
 
     if (!session.restored) {
