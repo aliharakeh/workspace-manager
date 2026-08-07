@@ -1,11 +1,15 @@
+import { useState } from "react"
 import {
   AppWindowIcon,
   FolderIcon,
   MoreHorizontalIcon,
+  NetworkIcon,
   PlusIcon,
 } from "lucide-react"
 import type { App, StatusEvent, Workspace } from "@/lib/types"
 import { AppRunControls, AppStatusDot } from "@/components/app-run-controls"
+import { PortsDialog } from "@/components/ports-dialog"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
   Sidebar,
@@ -60,21 +64,34 @@ export function AppSidebar({
   onCreateApp,
   onStatus,
 }: AppSidebarProps) {
+  const [portsOpen, setPortsOpen] = useState(false)
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b">
         <div className="flex items-center gap-2 px-2 py-1.5">
-          <div className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <AppWindowIcon className="size-4" />
           </div>
-          <div className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">
+          <div className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
             <span className="truncate text-sm font-medium">App Runner</span>
             <span className="truncate text-xs text-muted-foreground">
               Local workspaces
             </span>
           </div>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="shrink-0"
+            title="Listening ports"
+            onClick={() => setPortsOpen(true)}
+          >
+            <NetworkIcon />
+            <span className="sr-only">Listening ports</span>
+          </Button>
         </div>
       </SidebarHeader>
+      <PortsDialog open={portsOpen} onOpenChange={setPortsOpen} />
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Workspaces</SidebarGroupLabel>

@@ -2,6 +2,7 @@ import type {
   App,
   ConfigSet,
   EnvVar,
+  ListeningProcess,
   RunConfig,
   RunMode,
   StatusEvent,
@@ -174,6 +175,19 @@ export const api = {
       request<StatusEvent>(`/api/apps/${appId}/stop`, { method: "POST" }),
     reload: (appId: number) =>
       request<StatusEvent>(`/api/apps/${appId}/reload`, { method: "POST" }),
+  },
+
+  ports: {
+    list: () =>
+      request<{
+        min: number
+        max: number
+        processes: ListeningProcess[]
+      }>("/api/ports"),
+    kill: (pid: number) =>
+      request<{ ok: true; pid: number }>(`/api/ports/${pid}/kill`, {
+        method: "POST",
+      }),
   },
 
   fs: {

@@ -98,4 +98,11 @@ export type LogEvent = {
   ts: number
 }
 
+/** OS process holding a listening TCP user port (1024–49151). */
+export type ListeningProcess = {
+  port: number
+  pid: number
+  name: string
+}
+
 export type RunnerEvent = LogEvent | (StatusEvent & { type: "status" })
