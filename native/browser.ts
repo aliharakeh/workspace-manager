@@ -1,3 +1,7 @@
+/**
+ * Open the OS default browser and detect Bun standalone binaries.
+ */
+
 import { basename } from "node:path"
 
 /** True when running the Bun `--compile` binary (not `bun run …`). */

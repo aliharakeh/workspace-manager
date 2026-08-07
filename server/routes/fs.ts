@@ -1,12 +1,15 @@
 import { readFileSync } from "node:fs"
 import { appsRepo } from "../db/apps"
-import { readProjectFile, validateProjectPath } from "../lib/fs"
-import { error, json, notFound, parseId, readJson } from "../lib/http"
 import {
   pickNativeFile,
   pickNativeFolder,
+} from "../../native/dialog"
+import {
+  readProjectFile,
   toProjectRelative,
-} from "../lib/native-dialog"
+  validateProjectPath,
+} from "../lib/fs"
+import { error, json, notFound, parseId, readJson } from "../lib/http"
 
 function readPickedFileContent(absolutePath: string): string {
   try {

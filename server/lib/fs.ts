@@ -78,3 +78,17 @@ export function readProjectFile(
     }
   }
 }
+
+/** Make `absolutePath` relative to `rootDir`, or null if outside root. */
+export function toProjectRelative(
+  rootDir: string,
+  absolutePath: string
+): string | null {
+  const root = normalize(resolve(rootDir))
+  const full = normalize(resolve(absolutePath))
+  const rel = relative(root, full)
+  if (!rel || isAbsolute(rel) || rel === ".." || rel.startsWith(`..${sep}`)) {
+    return null
+  }
+  return rel.replace(/\\/g, "/")
+}

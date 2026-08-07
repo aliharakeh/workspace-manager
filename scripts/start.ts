@@ -17,7 +17,7 @@
  * If you already built (`bun run build`), use `bun run start:server` to skip
  * the rebuild and only run the server.
  */
-import { findAvailablePort } from "./ports"
+import { findAvailablePort } from "../native/ports"
 
 console.log("Building frontend…")
 const build = Bun.spawn(["bun", "run", "build"], {

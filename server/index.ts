@@ -1,5 +1,5 @@
 import "./db"
-import { findAvailablePort } from "../scripts/ports"
+import { findAvailablePort } from "../native/ports"
 import { health } from "./routes/health"
 import { handleWorkspaces } from "./routes/workspaces"
 import { handleApps } from "./routes/apps"
@@ -9,7 +9,7 @@ import { handleEnvVars } from "./routes/env-vars"
 import { handleTemplates } from "./routes/templates"
 import { handleRunConfigs } from "./routes/run-configs"
 import { handleRunner } from "./routes/runner"
-import { isStandaloneBinary, openBrowser } from "./lib/open-browser"
+import { isStandaloneBinary, openBrowser } from "../native/browser"
 import { hasFrontendBuild, serveStatic } from "./static"
 
 const preferredPort = Number(process.env.PORT || process.env.API_PORT) || 3000

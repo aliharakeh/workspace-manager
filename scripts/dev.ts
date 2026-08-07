@@ -15,7 +15,7 @@
  *
  * Use this for day-to-day UI work with HMR. For production, use `start.ts`.
  */
-import { findAvailablePort } from "./ports"
+import { findAvailablePort } from "../native/ports"
 
 const preferredApi = Number(process.env.API_PORT || process.env.PORT) || 3000
 const preferredWeb = Number(process.env.WEB_PORT) || 5173

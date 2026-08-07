@@ -14,7 +14,7 @@
  * Without a `dist/` build this is API-only. With `dist/` present the server
  * can also serve the production frontend from the same origin.
  */
-import { findAvailablePort } from "./ports"
+import { findAvailablePort } from "../native/ports"
 
 const preferred = Number(process.env.API_PORT || process.env.PORT) || 3000
 const port = await findAvailablePort(preferred)

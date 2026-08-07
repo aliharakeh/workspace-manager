@@ -1,4 +1,13 @@
-import { isAbsolute, normalize, relative, resolve, sep } from "node:path"
+/**
+ * Cross-platform native file/folder picker dialogs.
+ *
+ * Windows: PowerShell + WinForms
+ * macOS: osascript
+ * Linux: zenity, then kdialog
+ */
+
+import { resolve, sep } from "node:path"
+import { run } from "./run"
 
 export type NativePickResult =
   | { ok: true; path: string }
@@ -30,22 +39,14 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
 }
 `.trim()
 
-  const proc = Bun.spawn(
-    [
-      "powershell",
-      "-NoProfile",
-      "-STA",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-Command",
-      script,
-    ],
-    { stdout: "pipe", stderr: "pipe" }
-  )
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
+  const { stdout, stderr, code } = await run([
+    "powershell",
+    "-NoProfile",
+    "-STA",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    script,
   ])
   if (code !== 0) {
     return {
@@ -68,15 +69,7 @@ async function pickFileMac(startDir?: string): Promise<NativePickResult> {
 on error number -128
   return ""
 end try`
-  const proc = Bun.spawn(["osascript", "-e", script], {
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ])
+  const { stdout, stderr, code } = await run(["osascript", "-e", script])
   const selected = stdout.trim()
   if (!selected) {
     if (code !== 0 && stderr.trim()) {
@@ -91,20 +84,12 @@ async function pickFileLinux(startDir?: string): Promise<NativePickResult> {
   const args = ["--file-selection", "--title=Select template file"]
   if (startDir) args.push(`--filename=${startDir}${sep}`)
 
-  const zenity = Bun.spawn(["zenity", ...args], {
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(zenity.stdout).text(),
-    new Response(zenity.stderr).text(),
-    zenity.exited,
-  ])
+  const zenity = await run(["zenity", ...args])
 
   // zenity: 0 = ok, 1 = cancel
-  if (code === 1) return { ok: false, cancelled: true }
-  if (code === 0) {
-    const selected = stdout.trim()
+  if (zenity.code === 1) return { ok: false, cancelled: true }
+  if (zenity.code === 0) {
+    const selected = zenity.stdout.trim()
     if (!selected) return { ok: false, cancelled: true }
     return { ok: true, path: selected }
   }
@@ -112,27 +97,19 @@ async function pickFileLinux(startDir?: string): Promise<NativePickResult> {
   const kArgs = ["--getopenfilename"]
   if (startDir) kArgs.push(startDir)
   else kArgs.push(".")
-  const kdialog = Bun.spawn(["kdialog", ...kArgs], {
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  const [kOut, kErr, kCode] = await Promise.all([
-    new Response(kdialog.stdout).text(),
-    new Response(kdialog.stderr).text(),
-    kdialog.exited,
-  ])
-  if (kCode === 0) {
-    const selected = kOut.trim()
+  const kdialog = await run(["kdialog", ...kArgs])
+  if (kdialog.code === 0) {
+    const selected = kdialog.stdout.trim()
     if (!selected) return { ok: false, cancelled: true }
     return { ok: true, path: selected }
   }
-  if (kCode === 1) return { ok: false, cancelled: true }
+  if (kdialog.code === 1) return { ok: false, cancelled: true }
 
   return {
     ok: false,
     error:
-      stderr.trim() ||
-      kErr.trim() ||
+      zenity.stderr.trim() ||
+      kdialog.stderr.trim() ||
       "No native file dialog available (install zenity or kdialog)",
   }
 }
@@ -167,22 +144,14 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
 }
 `.trim()
 
-  const proc = Bun.spawn(
-    [
-      "powershell",
-      "-NoProfile",
-      "-STA",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-Command",
-      script,
-    ],
-    { stdout: "pipe", stderr: "pipe" }
-  )
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
+  const { stdout, stderr, code } = await run([
+    "powershell",
+    "-NoProfile",
+    "-STA",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    script,
   ])
   if (code !== 0) {
     return {
@@ -205,15 +174,7 @@ async function pickFolderMac(startDir?: string): Promise<NativePickResult> {
 on error number -128
   return ""
 end try`
-  const proc = Bun.spawn(["osascript", "-e", script], {
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ])
+  const { stdout, stderr, code } = await run(["osascript", "-e", script])
   const selected = stdout.trim()
   if (!selected) {
     if (code !== 0 && stderr.trim()) {
@@ -232,19 +193,11 @@ async function pickFolderLinux(startDir?: string): Promise<NativePickResult> {
   ]
   if (startDir) args.push(`--filename=${startDir}${sep}`)
 
-  const zenity = Bun.spawn(["zenity", ...args], {
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(zenity.stdout).text(),
-    new Response(zenity.stderr).text(),
-    zenity.exited,
-  ])
+  const zenity = await run(["zenity", ...args])
 
-  if (code === 1) return { ok: false, cancelled: true }
-  if (code === 0) {
-    const selected = stdout.trim()
+  if (zenity.code === 1) return { ok: false, cancelled: true }
+  if (zenity.code === 0) {
+    const selected = zenity.stdout.trim()
     if (!selected) return { ok: false, cancelled: true }
     return { ok: true, path: selected }
   }
@@ -252,27 +205,19 @@ async function pickFolderLinux(startDir?: string): Promise<NativePickResult> {
   const kArgs = ["--getexistingdirectory"]
   if (startDir) kArgs.push(startDir)
   else kArgs.push(".")
-  const kdialog = Bun.spawn(["kdialog", ...kArgs], {
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  const [kOut, kErr, kCode] = await Promise.all([
-    new Response(kdialog.stdout).text(),
-    new Response(kdialog.stderr).text(),
-    kdialog.exited,
-  ])
-  if (kCode === 0) {
-    const selected = kOut.trim()
+  const kdialog = await run(["kdialog", ...kArgs])
+  if (kdialog.code === 0) {
+    const selected = kdialog.stdout.trim()
     if (!selected) return { ok: false, cancelled: true }
     return { ok: true, path: selected }
   }
-  if (kCode === 1) return { ok: false, cancelled: true }
+  if (kdialog.code === 1) return { ok: false, cancelled: true }
 
   return {
     ok: false,
     error:
-      stderr.trim() ||
-      kErr.trim() ||
+      zenity.stderr.trim() ||
+      kdialog.stderr.trim() ||
       "No native folder dialog available (install zenity or kdialog)",
   }
 }
@@ -287,18 +232,4 @@ export async function pickNativeFolder(
   if (process.platform === "win32") return pickFolderWindows(dir)
   if (process.platform === "darwin") return pickFolderMac(dir)
   return pickFolderLinux(dir)
-}
-
-/** Make `absolutePath` relative to `rootDir`, or null if outside root. */
-export function toProjectRelative(
-  rootDir: string,
-  absolutePath: string
-): string | null {
-  const root = normalize(resolve(rootDir))
-  const full = normalize(resolve(absolutePath))
-  const rel = relative(root, full)
-  if (!rel || isAbsolute(rel) || rel === ".." || rel.startsWith(`..${sep}`)) {
-    return null
-  }
-  return rel.replace(/\\/g, "/")
 }

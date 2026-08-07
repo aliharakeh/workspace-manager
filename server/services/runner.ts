@@ -1,3 +1,9 @@
+import {
+  killProcess,
+  mergeSpawnEnv,
+  spawnShell,
+  type SpawnedProcess,
+} from "../../native/process"
 import { appsRepo } from "../db/apps"
 import { configSetsRepo } from "../db/config-sets"
 import { envVarsRepo } from "../db/env-vars"
@@ -41,7 +47,7 @@ type Session = {
   appId: number
   mode: RunMode
   processes: ProcessState[]
-  children: Map<number, ReturnType<typeof Bun.spawn>>
+  children: Map<number, SpawnedProcess>
   running: boolean
   abortSequential: boolean
   restored: boolean
@@ -153,26 +159,6 @@ async function pipeStream(
   }
 }
 
-function killChild(child: ReturnType<typeof Bun.spawn>) {
-  try {
-    child.kill()
-  } catch {
-    // already dead
-  }
-}
-
-function spawnEnv(appEnv: Record<string, string>): Record<string, string> {
-  const env: Record<string, string> = {}
-  for (const [key, value] of Object.entries(process.env)) {
-    if (typeof value === "string") env[key] = value
-  }
-  Object.assign(env, appEnv)
-  // Reduce stdout buffering for many CLIs
-  env.PYTHONUNBUFFERED = "1"
-  env.FORCE_COLOR = env.FORCE_COLOR ?? "0"
-  return env
-}
-
 async function spawnCommand(
   session: Session,
   cmd: RunCommand,
@@ -184,17 +170,9 @@ async function spawnCommand(
   emit(session, statusEvent(session))
   systemLog(session, cmd.id, `$ ${cmd.command}`)
 
-  const isWin = process.platform === "win32"
-  let child: ReturnType<typeof Bun.spawn>
+  let child: SpawnedProcess
   try {
-    child = Bun.spawn({
-      cmd: isWin ? ["cmd", "/c", cmd.command] : ["sh", "-c", cmd.command],
-      cwd,
-      env,
-      stdout: "pipe",
-      stderr: "pipe",
-      stdin: "ignore",
-    })
+    child = spawnShell({ command: cmd.command, cwd, env })
   } catch (err) {
     processState.status = "error"
     processState.exitCode = 1
@@ -266,7 +244,7 @@ async function runSession(session: Session) {
   }
 
   const set = configSetsRepo.resolveActive(session.appId)
-  const env = spawnEnv(envVarsRepo.toRecord(set.id))
+  const env = mergeSpawnEnv(envVarsRepo.toRecord(set.id))
   const config = runConfigsRepo.getByConfigSet(set.id)
   const commands = config?.commands ?? []
 
@@ -395,7 +373,7 @@ export const runner = {
       }
     }
     for (const child of session.children.values()) {
-      killChild(child)
+      killProcess(child)
     }
     session.children.clear()
     session.running = false

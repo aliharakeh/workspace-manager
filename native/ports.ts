@@ -1,33 +1,14 @@
 /**
- * ports.ts — shared port helper for the other launch scripts.
- *
- * Finds the first free TCP port starting at a preferred value (e.g. 3000),
- * then walking upward if that port is already in use. Uses OS tools to list
- * listening ports (no temporary socket servers).
- *
- * Not run directly; imported by `dev.ts`, `dev-server.ts`, `dev-web.ts`,
- * `start.ts`, and `server/index.ts`.
+ * Find free TCP ports by querying OS listening-port tools
+ * (netstat / lsof / ss) — no temporary socket servers.
  */
+
+import { run } from "./run"
 
 /** Local port from `host:port` / `[ipv6]:port` / `*:port`. */
 function parseLocalPort(address: string): number | null {
   const match = address.match(/:(\d+)$/)
   return match ? Number(match[1]) : null
-}
-
-async function run(cmd: string[], opts?: { rejectOnError?: boolean }) {
-  const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" })
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ])
-  if (opts?.rejectOnError && code !== 0) {
-    throw new Error(
-      `${cmd.join(" ")} exited ${code}${stderr.trim() ? `: ${stderr.trim()}` : ""}`
-    )
-  }
-  return { stdout, stderr, code }
 }
 
 /** Listening TCP ports currently held on this machine. */
