@@ -1,18 +1,20 @@
 # React + TypeScript + Vite + shadcn/ui + Bun API
 
-Frontend is the Vite + React + shadcn app at the repo root. Backend is a zero-dependency Bun server in `server/`.
+Frontend is the Vite + React + shadcn app at the repo root. Backend is a Bun server in `server/` with SQLite persistence.
 
 ## Structure
 
 ```text
 src/          React frontend (shadcn)
-server/       Bun.serve API
-scripts/dev.ts  runs web + API together
+server/       Bun.serve API + SQLite + process runner + static files
+dist/         Production frontend build (served by Bun)
+data/         Local SQLite DB and template backups (gitignored)
+scripts/      Dev / production launchers
 ```
 
 ## Development
 
-Run both (Vite on `:5173`, API on `:3000`, `/api` proxied):
+API + Vite HMR. Preferred ports `3000` / `5173`; if busy, the next free ports are chosen automatically:
 
 ```bash
 bun run dev
@@ -21,35 +23,32 @@ bun run dev
 Or separately:
 
 ```bash
-bun run dev:web
 bun run dev:server
+bun run dev:web
 ```
 
-Smoke-check the API (via the Vite proxy while `dev` is running, or hit Bun directly):
+## Production
+
+Build the frontend and serve it from the Bun server (single process, no Vite):
 
 ```bash
-curl http://localhost:3000/api/health
-# → {"ok":true}
-
-# through Vite proxy:
-curl http://localhost:5173/api/health
+bun run start
 ```
 
-From the frontend:
-
-```ts
-const res = await fetch("/api/health")
-const data = await res.json() // { ok: true }
-```
-
-## Adding components
+Or build once, then run the server again:
 
 ```bash
-npx shadcn@latest add button
+bun run build
+bun run start:server
 ```
 
-Components land in `src/components`. Import with:
+Open the printed URL (API and UI share the same origin; `/api` is handled by Bun, everything else from `dist/`).
 
-```tsx
-import { Button } from "@/components/ui/button"
-```
+## Features
+
+- **Workspaces** — named groups of apps
+- **Apps** — name + local `project_path`
+- **Env vars** — per-app key/value pairs
+- **Templates** — Handlebars templates applied to project files on Run (with backup/restore on Stop)
+- **Run config** — one config per app, multiple commands, sequential or parallel
+- **Logs** — SSE-streamed stdout/stderr per process tab
