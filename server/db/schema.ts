@@ -32,25 +32,43 @@ export const apps = sqliteTable(
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     project_path: text("project_path").notNull(),
+    // ponytail: no FK — avoids circular reference with config_sets.app_id
+    active_config_set_id: integer("active_config_set_id"),
     ...timestamps,
   },
   (t) => [index("idx_apps_workspace_id").on(t.workspace_id)]
+)
+
+export const configSets = sqliteTable(
+  "config_sets",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    app_id: integer("app_id")
+      .notNull()
+      .references(() => apps.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    unique().on(t.app_id, t.name),
+    index("idx_config_sets_app_id").on(t.app_id),
+  ]
 )
 
 export const envVars = sqliteTable(
   "env_vars",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    app_id: integer("app_id")
+    config_set_id: integer("config_set_id")
       .notNull()
-      .references(() => apps.id, { onDelete: "cascade" }),
+      .references(() => configSets.id, { onDelete: "cascade" }),
     key: text("key").notNull(),
     value: text("value").notNull().default(""),
     ...timestamps,
   },
   (t) => [
-    unique().on(t.app_id, t.key),
-    index("idx_env_vars_app_id").on(t.app_id),
+    unique().on(t.config_set_id, t.key),
+    index("idx_env_vars_config_set_id").on(t.config_set_id),
   ]
 )
 
@@ -58,25 +76,25 @@ export const templates = sqliteTable(
   "templates",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    app_id: integer("app_id")
+    config_set_id: integer("config_set_id")
       .notNull()
-      .references(() => apps.id, { onDelete: "cascade" }),
+      .references(() => configSets.id, { onDelete: "cascade" }),
     file_path: text("file_path").notNull(),
     content: text("content").notNull().default(""),
     ...timestamps,
   },
   (t) => [
-    unique().on(t.app_id, t.file_path),
-    index("idx_templates_app_id").on(t.app_id),
+    unique().on(t.config_set_id, t.file_path),
+    index("idx_templates_config_set_id").on(t.config_set_id),
   ]
 )
 
 export const runConfigs = sqliteTable("run_configs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  app_id: integer("app_id")
+  config_set_id: integer("config_set_id")
     .notNull()
     .unique()
-    .references(() => apps.id, { onDelete: "cascade" }),
+    .references(() => configSets.id, { onDelete: "cascade" }),
   mode: text("mode", { enum: ["sequential", "parallel"] })
     .notNull()
     .default("parallel"),

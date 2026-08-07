@@ -4,11 +4,11 @@ import { templates } from "./schema"
 import type { Template } from "./types"
 
 export const templatesRepo = {
-  listByApp(appId: number): Template[] {
+  listByConfigSet(configSetId: number): Template[] {
     return db
       .select()
       .from(templates)
-      .where(eq(templates.app_id, appId))
+      .where(eq(templates.config_set_id, configSetId))
       .orderBy(sql`${templates.file_path} COLLATE NOCASE ASC`)
       .all()
   },
@@ -20,14 +20,14 @@ export const templatesRepo = {
   },
 
   create(input: {
-    app_id: number
+    config_set_id: number
     file_path: string
     content?: string
   }): Template {
     return db
       .insert(templates)
       .values({
-        app_id: input.app_id,
+        config_set_id: input.config_set_id,
         file_path: input.file_path,
         content: input.content ?? "",
       })

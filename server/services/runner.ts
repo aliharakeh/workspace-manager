@@ -1,4 +1,5 @@
 import { appsRepo } from "../db/apps"
+import { configSetsRepo } from "../db/config-sets"
 import { envVarsRepo } from "../db/env-vars"
 import { runConfigsRepo } from "../db/run-configs"
 import type { RunCommand, RunMode } from "../db/types"
@@ -264,8 +265,9 @@ async function runSession(session: Session) {
     return
   }
 
-  const env = spawnEnv(envVarsRepo.toRecord(session.appId))
-  const config = runConfigsRepo.getByApp(session.appId)
+  const set = configSetsRepo.resolveActive(session.appId)
+  const env = spawnEnv(envVarsRepo.toRecord(set.id))
+  const config = runConfigsRepo.getByConfigSet(set.id)
   const commands = config?.commands ?? []
 
   try {
@@ -303,7 +305,8 @@ async function runSession(session: Session) {
 }
 
 function createSession(appId: number): Session {
-  const config = runConfigsRepo.getOrCreate(appId)
+  const set = configSetsRepo.resolveActive(appId)
+  const config = runConfigsRepo.getOrCreate(set.id)
   if (config.commands.length === 0) {
     throw new Error("No run commands configured")
   }

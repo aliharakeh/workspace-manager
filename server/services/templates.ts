@@ -2,6 +2,7 @@ import Handlebars from "handlebars"
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, join, normalize, resolve, sep } from "node:path"
 import { appsRepo } from "../db/apps"
+import { configSetsRepo } from "../db/config-sets"
 import { envVarsRepo } from "../db/env-vars"
 import { templatesRepo } from "../db/templates"
 
@@ -36,8 +37,9 @@ export function applyTemplates(
   const app = appsRepo.get(appId)
   if (!app) throw new Error("App not found")
 
-  const templates = templatesRepo.listByApp(appId)
-  const env = envVarsRepo.toRecord(appId)
+  const set = configSetsRepo.resolveActive(appId)
+  const templates = templatesRepo.listByConfigSet(set.id)
+  const env = envVarsRepo.toRecord(set.id)
   const backupDir = backupRoot(appId, sessionId)
   const applied: string[] = []
 
@@ -75,7 +77,8 @@ export function restoreTemplates(appId: number, sessionId: string): string[] {
   if (!existsSync(backupDir)) return []
 
   const restored: string[] = []
-  const templates = templatesRepo.listByApp(appId)
+  const set = configSetsRepo.resolveActive(appId)
+  const templates = templatesRepo.listByConfigSet(set.id)
 
   for (const template of templates) {
     const backupPath = join(backupDir, template.file_path.replace(/\\/g, "/"))

@@ -1,5 +1,6 @@
 import {
   apps,
+  configSets,
   envVars,
   runCommands,
   runConfigs,
@@ -9,6 +10,7 @@ import {
 
 export type Workspace = typeof workspaces.$inferSelect
 export type App = typeof apps.$inferSelect
+export type ConfigSet = typeof configSets.$inferSelect
 export type EnvVar = typeof envVars.$inferSelect
 export type Template = typeof templates.$inferSelect
 export type RunConfig = typeof runConfigs.$inferSelect

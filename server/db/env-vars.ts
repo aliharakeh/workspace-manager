@@ -4,11 +4,11 @@ import { envVars } from "./schema"
 import type { EnvVar } from "./types"
 
 export const envVarsRepo = {
-  listByApp(appId: number): EnvVar[] {
+  listByConfigSet(configSetId: number): EnvVar[] {
     return db
       .select()
       .from(envVars)
-      .where(eq(envVars.app_id, appId))
+      .where(eq(envVars.config_set_id, configSetId))
       .orderBy(sql`${envVars.key} COLLATE NOCASE ASC`)
       .all()
   },
@@ -17,11 +17,15 @@ export const envVarsRepo = {
     return db.select().from(envVars).where(eq(envVars.id, id)).get() ?? null
   },
 
-  create(input: { app_id: number; key: string; value?: string }): EnvVar {
+  create(input: {
+    config_set_id: number
+    key: string
+    value?: string
+  }): EnvVar {
     return db
       .insert(envVars)
       .values({
-        app_id: input.app_id,
+        config_set_id: input.config_set_id,
         key: input.key,
         value: input.value ?? "",
       })
@@ -50,9 +54,9 @@ export const envVarsRepo = {
     return db.delete(envVars).where(eq(envVars.id, id)).run().changes > 0
   },
 
-  toRecord(appId: number): Record<string, string> {
+  toRecord(configSetId: number): Record<string, string> {
     return Object.fromEntries(
-      this.listByApp(appId).map((v) => [v.key, v.value])
+      this.listByConfigSet(configSetId).map((v) => [v.key, v.value])
     )
   },
 }

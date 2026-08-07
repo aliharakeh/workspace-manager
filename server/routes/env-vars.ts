@@ -1,4 +1,5 @@
 import { appsRepo } from "../db/apps"
+import { configSetsRepo } from "../db/config-sets"
 import { envVarsRepo } from "../db/env-vars"
 import { error, json, notFound, parseId, readJson } from "../lib/http"
 
@@ -12,8 +13,10 @@ export async function handleEnvVars(
     if (!appId) return error("Invalid app id")
     if (!appsRepo.get(appId)) return notFound("App not found")
 
+    const set = configSetsRepo.resolveActive(appId)
+
     if (req.method === "GET") {
-      return json(envVarsRepo.listByApp(appId))
+      return json(envVarsRepo.listByConfigSet(set.id))
     }
 
     if (req.method === "POST") {
@@ -21,13 +24,13 @@ export async function handleEnvVars(
       if (!body?.key?.trim()) return error("key is required")
       try {
         const envVar = envVarsRepo.create({
-          app_id: appId,
+          config_set_id: set.id,
           key: body.key.trim(),
           value: body.value ?? "",
         })
         return json(envVar, { status: 201 })
       } catch {
-        return error("Env var key already exists for this app", 409)
+        return error("Env var key already exists for this config set", 409)
       }
     }
 
@@ -54,7 +57,7 @@ export async function handleEnvVars(
       if (!envVar) return notFound("Env var not found")
       return json(envVar)
     } catch {
-      return error("Env var key already exists for this app", 409)
+      return error("Env var key already exists for this config set", 409)
     }
   }
 

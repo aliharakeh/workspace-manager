@@ -1,4 +1,5 @@
 import { appsRepo } from "../db/apps"
+import { configSetsRepo } from "../db/config-sets"
 import { runConfigsRepo } from "../db/run-configs"
 import type { RunMode } from "../db/types"
 import { error, json, notFound, parseId, readJson } from "../lib/http"
@@ -14,8 +15,10 @@ export async function handleRunConfigs(
   if (!appId) return error("Invalid app id")
   if (!appsRepo.get(appId)) return notFound("App not found")
 
+  const set = configSetsRepo.resolveActive(appId)
+
   if (req.method === "GET") {
-    return json(runConfigsRepo.getOrCreate(appId))
+    return json(runConfigsRepo.getOrCreate(set.id))
   }
 
   if (req.method === "PUT") {
@@ -35,7 +38,7 @@ export async function handleRunConfigs(
       }
     }
 
-    const config = runConfigsRepo.upsert(appId, {
+    const config = runConfigsRepo.upsert(set.id, {
       mode: body.mode,
       commands: body.commands?.map((c) => ({
         label: c.label ?? null,

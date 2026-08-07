@@ -1,4 +1,5 @@
 import { appsRepo } from "../db/apps"
+import { configSetsRepo } from "../db/config-sets"
 import { templatesRepo } from "../db/templates"
 import { error, json, notFound, parseId, readJson } from "../lib/http"
 
@@ -12,8 +13,10 @@ export async function handleTemplates(
     if (!appId) return error("Invalid app id")
     if (!appsRepo.get(appId)) return notFound("App not found")
 
+    const set = configSetsRepo.resolveActive(appId)
+
     if (req.method === "GET") {
-      return json(templatesRepo.listByApp(appId))
+      return json(templatesRepo.listByConfigSet(set.id))
     }
 
     if (req.method === "POST") {
@@ -21,7 +24,7 @@ export async function handleTemplates(
       if (!body?.file_path?.trim()) return error("file_path is required")
       try {
         const template = templatesRepo.create({
-          app_id: appId,
+          config_set_id: set.id,
           file_path: body.file_path.trim().replace(/\\/g, "/"),
           content: body.content ?? "",
         })

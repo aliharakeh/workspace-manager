@@ -16,30 +16,30 @@ function withCommands(config: RunConfig): RunConfigWithCommands {
 }
 
 export const runConfigsRepo = {
-  getByApp(appId: number): RunConfigWithCommands | null {
+  getByConfigSet(configSetId: number): RunConfigWithCommands | null {
     const config = db
       .select()
       .from(runConfigs)
-      .where(eq(runConfigs.app_id, appId))
+      .where(eq(runConfigs.config_set_id, configSetId))
       .get()
     if (!config) return null
     return withCommands(config)
   },
 
-  getOrCreate(appId: number): RunConfigWithCommands {
-    const existing = this.getByApp(appId)
+  getOrCreate(configSetId: number): RunConfigWithCommands {
+    const existing = this.getByConfigSet(configSetId)
     if (existing) return existing
 
     const created = db
       .insert(runConfigs)
-      .values({ app_id: appId, mode: "parallel" })
+      .values({ config_set_id: configSetId, mode: "parallel" })
       .returning()
       .get()
     return withCommands(created)
   },
 
   upsert(
-    appId: number,
+    configSetId: number,
     input: {
       mode?: RunMode
       commands?: Array<{ label?: string | null; command: string }>
@@ -48,13 +48,16 @@ export const runConfigsRepo = {
     let config = db
       .select()
       .from(runConfigs)
-      .where(eq(runConfigs.app_id, appId))
+      .where(eq(runConfigs.config_set_id, configSetId))
       .get()
 
     if (!config) {
       config = db
         .insert(runConfigs)
-        .values({ app_id: appId, mode: input.mode ?? "parallel" })
+        .values({
+          config_set_id: configSetId,
+          mode: input.mode ?? "parallel",
+        })
         .returning()
         .get()
     } else if (input.mode) {

@@ -4,6 +4,7 @@ import { health } from "./routes/health"
 import { handleWorkspaces } from "./routes/workspaces"
 import { handleApps } from "./routes/apps"
 import { handleFs } from "./routes/fs"
+import { handleConfigSets } from "./routes/config-sets"
 import { handleEnvVars } from "./routes/env-vars"
 import { handleTemplates } from "./routes/templates"
 import { handleRunConfigs } from "./routes/run-configs"
@@ -60,6 +61,7 @@ const server = Bun.serve({
       handleWorkspaces,
       handleApps,
       handleFs,
+      handleConfigSets,
       handleEnvVars,
       handleTemplates,
       handleRunConfigs,
