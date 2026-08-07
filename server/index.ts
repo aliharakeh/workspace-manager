@@ -9,17 +9,15 @@ import { handleEnvVars } from "./routes/env-vars"
 import { handleTemplates } from "./routes/templates"
 import { handleRunConfigs } from "./routes/run-configs"
 import { handleRunner } from "./routes/runner"
+import { isStandaloneBinary, openBrowser } from "./lib/open-browser"
 import { hasFrontendBuild, serveStatic } from "./static"
 
-const portFromEnv = process.env.PORT || process.env.API_PORT
-const preferredPort = Number(portFromEnv) || 3000
-// When a launcher already reserved PORT, bind that exact port.
-// Otherwise (direct `bun server/index.ts`) pick the next free port.
-const port = portFromEnv
-  ? preferredPort
-  : await findAvailablePort(preferredPort)
+const preferredPort = Number(process.env.PORT || process.env.API_PORT) || 3000
+// Prefer PORT / API_PORT when set, otherwise 3000. Always walk upward if busy
+// so startup works when another app already holds the preferred port.
+const port = await findAvailablePort(preferredPort)
 
-if (!portFromEnv && port !== preferredPort) {
+if (port !== preferredPort) {
   console.log(`Port ${preferredPort} is in use — falling back to ${port}`)
 }
 
@@ -95,10 +93,15 @@ const server = Bun.serve({
   },
 })
 
+const url = `http://localhost:${server.port}`
+
 if (servingFrontend) {
-  console.log(`App listening on http://localhost:${server.port}`)
+  console.log(`App listening on ${url}`)
+  if (isStandaloneBinary()) {
+    openBrowser(url)
+  }
 } else {
-  console.log(`API listening on http://localhost:${server.port}`)
+  console.log(`API listening on ${url}`)
   console.log(
     `(No dist/ build found — API only. Use bun run start for production.)`
   )
