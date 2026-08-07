@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs"
 import { appsRepo } from "../db/apps"
 import { readProjectFile, validateProjectPath } from "../lib/fs"
 import { error, json, notFound, parseId, readJson } from "../lib/http"
-import { pickNativeFile, toProjectRelative } from "../lib/native-dialog"
+import {
+  pickNativeFile,
+  pickNativeFolder,
+  toProjectRelative,
+} from "../lib/native-dialog"
 
 function readPickedFileContent(absolutePath: string): string {
   try {
@@ -26,6 +30,22 @@ export async function handleFs(
       return json({ ok: false, error: result.error }, { status: 400 })
     }
     return json({ ok: true, path: result.resolved })
+  }
+
+  if (pathname === "/api/fs/pick-folder" && req.method === "POST") {
+    const body = await readJson<{ startDir?: string }>(req)
+    const startDir = body?.startDir?.trim() || undefined
+    const picked = await pickNativeFolder(startDir)
+    if (!picked.ok) {
+      if ("cancelled" in picked && picked.cancelled) {
+        return json({ cancelled: true })
+      }
+      return error(
+        "error" in picked ? picked.error : "Folder dialog failed",
+        500
+      )
+    }
+    return json({ cancelled: false, path: picked.path })
   }
 
   if (pathname === "/api/fs/pick-file" && req.method === "POST") {

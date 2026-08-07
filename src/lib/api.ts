@@ -185,6 +185,12 @@ export const api = {
           body: JSON.stringify({ path }),
         }
       ),
+    /** Opens the OS native folder dialog. */
+    pickFolder: (opts?: { startDir?: string }) =>
+      request<{ cancelled: boolean; path?: string }>("/api/fs/pick-folder", {
+        method: "POST",
+        body: JSON.stringify(opts ?? {}),
+      }),
     /** Opens the OS native file dialog. Paths are relative when scoped to an app. */
     pickFile: (opts?: { startDir?: string; appId?: number }) =>
       request<{

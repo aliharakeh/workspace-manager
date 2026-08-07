@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { FolderOpenIcon } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
 import type { App } from "@/lib/types"
@@ -39,17 +40,38 @@ export function AppDialog({
   app,
   onSaved,
 }: AppDialogProps) {
-  const [name, setName] = useState(app?.name ?? "")
-  const [projectPath, setProjectPath] = useState(app?.project_path ?? "")
+  const [name, setName] = useState("")
+  const [projectPath, setProjectPath] = useState("")
   const [saving, setSaving] = useState(false)
+  const [browsing, setBrowsing] = useState(false)
   const isEdit = !!app
 
-  function handleOpenChange(next: boolean) {
-    if (next) {
-      setName(app?.name ?? "")
-      setProjectPath(app?.project_path ?? "")
+  useEffect(() => {
+    if (!open) return
+    setName(app?.name ?? "")
+    setProjectPath(app?.project_path ?? "")
+    setSaving(false)
+    setBrowsing(false)
+  }, [open, app])
+
+  async function handleBrowse() {
+    setBrowsing(true)
+    try {
+      const picked = await api.fs.pickFolder({
+        startDir: projectPath.trim() || undefined,
+      })
+      if (picked.cancelled || !picked.path) return
+      setProjectPath(picked.path)
+      if (!name.trim()) {
+        const parts = picked.path.replace(/[/\\]+$/, "").split(/[/\\]/)
+        const folderName = parts[parts.length - 1]
+        if (folderName) setName(folderName)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to browse")
+    } finally {
+      setBrowsing(false)
     }
-    onOpenChange(next)
   }
 
   async function handleSave() {
@@ -79,7 +101,7 @@ export function AppDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit app" : "New app"}</DialogTitle>
@@ -100,19 +122,31 @@ export function AppDialog({
           </Field>
           <Field>
             <FieldLabel htmlFor="app-path">Project path</FieldLabel>
-            <Input
-              id="app-path"
-              value={projectPath}
-              onChange={(e) => setProjectPath(e.target.value)}
-              placeholder="C:\Projects\my-app"
-            />
+            <div className="flex gap-2">
+              <Input
+                id="app-path"
+                value={projectPath}
+                onChange={(e) => setProjectPath(e.target.value)}
+                placeholder="C:\Projects\my-app"
+                className="min-w-0 flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={browsing || saving}
+                onClick={() => void handleBrowse()}
+              >
+                <FolderOpenIcon data-icon="inline-start" />
+                {browsing ? "Browsing…" : "Browse"}
+              </Button>
+            </div>
           </Field>
         </FieldGroup>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button disabled={saving} onClick={() => void handleSave()}>
+          <Button disabled={saving || browsing} onClick={() => void handleSave()}>
             {saving ? "Saving…" : "Save"}
           </Button>
         </DialogFooter>
