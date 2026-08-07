@@ -1,6 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react"
 import type { LogLine } from "@/hooks/use-runner-logs"
 import type { ProcessState, StatusEvent } from "@/lib/types"
+import { stripAnsi } from "@/lib/ansi"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
@@ -27,26 +34,84 @@ function statusVariant(
   }
 }
 
+function LogStreamView({
+  label,
+  empty,
+  lines,
+  tone,
+  bottomRef,
+}: {
+  label: string
+  empty: string
+  lines: LogLine[]
+  tone?: "destructive"
+  bottomRef?: RefObject<HTMLDivElement | null>
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+        <span className="text-xs text-muted-foreground/70">{lines.length}</span>
+      </div>
+      <ScrollArea className="h-56 rounded-lg border bg-muted/30">
+        <pre
+          className={cn(
+            "p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap",
+            tone === "destructive" && "text-destructive"
+          )}
+        >
+          {lines.length === 0
+            ? empty
+            : lines.map((line) => (
+                <span
+                  key={line.id}
+                  className={cn(
+                    "block",
+                    line.stream === "system" && "text-muted-foreground"
+                  )}
+                >
+                  {stripAnsi(line.text)}
+                </span>
+              ))}
+          {bottomRef ? <div ref={bottomRef} /> : null}
+        </pre>
+      </ScrollArea>
+    </div>
+  )
+}
+
 export function LogsPanel({ status, logs, connected }: LogsPanelProps) {
   const processes = status?.processes ?? []
-  const [active, setActive] = useState<string>("all")
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const [active, setActive] = useState<string | null>(null)
+  const stdoutBottomRef = useRef<HTMLDivElement>(null)
+  const stderrBottomRef = useRef<HTMLDivElement>(null)
 
   const activeId = useMemo(() => {
-    if (active === "all") return "all"
-    if (processes.some((p) => String(p.commandId) === active)) return active
-    return "all"
+    if (active && processes.some((p) => String(p.commandId) === active)) {
+      return active
+    }
+    return processes[0] ? String(processes[0].commandId) : null
   }, [processes, active])
 
   const visibleLogs = useMemo(() => {
-    if (activeId === "all") return logs
+    if (!activeId) return []
     const commandId = Number(activeId)
     return logs.filter((l) => l.commandId === commandId)
   }, [logs, activeId])
 
+  const stdoutLogs = useMemo(
+    () => visibleLogs.filter((l) => l.stream !== "stderr"),
+    [visibleLogs]
+  )
+  const stderrLogs = useMemo(
+    () => visibleLogs.filter((l) => l.stream === "stderr"),
+    [visibleLogs]
+  )
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [visibleLogs.length, activeId])
+    stdoutBottomRef.current?.scrollIntoView({ behavior: "smooth" })
+    stderrBottomRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [stdoutLogs.length, stderrLogs.length, activeId])
 
   if (processes.length === 0 && logs.length === 0) {
     return (
@@ -82,54 +147,42 @@ export function LogsPanel({ status, logs, connected }: LogsPanelProps) {
         {status?.running ? <Badge variant="default">Live</Badge> : null}
       </div>
 
-      <div className="flex flex-wrap gap-1">
-        <button
-          type="button"
-          className={cn(
-            "rounded-md px-2.5 py-1 text-sm",
-            activeId === "all" ? "bg-muted font-medium" : "hover:bg-muted/60"
-          )}
-          onClick={() => setActive("all")}
-        >
-          All
-        </button>
-        {processes.map((p) => (
-          <button
-            key={p.commandId}
-            type="button"
-            className={cn(
-              "inline-flex items-center gap-2 rounded-md px-2.5 py-1 text-sm",
-              activeId === String(p.commandId)
-                ? "bg-muted font-medium"
-                : "hover:bg-muted/60"
-            )}
-            onClick={() => setActive(String(p.commandId))}
-          >
-            <span className="max-w-40 truncate">{p.label}</span>
-            <Badge variant={statusVariant(p.status)}>{p.status}</Badge>
-          </button>
-        ))}
-      </div>
+      {processes.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {processes.map((p) => (
+            <button
+              key={p.commandId}
+              type="button"
+              className={cn(
+                "inline-flex items-center gap-2 rounded-md px-2.5 py-1 text-sm",
+                activeId === String(p.commandId)
+                  ? "bg-muted font-medium"
+                  : "hover:bg-muted/60"
+              )}
+              onClick={() => setActive(String(p.commandId))}
+            >
+              <span className="max-w-40 truncate">{p.label}</span>
+              <Badge variant={statusVariant(p.status)}>{p.status}</Badge>
+            </button>
+          ))}
+        </div>
+      ) : null}
 
-      <ScrollArea className="h-80 rounded-lg border bg-muted/30">
-        <pre className="p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
-          {visibleLogs.length === 0
-            ? "No output yet."
-            : visibleLogs.map((line) => (
-                <span
-                  key={line.id}
-                  className={cn(
-                    "block",
-                    line.stream === "stderr" && "text-destructive",
-                    line.stream === "system" && "text-muted-foreground"
-                  )}
-                >
-                  {line.text}
-                </span>
-              ))}
-          <div ref={bottomRef} />
-        </pre>
-      </ScrollArea>
+      <div className="flex flex-col gap-3 lg:flex-row">
+        <LogStreamView
+          label="stdout"
+          empty="No stdout yet."
+          lines={stdoutLogs}
+          bottomRef={stdoutBottomRef}
+        />
+        <LogStreamView
+          label="stderr"
+          empty="No stderr yet."
+          lines={stderrLogs}
+          tone="destructive"
+          bottomRef={stderrBottomRef}
+        />
+      </div>
     </div>
   )
 }
