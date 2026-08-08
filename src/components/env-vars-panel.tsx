@@ -1,11 +1,24 @@
-import { useEffect, useState } from "react"
+import { useDeferredValue, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { KeyRoundIcon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react"
+import {
+  KeyRoundIcon,
+  PlusIcon,
+  SaveIcon,
+  SearchIcon,
+  Trash2Icon,
+  XIcon,
+} from "lucide-react"
 import { api } from "@/lib/api"
 import type { EnvVar } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group"
 import {
   Empty,
   EmptyDescription,
@@ -119,15 +132,28 @@ export function EnvVarsPanel({ appId }: EnvVarsPanelProps) {
   const [vars, setVars] = useState<EnvVar[]>([])
   const [key, setKey] = useState("")
   const [value, setValue] = useState("")
+  const [query, setQuery] = useState("")
+  const deferredQuery = useDeferredValue(query)
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
+
+  const filtered = useMemo(() => {
+    const q = deferredQuery.trim().toLowerCase()
+    if (!q) return vars
+    return vars.filter(
+      (v) =>
+        v.key.toLowerCase().includes(q) || v.value.toLowerCase().includes(q)
+    )
+  }, [vars, deferredQuery])
 
   async function load() {
     setLoading(true)
     try {
       setVars(await api.envVars.list(appId))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load env vars")
+      toast.error(
+        err instanceof Error ? err.message : "Failed to load env vars"
+      )
     } finally {
       setLoading(false)
     }
@@ -214,22 +240,57 @@ export function EnvVarsPanel({ appId }: EnvVarsPanelProps) {
         </Empty>
       ) : (
         <div className="flex flex-col gap-2">
-          {vars.map((item) => (
-            <EnvVarRow
-              key={item.id}
-              item={item}
-              onSaved={(updated) =>
-                setVars((prev) =>
-                  prev
-                    .map((v) => (v.id === updated.id ? updated : v))
-                    .sort((a, b) => a.key.localeCompare(b.key))
-                )
-              }
-              onDeleted={(id) =>
-                setVars((prev) => prev.filter((v) => v.id !== id))
-              }
-            />
-          ))}
+          <div className="flex items-center gap-2">
+            <InputGroup className="max-w-sm flex-1">
+              <InputGroupAddon align="inline-start">
+                <SearchIcon />
+              </InputGroupAddon>
+              <InputGroupInput
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search key or value…"
+                aria-label="Search env vars"
+              />
+              {query ? (
+                <InputGroupAddon align="inline-end">
+                  <InputGroupButton
+                    size="icon-xs"
+                    aria-label="Clear search"
+                    onClick={() => setQuery("")}
+                  >
+                    <XIcon />
+                  </InputGroupButton>
+                </InputGroupAddon>
+              ) : null}
+            </InputGroup>
+            <span className="text-xs text-muted-foreground">
+              {filtered.length} of {vars.length}
+            </span>
+          </div>
+          {filtered.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No env vars match “{query.trim()}”.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {filtered.map((item) => (
+                <EnvVarRow
+                  key={item.id}
+                  item={item}
+                  onSaved={(updated) =>
+                    setVars((prev) =>
+                      prev
+                        .map((v) => (v.id === updated.id ? updated : v))
+                        .sort((a, b) => a.key.localeCompare(b.key))
+                    )
+                  }
+                  onDeleted={(id) =>
+                    setVars((prev) => prev.filter((v) => v.id !== id))
+                  }
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

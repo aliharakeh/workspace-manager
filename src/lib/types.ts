@@ -25,6 +25,23 @@ export type ConfigSet = {
   updated_at: string
 }
 
+export type ConfigSetDetail = ConfigSet & {
+  env_vars: EnvVar[]
+  templates: Template[]
+  run_config: RunConfig | null
+}
+
+/**
+ * What to copy from a source config set.
+ * `true` copies everything, `false` skips, an array copies only the listed
+ * items: env var keys, template file paths, or source run command ids.
+ */
+export type CopyParts = {
+  env?: boolean | string[]
+  templates?: boolean | string[]
+  run?: boolean | number[]
+}
+
 export type EnvVar = {
   id: number
   config_set_id: number

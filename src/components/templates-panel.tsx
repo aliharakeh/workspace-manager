@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useDeferredValue, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
   EyeIcon,
@@ -7,7 +7,9 @@ import {
   PencilIcon,
   PlusIcon,
   RefreshCwIcon,
+  SearchIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react"
 import { api } from "@/lib/api"
 import { renderTemplatePreview } from "@/lib/template-preview"
@@ -20,6 +22,12 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group"
 import {
   Empty,
   EmptyDescription,
@@ -109,10 +117,15 @@ function TemplateItem({
   }
 
   return (
-    <AccordionItem value={String(template.id)} className="rounded-lg border px-3">
+    <AccordionItem
+      value={String(template.id)}
+      className="rounded-lg border px-3"
+    >
       <AccordionTrigger className="hover:no-underline">
         <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5 pr-2">
-          <span className="truncate font-medium">{fileName(template.file_path)}</span>
+          <span className="truncate font-medium">
+            {fileName(template.file_path)}
+          </span>
           <span className="truncate font-mono text-xs font-normal text-muted-foreground">
             {template.file_path}
           </span>
@@ -143,7 +156,10 @@ function TemplateItem({
               <PencilIcon />
               Edit
             </ToggleGroupItem>
-            <ToggleGroupItem value="preview" aria-label="Preview rendered template">
+            <ToggleGroupItem
+              value="preview"
+              aria-label="Preview rendered template"
+            >
               <EyeIcon />
               Preview
             </ToggleGroupItem>
@@ -191,9 +207,21 @@ function TemplateItem({
 export function TemplatesPanel({ appId }: TemplatesPanelProps) {
   const [templates, setTemplates] = useState<Template[]>([])
   const [env, setEnv] = useState<Record<string, string>>({})
+  const [query, setQuery] = useState("")
+  const deferredQuery = useDeferredValue(query)
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [openIds, setOpenIds] = useState<string[]>([])
+
+  const filtered = useMemo(() => {
+    const q = deferredQuery.trim().toLowerCase()
+    if (!q) return templates
+    return templates.filter(
+      (t) =>
+        t.file_path.toLowerCase().includes(q) ||
+        fileName(t.file_path).toLowerCase().includes(q)
+    )
+  }, [templates, deferredQuery])
 
   async function load() {
     setLoading(true)
@@ -204,16 +232,13 @@ export function TemplatesPanel({ appId }: TemplatesPanelProps) {
       ])
       setTemplates(list)
       setEnv(Object.fromEntries(vars.map((v) => [v.key, v.value])))
-      setOpenIds((current) => {
-        if (list.length === 0) return []
-        const stillOpen = current.filter((id) =>
-          list.some((t) => String(t.id) === id)
-        )
-        if (stillOpen.length > 0) return stillOpen
-        return [String(list[0]!.id)]
-      })
+      setOpenIds((current) =>
+        current.filter((id) => list.some((t) => String(t.id) === id))
+      )
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load templates")
+      toast.error(
+        err instanceof Error ? err.message : "Failed to load templates"
+      )
     } finally {
       setLoading(false)
     }
@@ -289,6 +314,36 @@ export function TemplatesPanel({ appId }: TemplatesPanelProps) {
         </Button>
       </div>
 
+      {templates.length > 0 ? (
+        <div className="flex items-center gap-2">
+          <InputGroup className="max-w-sm flex-1">
+            <InputGroupAddon align="inline-start">
+              <SearchIcon />
+            </InputGroupAddon>
+            <InputGroupInput
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search file path…"
+              aria-label="Search templates"
+            />
+            {query ? (
+              <InputGroupAddon align="inline-end">
+                <InputGroupButton
+                  size="icon-xs"
+                  aria-label="Clear search"
+                  onClick={() => setQuery("")}
+                >
+                  <XIcon />
+                </InputGroupButton>
+              </InputGroupAddon>
+            ) : null}
+          </InputGroup>
+          <span className="text-xs text-muted-foreground">
+            {filtered.length} of {templates.length}
+          </span>
+        </div>
+      ) : null}
+
       {templates.length === 0 ? (
         <Empty className="border">
           <EmptyHeader>
@@ -310,6 +365,10 @@ export function TemplatesPanel({ appId }: TemplatesPanelProps) {
             {adding ? "Browsing…" : "Choose a file"}
           </Button>
         </Empty>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No templates match “{query.trim()}”.
+        </p>
       ) : (
         <Accordion
           value={openIds}
@@ -317,7 +376,7 @@ export function TemplatesPanel({ appId }: TemplatesPanelProps) {
           keepMounted
           className="gap-2"
         >
-          {templates.map((template) => (
+          {filtered.map((template) => (
             <TemplateItem
               key={template.id}
               appId={appId}

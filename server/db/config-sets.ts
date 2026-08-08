@@ -1,27 +1,52 @@
 import { eq, sql } from "drizzle-orm"
 import { db } from "./index"
-import {
-  apps,
-  configSets,
-  envVars,
-  runConfigs,
-  templates,
-} from "./schema"
+import { apps, configSets, envVars, templates } from "./schema"
 import type { ConfigSet } from "./types"
 import { runConfigsRepo } from "./run-configs"
+import { envVarsRepo } from "./env-vars"
+import { templatesRepo } from "./templates"
 
+/**
+ * What to copy from a source set.
+ * - `true` copies everything, `false` skips.
+ * - An array copies only the listed items: env var keys, template file paths,
+ *   or source run command ids.
+ */
 export type ConfigCopyParts = {
-  env?: boolean
-  templates?: boolean
-  run?: boolean
+  env?: boolean | string[]
+  templates?: boolean | string[]
+  run?: boolean | number[]
 }
 
-function resolveParts(parts?: ConfigCopyParts): Required<ConfigCopyParts> {
-  if (!parts) return { env: true, templates: true, run: true }
+type ResolvedPart = { all: boolean; items: string[] } | null
+type ResolvedRunPart = { all: boolean; commandIds: number[] } | null
+
+function resolveCategory(part: boolean | string[] | undefined): ResolvedPart {
+  if (part === false) return null
+  if (part === undefined || part === true) return { all: true, items: [] }
+  return { all: false, items: part.filter((k): k is string => typeof k === "string") }
+}
+
+function resolveRun(part: boolean | number[] | undefined): ResolvedRunPart {
+  if (part === false) return null
+  if (part === undefined || part === true) return { all: true, commandIds: [] }
   return {
-    env: parts.env !== false,
-    templates: parts.templates !== false,
-    run: parts.run !== false,
+    all: false,
+    commandIds: part.filter(
+      (n): n is number => typeof n === "number" && Number.isInteger(n)
+    ),
+  }
+}
+
+function resolveParts(parts?: ConfigCopyParts): {
+  env: ResolvedPart
+  templates: ResolvedPart
+  run: ResolvedRunPart
+} {
+  return {
+    env: resolveCategory(parts?.env),
+    templates: resolveCategory(parts?.templates),
+    run: resolveRun(parts?.run),
   }
 }
 
@@ -118,16 +143,15 @@ export const configSetsRepo = {
     }
 
     if (selected.env) {
+      const sourceEnv = envVarsRepo.listByConfigSet(sourceId)
+      const chosen = selected.env.all
+        ? sourceEnv
+        : sourceEnv.filter((v) => selected.env.items.includes(v.key))
       db.delete(envVars).where(eq(envVars.config_set_id, targetId)).run()
-      const sourceEnv = db
-        .select()
-        .from(envVars)
-        .where(eq(envVars.config_set_id, sourceId))
-        .all()
-      if (sourceEnv.length > 0) {
+      if (chosen.length > 0) {
         db.insert(envVars)
           .values(
-            sourceEnv.map((v) => ({
+            chosen.map((v) => ({
               config_set_id: targetId,
               key: v.key,
               value: v.value,
@@ -138,16 +162,17 @@ export const configSetsRepo = {
     }
 
     if (selected.templates) {
+      const sourceTemplates = templatesRepo.listByConfigSet(sourceId)
+      const chosen = selected.templates.all
+        ? sourceTemplates
+        : sourceTemplates.filter((t) =>
+            selected.templates.items.includes(t.file_path)
+          )
       db.delete(templates).where(eq(templates.config_set_id, targetId)).run()
-      const sourceTemplates = db
-        .select()
-        .from(templates)
-        .where(eq(templates.config_set_id, sourceId))
-        .all()
-      if (sourceTemplates.length > 0) {
+      if (chosen.length > 0) {
         db.insert(templates)
           .values(
-            sourceTemplates.map((t) => ({
+            chosen.map((t) => ({
               config_set_id: targetId,
               file_path: t.file_path,
               content: t.content,
@@ -159,13 +184,15 @@ export const configSetsRepo = {
 
     if (selected.run) {
       const sourceRun = runConfigsRepo.getByConfigSet(sourceId)
+      const commands = (sourceRun?.commands ?? []).filter(
+        (c) => selected.run.all || selected.run.commandIds.includes(c.id)
+      )
       runConfigsRepo.upsert(targetId, {
         mode: sourceRun?.mode ?? "parallel",
-        commands:
-          sourceRun?.commands.map((c) => ({
-            label: c.label,
-            command: c.command,
-          })) ?? [],
+        commands: commands.map((c) => ({
+          label: c.label,
+          command: c.command,
+        })),
       })
     }
   },

@@ -1,6 +1,8 @@
 import type {
   App,
   ConfigSet,
+  ConfigSetDetail,
+  CopyParts,
   EnvVar,
   ListeningProcess,
   ReadyUrlPattern,
@@ -81,13 +83,15 @@ export const api = {
   configSets: {
     list: (appId: number) =>
       request<ConfigSet[]>(`/api/apps/${appId}/config-sets`),
+    getDetail: (id: number) =>
+      request<ConfigSetDetail>(`/api/config-sets/${id}`),
     create: (
       appId: number,
       body: {
         name: string
         copy_from_id?: number
         activate?: boolean
-        parts?: { env?: boolean; templates?: boolean; run?: boolean }
+        parts?: CopyParts
       }
     ) =>
       request<ConfigSet>(`/api/apps/${appId}/config-sets`, {
@@ -106,11 +110,7 @@ export const api = {
         `/api/config-sets/${id}/activate`,
         { method: "POST" }
       ),
-    copyFrom: (
-      id: number,
-      sourceId: number,
-      parts?: { env?: boolean; templates?: boolean; run?: boolean }
-    ) =>
+    copyFrom: (id: number, sourceId: number, parts?: CopyParts) =>
       request<ConfigSet>(`/api/config-sets/${id}/copy-from`, {
         method: "POST",
         body: JSON.stringify({ source_id: sourceId, parts }),

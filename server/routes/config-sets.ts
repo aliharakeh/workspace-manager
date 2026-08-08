@@ -3,21 +3,51 @@ import {
   configSetsRepo,
   type ConfigCopyParts,
 } from "../db/config-sets"
+import { envVarsRepo } from "../db/env-vars"
+import { runConfigsRepo } from "../db/run-configs"
+import { templatesRepo } from "../db/templates"
 import { error, json, notFound, parseId, readJson } from "../lib/http"
+
+function parseListPart<T>(
+  value: unknown,
+  guard: (item: unknown) => item is T
+): boolean | T[] | undefined {
+  if (typeof value === "boolean") return value
+  if (Array.isArray(value)) {
+    const items = value.filter(guard)
+    return items.length > 0 ? items : false
+  }
+  return undefined
+}
 
 function parseParts(raw: unknown): ConfigCopyParts | undefined {
   if (!raw || typeof raw !== "object") return undefined
   const p = raw as Record<string, unknown>
   return {
-    env: typeof p.env === "boolean" ? p.env : undefined,
-    templates: typeof p.templates === "boolean" ? p.templates : undefined,
-    run: typeof p.run === "boolean" ? p.run : undefined,
+    env: parseListPart(p.env, (v): v is string => typeof v === "string"),
+    templates: parseListPart(p.templates, (v): v is string => typeof v === "string"),
+    run: parseListPart(
+      p.run,
+      (v): v is number => typeof v === "number" && Number.isInteger(v)
+    ),
   }
+}
+
+function isPartEnabled(
+  part: boolean | string[] | number[] | undefined
+): boolean {
+  if (part === undefined || part === true) return true
+  if (Array.isArray(part)) return part.length > 0
+  return false
 }
 
 function hasAnyPart(parts?: ConfigCopyParts): boolean {
   if (!parts) return true
-  return parts.env !== false || parts.templates !== false || parts.run !== false
+  return (
+    isPartEnabled(parts.env) ||
+    isPartEnabled(parts.templates) ||
+    isPartEnabled(parts.run)
+  )
 }
 
 export async function handleConfigSets(
@@ -123,6 +153,17 @@ export async function handleConfigSets(
 
   const id = parseId(itemMatch[1])
   if (!id) return error("Invalid config set id")
+
+  if (req.method === "GET") {
+    const set = configSetsRepo.get(id)
+    if (!set) return notFound("Config set not found")
+    return json({
+      ...set,
+      env_vars: envVarsRepo.listByConfigSet(id),
+      templates: templatesRepo.listByConfigSet(id),
+      run_config: runConfigsRepo.getByConfigSet(id),
+    })
+  }
 
   if (req.method === "PATCH") {
     const body = await readJson<{ name?: string }>(req)
