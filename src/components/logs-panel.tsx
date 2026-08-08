@@ -5,6 +5,7 @@ import {
   useState,
   type RefObject,
 } from "react"
+import { ExternalLinkIcon } from "lucide-react"
 import type { LogLine } from "@/hooks/use-runner-logs"
 import type { ProcessState, StatusEvent } from "@/lib/types"
 import { stripAnsi } from "@/lib/ansi"
@@ -82,6 +83,10 @@ function LogStreamView({
 
 export function LogsPanel({ status, logs, connected }: LogsPanelProps) {
   const processes = status?.processes ?? []
+  const readyUrls = useMemo(() => {
+    if (!status?.running) return []
+    return [...new Set(processes.flatMap((p) => p.urls ?? []))]
+  }, [status?.running, processes])
   const [active, setActive] = useState<string | null>(null)
   const stdoutBottomRef = useRef<HTMLDivElement>(null)
   const stderrBottomRef = useRef<HTMLDivElement>(null)
@@ -164,6 +169,24 @@ export function LogsPanel({ status, logs, connected }: LogsPanelProps) {
               <span className="max-w-40 truncate">{p.label}</span>
               <Badge variant={statusVariant(p.status)}>{p.status}</Badge>
             </button>
+          ))}
+        </div>
+      ) : null}
+
+      {readyUrls.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Open</span>
+          {readyUrls.map((url) => (
+            <a
+              key={url}
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex max-w-full items-center gap-1 truncate rounded-md border px-2 py-1 font-mono text-xs hover:bg-muted"
+            >
+              <ExternalLinkIcon className="size-3 shrink-0" />
+              <span className="truncate">{url}</span>
+            </a>
           ))}
         </div>
       ) : null}

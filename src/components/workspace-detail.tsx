@@ -1,4 +1,4 @@
-import { AppWindowIcon, PlusIcon } from "lucide-react"
+import { AppWindowIcon, ExternalLinkIcon, PlusIcon } from "lucide-react"
 import type { App, StatusEvent, Workspace } from "@/lib/types"
 import { AppRunControls, AppStatusDot } from "@/components/app-run-controls"
 import { ConfigSetPicker } from "@/components/config-set-picker"
@@ -89,47 +89,82 @@ export function WorkspaceDetail({
           const activeProcesses = status?.processes.filter(
             (process) => process.status === "running"
           ).length
+          const readyUrls = running
+            ? [
+                ...new Set(
+                  (status?.processes ?? []).flatMap((p) => p.urls ?? [])
+                ),
+              ]
+            : []
 
           return (
             <li key={app.id}>
-              <div className="flex flex-col gap-3 rounded-xl px-4 py-3 ring-1 ring-foreground/10 sm:flex-row sm:items-center sm:justify-between">
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={() => onSelectApp(app.id)}
-                >
-                  <div className="flex items-center gap-2">
-                    <AppStatusDot running={running} />
-                    <span className="truncate font-medium">{app.name}</span>
-                    <Badge variant={running ? "default" : "outline"}>
-                      {running ? "Running" : "Idle"}
-                    </Badge>
-                  </div>
-                  <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
-                    {app.project_path}
-                  </p>
-                  {running && processCount > 0 ? (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {activeProcesses}/{processCount} process
-                      {processCount === 1 ? "" : "es"} active
+              <div className="flex flex-col gap-3 rounded-xl px-4 py-3 ring-1 ring-foreground/10">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={() => onSelectApp(app.id)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <AppStatusDot running={running} />
+                      <span className="truncate font-medium">{app.name}</span>
+                      <Badge variant={running ? "default" : "outline"}>
+                        {running ? "Running" : "Idle"}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
+                      {app.project_path}
                     </p>
-                  ) : null}
-                  {status?.error ? (
-                    <p className="mt-1 text-xs text-destructive">{status.error}</p>
-                  ) : null}
-                </button>
-                <div className="flex flex-wrap items-center gap-2">
-                  <ConfigSetPicker
-                    app={app}
-                    onAppChange={onAppChange}
-                    stopPropagation
-                  />
-                  <AppRunControls
-                    appId={app.id}
-                    running={running}
-                    onStatus={onStatus}
-                  />
+                    {running && processCount > 0 ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {activeProcesses}/{processCount} process
+                        {processCount === 1 ? "" : "es"} active
+                      </p>
+                    ) : null}
+                    {status?.error ? (
+                      <p className="mt-1 text-xs text-destructive">
+                        {status.error}
+                      </p>
+                    ) : null}
+                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ConfigSetPicker
+                      app={app}
+                      onAppChange={onAppChange}
+                      stopPropagation
+                    />
+                    <AppRunControls
+                      appId={app.id}
+                      running={running}
+                      onStatus={onStatus}
+                    />
+                  </div>
                 </div>
+                {readyUrls.length > 0 ? (
+                  <ul className="flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
+                    {readyUrls.map((url) => (
+                      <li key={url} className="min-w-0 max-w-full">
+                        <Badge
+                          variant="secondary"
+                          className="max-w-full font-mono"
+                          title={url}
+                          render={
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                          }
+                        >
+                          <ExternalLinkIcon data-icon="inline-start" />
+                          <span className="truncate">{url}</span>
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
             </li>
           )

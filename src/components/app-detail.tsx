@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { PencilIcon, Trash2Icon } from "lucide-react"
+import { useMemo, useState } from "react"
+import { ExternalLinkIcon, PencilIcon, Trash2Icon } from "lucide-react"
 import type { App, StatusEvent } from "@/lib/types"
 import type { LogLine } from "@/hooks/use-runner-logs"
 import { AppRunControls } from "@/components/app-run-controls"
@@ -8,10 +8,11 @@ import { EnvVarsPanel } from "@/components/env-vars-panel"
 import { TemplatesPanel } from "@/components/templates-panel"
 import { RunConfigPanel } from "@/components/run-config-panel"
 import { LogsPanel } from "@/components/logs-panel"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
+import { cn } from "@/lib/utils"
 
 type AppDetailProps = {
   app: App
@@ -37,6 +38,12 @@ export function AppDetail({
   const running = !!status?.running
   const [tab, setTab] = useState("env")
   const [panelEpoch, setPanelEpoch] = useState(0)
+  const readyUrls = useMemo(() => {
+    if (!running) return []
+    return [
+      ...new Set((status?.processes ?? []).flatMap((p) => p.urls ?? [])),
+    ]
+  }, [running, status?.processes])
 
   function handleStatus(next: StatusEvent) {
     onStatus(next)
@@ -87,6 +94,22 @@ export function AppDetail({
             running={running}
             onStatus={handleStatus}
           />
+          {readyUrls.map((url) => (
+            <a
+              key={url}
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "max-w-64"
+              )}
+              title={url}
+            >
+              <ExternalLinkIcon data-icon="inline-start" />
+              <span className="truncate font-mono text-xs">{url}</span>
+            </a>
+          ))}
         </div>
       </div>
 
