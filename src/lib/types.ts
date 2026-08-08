@@ -78,6 +78,8 @@ export type ProcessState = {
   status: ProcessStatus
   exitCode: number | null
   pid: number | null
+  /** URLs detected from process logs (Vite, Spring Boot, etc.) */
+  urls?: string[]
 }
 
 export type StatusEvent = {
@@ -103,6 +105,19 @@ export type ListeningProcess = {
   port: number
   pid: number
   name: string
+}
+
+/** Regex used to detect ready URLs from process logs. */
+export type ReadyUrlPattern = {
+  id: number
+  /** Stable id for built-in defaults; null for user-created patterns. */
+  key: string | null
+  label: string
+  pattern: string
+  flags: string
+  sort_order: number
+  created_at: string
+  updated_at: string
 }
 
 export type RunnerEvent = LogEvent | (StatusEvent & { type: "status" })

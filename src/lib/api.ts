@@ -3,6 +3,7 @@ import type {
   ConfigSet,
   EnvVar,
   ListeningProcess,
+  ReadyUrlPattern,
   RunConfig,
   RunMode,
   StatusEvent,
@@ -188,6 +189,25 @@ export const api = {
       request<{ ok: true; pid: number }>(`/api/ports/${pid}/kill`, {
         method: "POST",
       }),
+  },
+
+  readyUrlPatterns: {
+    list: () => request<ReadyUrlPattern[]>("/api/ready-url-patterns"),
+    create: (body: { label: string; pattern: string; flags?: string }) =>
+      request<ReadyUrlPattern>("/api/ready-url-patterns", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    update: (
+      id: number,
+      body: { label?: string; pattern?: string; flags?: string }
+    ) =>
+      request<ReadyUrlPattern>(`/api/ready-url-patterns/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    delete: (id: number) =>
+      request<void>(`/api/ready-url-patterns/${id}`, { method: "DELETE" }),
   },
 
   fs: {

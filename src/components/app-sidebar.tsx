@@ -3,12 +3,12 @@ import {
   AppWindowIcon,
   FolderIcon,
   MoreHorizontalIcon,
-  NetworkIcon,
   PlusIcon,
+  SettingsIcon,
 } from "lucide-react"
 import type { App, StatusEvent, Workspace } from "@/lib/types"
 import { AppRunControls, AppStatusDot } from "@/components/app-run-controls"
-import { PortsDialog } from "@/components/ports-dialog"
+import { SettingsDialog } from "@/components/settings-dialog"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
@@ -64,7 +64,7 @@ export function AppSidebar({
   onCreateApp,
   onStatus,
 }: AppSidebarProps) {
-  const [portsOpen, setPortsOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   return (
     <Sidebar collapsible="icon">
@@ -83,15 +83,15 @@ export function AppSidebar({
             variant="ghost"
             size="icon-sm"
             className="shrink-0"
-            title="Listening ports"
-            onClick={() => setPortsOpen(true)}
+            title="Settings"
+            onClick={() => setSettingsOpen(true)}
           >
-            <NetworkIcon />
-            <span className="sr-only">Listening ports</span>
+            <SettingsIcon />
+            <span className="sr-only">Settings</span>
           </Button>
         </div>
       </SidebarHeader>
-      <PortsDialog open={portsOpen} onOpenChange={setPortsOpen} />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Workspaces</SidebarGroupLabel>
