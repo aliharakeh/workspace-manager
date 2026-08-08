@@ -2,13 +2,16 @@ import { useState } from "react"
 import {
   AppWindowIcon,
   FolderIcon,
+  MoonIcon,
   MoreHorizontalIcon,
   PlusIcon,
   SettingsIcon,
+  SunIcon,
 } from "lucide-react"
 import type { App, StatusEvent, Workspace } from "@/lib/types"
 import { AppRunControls, AppStatusDot } from "@/components/app-run-controls"
 import { SettingsDialog } from "@/components/settings-dialog"
+import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
@@ -65,6 +68,8 @@ export function AppSidebar({
   onStatus,
 }: AppSidebarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const { resolvedTheme, toggleTheme } = useTheme()
+  const dark = resolvedTheme === "dark"
 
   return (
     <Sidebar collapsible="icon">
@@ -79,6 +84,16 @@ export function AppSidebar({
               Local workspaces
             </span>
           </div>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="shrink-0"
+            title={dark ? "Switch to light theme" : "Switch to dark theme"}
+            onClick={toggleTheme}
+          >
+            {dark ? <SunIcon /> : <MoonIcon />}
+            <span className="sr-only">Toggle theme</span>
+          </Button>
           <Button
             variant="ghost"
             size="icon-sm"

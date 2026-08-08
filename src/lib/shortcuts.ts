@@ -1,7 +1,9 @@
 export const SEARCH_SHORTCUT_KEY = "shortcut.search"
+export const THEME_SHORTCUT_KEY = "shortcut.theme"
 
 export const DEFAULT_SHORTCUTS: Record<string, string> = {
   [SEARCH_SHORTCUT_KEY]: "ctrl+p",
+  [THEME_SHORTCUT_KEY]: "d",
 }
 
 export type ShortcutBinding = {

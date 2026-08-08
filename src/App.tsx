@@ -10,6 +10,7 @@ import { formatRoute, type AppTab } from "@/lib/routes"
 import {
   DEFAULT_SHORTCUTS,
   SEARCH_SHORTCUT_KEY,
+  THEME_SHORTCUT_KEY,
   formatShortcut,
   isShortcutRecorderActive,
   matchesShortcut,
@@ -23,6 +24,10 @@ import {
   type PaletteItem,
 } from "@/components/command-palette"
 import { SettingsProvider, useSettings } from "@/components/settings-provider"
+import {
+  isEditableTarget,
+  useTheme,
+} from "@/components/theme-provider"
 import { AppDialog, DeleteAppDialog } from "@/components/app-dialogs"
 import {
   WorkspaceDialog,
@@ -57,8 +62,11 @@ export function App() {
 
 function AppContent() {
   const { settings } = useSettings()
+  const { toggleTheme } = useTheme()
   const searchShortcut =
     settings[SEARCH_SHORTCUT_KEY] ?? DEFAULT_SHORTCUTS[SEARCH_SHORTCUT_KEY]
+  const themeShortcut =
+    settings[THEME_SHORTCUT_KEY] ?? DEFAULT_SHORTCUTS[THEME_SHORTCUT_KEY]
   const [paletteOpen, setPaletteOpen] = useState(false)
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -234,6 +242,20 @@ function AppContent() {
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [searchShortcut])
+
+  // Toggle the theme from the configured keyboard shortcut.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isShortcutRecorderActive()) return
+      if (isEditableTarget(event.target)) return
+      if (matchesShortcut(themeShortcut, event)) {
+        event.preventDefault()
+        toggleTheme()
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [themeShortcut, toggleTheme])
 
   const paletteItems = useMemo<PaletteItem[]>(
     () => [

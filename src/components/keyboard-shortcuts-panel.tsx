@@ -5,6 +5,7 @@ import { Kbd } from "@/components/ui/kbd"
 import {
   DEFAULT_SHORTCUTS,
   SEARCH_SHORTCUT_KEY,
+  THEME_SHORTCUT_KEY,
   eventToShortcut,
   formatShortcut,
   isValidShortcut,
@@ -22,6 +23,11 @@ const SHORTCUT_DEFINITIONS: {
     key: SEARCH_SHORTCUT_KEY,
     label: "Search workspaces and apps",
     description: "Open the global search palette.",
+  },
+  {
+    key: THEME_SHORTCUT_KEY,
+    label: "Toggle light/dark theme",
+    description: "Switch between the light and dark theme.",
   },
 ]
 
