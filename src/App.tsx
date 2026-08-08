@@ -5,6 +5,8 @@ import { api } from "@/lib/api"
 import type { App as AppEntity, StatusEvent, Workspace } from "@/lib/types"
 import { useRunnerLogs } from "@/hooks/use-runner-logs"
 import { useAppStatuses } from "@/hooks/use-app-statuses"
+import { useRoute } from "@/hooks/use-route"
+import { formatRoute, type AppTab } from "@/lib/routes"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AppDetail } from "@/components/app-detail"
 import { WorkspaceDetail } from "@/components/workspace-detail"
@@ -36,10 +38,9 @@ export function App() {
   const [appsByWorkspace, setAppsByWorkspace] = useState<
     Record<number, AppEntity[]>
   >({})
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(
-    null
-  )
-  const [selectedAppId, setSelectedAppId] = useState<number | null>(null)
+  const { route, navigate } = useRoute()
+  const selectedWorkspaceId = route.workspaceId
+  const selectedAppId = route.appId
   const [loading, setLoading] = useState(true)
 
   const [workspaceDialogOpen, setWorkspaceDialogOpen] = useState(false)
@@ -106,8 +107,6 @@ export function App() {
       const list = await api.workspaces.list()
       setWorkspaces(list)
       if (list.length) {
-        const first = list[0]!
-        setSelectedWorkspaceId((prev) => prev ?? first.id)
         await Promise.all(list.map((w) => loadApps(w.id)))
       }
     } catch (err) {
@@ -122,15 +121,152 @@ export function App() {
   }, [bootstrap])
 
   function handleSelectWorkspace(id: number) {
-    setSelectedWorkspaceId(id)
-    setSelectedAppId(null)
+    const workspace = workspaces.find((w) => w.id === id)
+    if (!workspace) return
     if (!appsByWorkspace[id]) void loadApps(id)
+    navigate(
+      formatRoute(
+        { workspaceId: id, appId: null, tab: null, configSetId: null },
+        workspace.name
+      )
+    )
   }
 
   function handleSelectApp(workspaceId: number, appId: number) {
-    setSelectedWorkspaceId(workspaceId)
-    setSelectedAppId(appId)
+    const workspace = workspaces.find((w) => w.id === workspaceId)
+    const app = (appsByWorkspace[workspaceId] ?? []).find(
+      (a) => a.id === appId
+    )
+    if (!workspace || !app) return
+    navigate(
+      formatRoute(
+        { workspaceId, appId, tab: "env", configSetId: app.active_config_set_id },
+        workspace.name,
+        app.name
+      )
+    )
   }
+
+  function handleTabChange(tab: AppTab) {
+    if (!selectedWorkspace || !selectedApp) return
+    navigate(
+      formatRoute(
+        {
+          workspaceId: selectedWorkspace.id,
+          appId: selectedApp.id,
+          tab,
+          configSetId: selectedApp.active_config_set_id,
+        },
+        selectedWorkspace.name,
+        selectedApp.name
+      )
+    )
+  }
+
+  function handleGoWorkspace(workspace: Workspace) {
+    navigate(
+      formatRoute(
+        { workspaceId: workspace.id, appId: null, tab: null, configSetId: null },
+        workspace.name
+      )
+    )
+  }
+
+  function handleGoApp(
+    workspace: Workspace,
+    app: AppEntity,
+    tab: AppTab = "env"
+  ) {
+    navigate(
+      formatRoute(
+        {
+          workspaceId: workspace.id,
+          appId: app.id,
+          tab,
+          configSetId: app.active_config_set_id,
+        },
+        workspace.name,
+        app.name
+      )
+    )
+  }
+
+  function handleGoHome() {
+    navigate("/")
+  }
+
+  // Update an app's stored data and, if it's the selected app, re-navigate so
+  // the URL reflects the (possibly changed) active config set.
+  function handleAppChange(app: AppEntity) {
+    setAppsByWorkspace((prev) => {
+      const list = prev[app.workspace_id] ?? []
+      return {
+        ...prev,
+        [app.workspace_id]: list.map((a) => (a.id === app.id ? app : a)),
+      }
+    })
+    if (selectedAppId === app.id && selectedWorkspace) {
+      handleGoApp(selectedWorkspace, app, route.tab ?? "env")
+    }
+  }
+
+  // Normalize the URL whenever data loads or entities disappear so the URL
+  // never points at a missing workspace/app (deep links, deletions, renames).
+  useEffect(() => {
+    if (loading) return
+    if (selectedWorkspaceId == null) {
+      const first = workspaces[0]
+      if (first) {
+        navigate(
+          formatRoute(
+            { workspaceId: first.id, appId: null, tab: null, configSetId: null },
+            first.name
+          )
+        )
+      }
+      return
+    }
+    const workspace = workspaces.find((w) => w.id === selectedWorkspaceId)
+    if (!workspace) {
+      navigate("/")
+      return
+    }
+    if (selectedAppId != null) {
+      const app = (appsByWorkspace[selectedWorkspaceId] ?? []).find(
+        (a) => a.id === selectedAppId
+      )
+      if (!app) {
+        navigate(
+          formatRoute(
+            { workspaceId: workspace.id, appId: null, tab: null, configSetId: null },
+            workspace.name
+          )
+        )
+      } else if (route.configSetId !== app.active_config_set_id) {
+        navigate(
+          formatRoute(
+            {
+              workspaceId: workspace.id,
+              appId: app.id,
+              tab: route.tab ?? "env",
+              configSetId: app.active_config_set_id,
+            },
+            workspace.name,
+            app.name
+          )
+        )
+      }
+    }
+  }, [
+    loading,
+    selectedWorkspaceId,
+    selectedAppId,
+    route.configSetId,
+    route.tab,
+    workspaces,
+    appsByWorkspace,
+    navigate,
+  ])
 
   return (
     <TooltipProvider>
@@ -199,6 +335,8 @@ export function App() {
               status={status ?? statusByAppId[selectedApp.id] ?? null}
               logs={logs}
               connected={connected}
+              tab={route.tab ?? "env"}
+              onTabChange={handleTabChange}
               onEdit={() => {
                 setAppDialogWorkspaceId(selectedApp.workspace_id)
                 setEditingApp(selectedApp)
@@ -206,17 +344,7 @@ export function App() {
               }}
               onDelete={() => setDeletingApp(selectedApp)}
               onStatus={handleStatus}
-              onAppChange={(app) => {
-                setAppsByWorkspace((prev) => {
-                  const list = prev[app.workspace_id] ?? []
-                  return {
-                    ...prev,
-                    [app.workspace_id]: list.map((a) =>
-                      a.id === app.id ? app : a
-                    ),
-                  }
-                })
-              }}
+              onAppChange={handleAppChange}
             />
           ) : selectedWorkspace ? (
             <WorkspaceDetail
@@ -232,17 +360,7 @@ export function App() {
                 setAppDialogOpen(true)
               }}
               onStatus={handleStatus}
-              onAppChange={(app) => {
-                setAppsByWorkspace((prev) => {
-                  const list = prev[app.workspace_id] ?? []
-                  return {
-                    ...prev,
-                    [app.workspace_id]: list.map((a) =>
-                      a.id === app.id ? app : a
-                    ),
-                  }
-                })
-              }}
+              onAppChange={handleAppChange}
             />
           ) : (
             <div className="flex flex-1 items-center justify-center p-6">
@@ -284,7 +402,7 @@ export function App() {
                 : [...prev, workspace]
               return next.sort((a, b) => a.name.localeCompare(b.name))
             })
-            setSelectedWorkspaceId(workspace.id)
+            handleGoWorkspace(workspace)
             if (!appsByWorkspace[workspace.id]) {
               setAppsByWorkspace((prev) => ({ ...prev, [workspace.id]: [] }))
             }
@@ -305,8 +423,7 @@ export function App() {
               return next
             })
             if (selectedWorkspaceId === id) {
-              setSelectedWorkspaceId(null)
-              setSelectedAppId(null)
+              handleGoHome()
             }
           }}
         />
@@ -331,8 +448,10 @@ export function App() {
                   ),
                 }
               })
-              setSelectedWorkspaceId(app.workspace_id)
-              setSelectedAppId(app.id)
+              const workspace = workspaces.find(
+                (w) => w.id === app.workspace_id
+              )
+              if (workspace) handleGoApp(workspace, app)
             }}
           />
         ) : null}
@@ -352,7 +471,6 @@ export function App() {
                 ).filter((a) => a.id !== id),
               }))
             }
-            if (selectedAppId === id) setSelectedAppId(null)
           }}
         />
 

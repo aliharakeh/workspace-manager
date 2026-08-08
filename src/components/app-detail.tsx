@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { ExternalLinkIcon, PencilIcon, Trash2Icon } from "lucide-react"
 import type { App, StatusEvent } from "@/lib/types"
 import type { LogLine } from "@/hooks/use-runner-logs"
+import type { AppTab } from "@/lib/routes"
 import { AppRunControls } from "@/components/app-run-controls"
 import { ConfigSetSwitcher } from "@/components/config-set-switcher"
 import { EnvVarsPanel } from "@/components/env-vars-panel"
@@ -19,6 +20,8 @@ type AppDetailProps = {
   status: StatusEvent | null
   logs: LogLine[]
   connected: boolean
+  tab: AppTab
+  onTabChange: (tab: AppTab) => void
   onEdit: () => void
   onDelete: () => void
   onStatus: (status: StatusEvent) => void
@@ -30,13 +33,14 @@ export function AppDetail({
   status,
   logs,
   connected,
+  tab,
+  onTabChange,
   onEdit,
   onDelete,
   onStatus,
   onAppChange,
 }: AppDetailProps) {
   const running = !!status?.running
-  const [tab, setTab] = useState("env")
   const [panelEpoch, setPanelEpoch] = useState(0)
   const readyUrls = useMemo(() => {
     if (!running) return []
@@ -47,7 +51,7 @@ export function AppDetail({
 
   function handleStatus(next: StatusEvent) {
     onStatus(next)
-    if (next.running) setTab("logs")
+    if (next.running) onTabChange("logs")
   }
 
   function handleAppChange(next: App) {
@@ -116,7 +120,7 @@ export function AppDetail({
       <Tabs
         value={tab}
         onValueChange={(value) => {
-          if (value) setTab(value)
+          if (value) onTabChange(value as AppTab)
         }}
         className="min-h-0 flex-1"
       >
