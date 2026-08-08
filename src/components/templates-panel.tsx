@@ -167,7 +167,11 @@ function TemplateItem({
         </div>
 
         {mode === "edit" ? (
-          <TemplateEditor value={content} onChange={setContent} />
+          <TemplateEditor
+            value={content}
+            onChange={setContent}
+            filePath={template.file_path}
+          />
         ) : preview.ok ? (
           <pre className="max-h-80 min-h-48 overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
             {preview.text.length > 0 ? preview.text : "(empty)"}

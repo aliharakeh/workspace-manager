@@ -81,6 +81,19 @@
     --sidebar-accent-foreground: oklch(0.205 0 0);
     --sidebar-border: oklch(0.922 0 0);
     --sidebar-ring: oklch(0.708 0 0);
+    --editor-bg: oklch(0.985 0 0);
+    --editor-fg: oklch(0.205 0 0);
+    --prism-comment: #6a737d;
+    --prism-punctuation: #575757;
+    --prism-tag: #0550ae;
+    --prism-number: #098658;
+    --prism-string: #a31515;
+    --prism-operator: #af6020;
+    --prism-keyword: #cf222e;
+    --prism-function: #8250df;
+    --prism-regex: #e36209;
+    --prism-boolean: #cf222e;
+    --prism-class: #0550ae;
 }
 
 .dark {
@@ -115,6 +128,19 @@
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.556 0 0);
+    --editor-bg: #2d2d2d;
+    --editor-fg: #ccc;
+    --prism-comment: #7c7c7c;
+    --prism-punctuation: #a8a8a8;
+    --prism-tag: #f2777a;
+    --prism-number: #f99157;
+    --prism-string: #99cc99;
+    --prism-operator: #67cdcc;
+    --prism-keyword: #cc99cc;
+    --prism-function: #66d9ef;
+    --prism-regex: #f2777a;
+    --prism-boolean: #f99157;
+    --prism-class: #f2b57a;
 }
 
 @layer base {
@@ -127,4 +153,60 @@
   html {
     @apply font-sans;
     }
+  .token.comment,
+  .token.prolog,
+  .token.doctype,
+  .token.cdata {
+    color: var(--prism-comment);
+  }
+  .token.punctuation {
+    color: var(--prism-punctuation);
+  }
+  .token.property,
+  .token.tag,
+  .token.constant,
+  .token.symbol,
+  .token.deleted {
+    color: var(--prism-tag);
+  }
+  .token.boolean,
+  .token.number {
+    color: var(--prism-number);
+  }
+  .token.selector,
+  .token.attr-name,
+  .token.string,
+  .token.char,
+  .token.builtin,
+  .token.inserted {
+    color: var(--prism-string);
+  }
+  .token.operator,
+  .token.entity,
+  .token.url {
+    color: var(--prism-operator);
+  }
+  .token.atrule,
+  .token.attr-value,
+  .token.keyword {
+    color: var(--prism-keyword);
+  }
+  .token.function {
+    color: var(--prism-function);
+  }
+  .token.class-name {
+    color: var(--prism-class);
+  }
+  .token.regex,
+  .token.important,
+  .token.variable {
+    color: var(--prism-regex);
+  }
+  .token.important,
+  .token.bold {
+    font-weight: bold;
+  }
+  .token.italic {
+    font-style: italic;
+  }
 }
