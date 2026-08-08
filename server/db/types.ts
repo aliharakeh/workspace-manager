@@ -2,6 +2,7 @@ import {
   apps,
   configSets,
   envVars,
+  readyUrlPatterns,
   runCommands,
   runConfigs,
   templates,
@@ -15,6 +16,7 @@ export type EnvVar = typeof envVars.$inferSelect
 export type Template = typeof templates.$inferSelect
 export type RunConfig = typeof runConfigs.$inferSelect
 export type RunCommand = typeof runCommands.$inferSelect
+export type ReadyUrlPatternRow = typeof readyUrlPatterns.$inferSelect
 
 export type RunMode = RunConfig["mode"]
 

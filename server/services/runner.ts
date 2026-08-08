@@ -10,6 +10,7 @@ import { envVarsRepo } from "../db/env-vars"
 import { runConfigsRepo } from "../db/run-configs"
 import type { RunCommand, RunMode } from "../db/types"
 import { stripAnsi } from "../lib/ansi"
+import { matchReadyUrl } from "./ready-url"
 import { applyTemplates, restoreTemplates } from "./templates"
 
 export type ProcessStatus = "pending" | "running" | "exited" | "killed" | "error"
@@ -21,6 +22,8 @@ export type ProcessState = {
   status: ProcessStatus
   exitCode: number | null
   pid: number | null
+  /** URLs detected from process logs (Vite, Spring Boot, etc.) */
+  urls: string[]
 }
 
 export type LogEvent = {
@@ -122,6 +125,44 @@ function systemLog(session: Session, commandId: number, text: string) {
   })
 }
 
+function noteReadyUrl(session: Session, commandId: number, line: string) {
+  if (!session.running) return
+  const match = matchReadyUrl(line)
+  if (!match) return
+  const processState = session.processes.find((p) => p.commandId === commandId)
+  if (!processState) return
+  if (processState.urls.includes(match.url)) return
+  processState.urls.push(match.url)
+  systemLog(
+    session,
+    commandId,
+    `Detected URL (${match.label}): ${match.url}`
+  )
+  emit(session, statusEvent(session))
+}
+
+function clearReadyUrls(session: Session) {
+  for (const processState of session.processes) {
+    processState.urls = []
+  }
+}
+
+function emitLogLine(
+  session: Session,
+  commandId: number,
+  kind: "stdout" | "stderr",
+  text: string
+) {
+  emit(session, {
+    type: "log",
+    commandId,
+    stream: kind,
+    text: text.endsWith("\n") ? text : `${text}\n`,
+    ts: Date.now(),
+  })
+  noteReadyUrl(session, commandId, text)
+}
+
 async function pipeStream(
   session: Session,
   commandId: number,
@@ -143,26 +184,13 @@ async function pipeStream(
       const parts = pending.split(/\r?\n/)
       pending = parts.pop() ?? ""
       for (const line of parts) {
-        const text = stripAnsi(line)
-        emit(session, {
-          type: "log",
-          commandId,
-          stream: kind,
-          text: `${text}\n`,
-          ts: Date.now(),
-        })
+        emitLogLine(session, commandId, kind, stripAnsi(line))
       }
     }
     pending += decoder.decode()
     const rest = stripAnsi(pending)
     if (rest) {
-      emit(session, {
-        type: "log",
-        commandId,
-        stream: kind,
-        text: rest.endsWith("\n") ? rest : `${rest}\n`,
-        ts: Date.now(),
-      })
+      emitLogLine(session, commandId, kind, rest)
     }
   } catch {
     // process killed / stream closed
@@ -279,6 +307,7 @@ async function runSession(session: Session) {
     }
   } finally {
     session.running = false
+    clearReadyUrls(session)
     if (!session.restored) {
       restoreTemplates(session.appId, session.id)
       session.restored = true
@@ -310,6 +339,7 @@ function createSession(appId: number): Session {
       status: "pending",
       exitCode: null,
       pid: null,
+      urls: [],
     })),
     children: new Map(),
     running: true,
@@ -377,6 +407,8 @@ export const runner = {
     if (!session) throw new Error("No active session")
 
     session.abortSequential = true
+    session.running = false
+    clearReadyUrls(session)
     for (const processState of session.processes) {
       if (processState.status === "running") {
         processState.status = "killed"
@@ -384,8 +416,9 @@ export const runner = {
     }
     const children = [...session.children.values()]
     session.children.clear()
+    // Emit cleared URLs immediately so UI updates before kill finishes
+    emit(session, statusEvent(session))
     await Promise.all(children.map((child) => killProcess(child)))
-    session.running = false
 
     if (!session.restored) {
       restoreTemplates(appId, session.id)

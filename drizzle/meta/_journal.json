@@ -15,6 +15,20 @@
       "when": 1786112000000,
       "tag": "0001_config_sets",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786113000000,
+      "tag": "0002_ready_url_patterns",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1786114000000,
+      "tag": "0003_ready_url_pattern_keys",
+      "breakpoints": true
     }
   ]
 }

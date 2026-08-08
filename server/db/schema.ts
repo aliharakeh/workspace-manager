@@ -115,3 +115,17 @@ export const runCommands = sqliteTable(
   },
   (t) => [index("idx_run_commands_config_id").on(t.run_config_id)]
 )
+
+/** Regex patterns used to detect ready URLs from process logs. */
+export const readyUrlPatterns = sqliteTable("ready_url_patterns", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  /** Stable id for built-in defaults; null for user-created patterns. */
+  key: text("key").unique(),
+  label: text("label").notNull(),
+  /** RegExp source; must include named group `url` and/or `port`. */
+  pattern: text("pattern").notNull(),
+  /** RegExp flags (default `i`). */
+  flags: text("flags").notNull().default("i"),
+  sort_order: integer("sort_order").notNull().default(0),
+  ...timestamps,
+})

@@ -1,5 +1,9 @@
 import "./db"
+import { readyUrlPatternsRepo } from "./db/ready-url-patterns"
 import { findAvailablePort } from "../native/ports"
+
+// Persist built-in log URL patterns so they show up in Settings by default.
+readyUrlPatternsRepo.ensureSeeded()
 import { health } from "./routes/health"
 import { handleWorkspaces } from "./routes/workspaces"
 import { handleApps } from "./routes/apps"
@@ -10,6 +14,7 @@ import { handleTemplates } from "./routes/templates"
 import { handleRunConfigs } from "./routes/run-configs"
 import { handleRunner } from "./routes/runner"
 import { handlePorts } from "./routes/ports"
+import { handleReadyUrlPatterns } from "./routes/ready-url-patterns"
 import { isStandaloneBinary, openBrowser } from "../native/browser"
 import { hasFrontendBuild, serveStatic } from "./static"
 
@@ -66,6 +71,7 @@ const server = Bun.serve({
       handleRunConfigs,
       handleRunner,
       handlePorts,
+      handleReadyUrlPatterns,
     ]
 
     for (const handler of handlers) {
