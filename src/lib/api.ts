@@ -218,6 +218,15 @@ export const api = {
       request<void>(`/api/ready-url-patterns/${id}`, { method: "DELETE" }),
   },
 
+  settings: {
+    get: () => request<Record<string, string>>("/api/settings"),
+    set: (key: string, value: string) =>
+      request<Record<string, string>>("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify({ key, value }),
+      }),
+  },
+
   fs: {
     validatePath: (path: string) =>
       request<{ ok: boolean; path?: string; error?: string }>(

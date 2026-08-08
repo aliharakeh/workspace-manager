@@ -1,21 +1,35 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { PlusIcon, FolderIcon } from "lucide-react"
+import { PlusIcon, FolderIcon, SearchIcon } from "lucide-react"
 import { api } from "@/lib/api"
 import type { App as AppEntity, StatusEvent, Workspace } from "@/lib/types"
 import { useRunnerLogs } from "@/hooks/use-runner-logs"
 import { useAppStatuses } from "@/hooks/use-app-statuses"
 import { useRoute } from "@/hooks/use-route"
 import { formatRoute, type AppTab } from "@/lib/routes"
+import {
+  DEFAULT_SHORTCUTS,
+  SEARCH_SHORTCUT_KEY,
+  formatShortcut,
+  isShortcutRecorderActive,
+  matchesShortcut,
+  shortcutParts,
+} from "@/lib/shortcuts"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AppDetail } from "@/components/app-detail"
 import { WorkspaceDetail } from "@/components/workspace-detail"
+import {
+  CommandPalette,
+  type PaletteItem,
+} from "@/components/command-palette"
+import { SettingsProvider, useSettings } from "@/components/settings-provider"
 import { AppDialog, DeleteAppDialog } from "@/components/app-dialogs"
 import {
   WorkspaceDialog,
   DeleteWorkspaceDialog,
 } from "@/components/workspace-dialogs"
 import { Button } from "@/components/ui/button"
+import { Kbd } from "@/components/ui/kbd"
 import {
   Empty,
   EmptyContent,
@@ -34,6 +48,19 @@ import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 
 export function App() {
+  return (
+    <SettingsProvider>
+      <AppContent />
+    </SettingsProvider>
+  )
+}
+
+function AppContent() {
+  const { settings } = useSettings()
+  const searchShortcut =
+    settings[SEARCH_SHORTCUT_KEY] ?? DEFAULT_SHORTCUTS[SEARCH_SHORTCUT_KEY]
+  const [paletteOpen, setPaletteOpen] = useState(false)
+
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [appsByWorkspace, setAppsByWorkspace] = useState<
     Record<number, AppEntity[]>
@@ -195,6 +222,55 @@ export function App() {
     navigate("/")
   }
 
+  // Open the search palette from the configured keyboard shortcut.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isShortcutRecorderActive()) return
+      if (matchesShortcut(searchShortcut, event)) {
+        event.preventDefault()
+        setPaletteOpen(true)
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [searchShortcut])
+
+  const paletteItems = useMemo<PaletteItem[]>(
+    () => [
+      ...workspaces.map<PaletteItem>((w) => ({
+        type: "workspace" as const,
+        id: w.id,
+        workspaceId: null,
+        title: w.name,
+        subtitle: "Workspace",
+      })),
+      ...workspaces.flatMap<PaletteItem>((w) =>
+        (appsByWorkspace[w.id] ?? []).map((a) => ({
+          type: "app" as const,
+          id: a.id,
+          workspaceId: w.id,
+          title: a.name,
+          subtitle: w.name,
+        }))
+      ),
+    ],
+    [workspaces, appsByWorkspace]
+  )
+
+  function handlePaletteSelect(item: PaletteItem) {
+    setPaletteOpen(false)
+    if (item.type === "workspace") {
+      const workspace = workspaces.find((w) => w.id === item.id)
+      if (workspace) handleGoWorkspace(workspace)
+      return
+    }
+    const workspace = workspaces.find((w) => w.id === item.workspaceId)
+    const app = (appsByWorkspace[item.workspaceId ?? -1] ?? []).find(
+      (a) => a.id === item.id
+    )
+    if (workspace && app) handleGoApp(workspace, app)
+  }
+
   // Update an app's stored data and, if it's the selected app, re-navigate so
   // the URL reflects the (possibly changed) active config set.
   function handleAppChange(app: AppEntity) {
@@ -309,10 +385,25 @@ export function App() {
                 <span className="text-muted-foreground">App Runner</span>
               )}
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-auto gap-1.5 text-muted-foreground"
+              onClick={() => setPaletteOpen(true)}
+              title={`Search (${formatShortcut(searchShortcut)})`}
+            >
+              <SearchIcon />
+              <span className="hidden lg:inline">Search</span>
+              <span className="hidden items-center gap-0.5 md:flex">
+                {shortcutParts(searchShortcut).map((part) => (
+                  <Kbd key={part}>{part}</Kbd>
+                ))}
+              </span>
+              <span className="sr-only">Search</span>
+            </Button>
             {selectedWorkspace && !selectedApp ? (
               <Button
                 size="sm"
-                className="ml-auto"
                 onClick={() => {
                   setAppDialogWorkspaceId(selectedWorkspace.id)
                   setEditingApp(null)
@@ -472,6 +563,14 @@ export function App() {
               }))
             }
           }}
+        />
+
+        <CommandPalette
+          open={paletteOpen}
+          onOpenChange={setPaletteOpen}
+          items={paletteItems}
+          shortcut={searchShortcut}
+          onSelect={handlePaletteSelect}
         />
 
         <Toaster />

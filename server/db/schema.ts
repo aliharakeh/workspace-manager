@@ -116,6 +116,18 @@ export const runCommands = sqliteTable(
   (t) => [index("idx_run_commands_config_id").on(t.run_config_id)]
 )
 
+/**
+ * Flat key/value store for app-wide settings (e.g. keyboard shortcuts).
+ * Values are stored as plain strings; consumers parse them.
+ */
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updated_at: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+})
+
 /** Regex patterns used to detect ready URLs from process logs. */
 export const readyUrlPatterns = sqliteTable("ready_url_patterns", {
   id: integer("id").primaryKey({ autoIncrement: true }),
