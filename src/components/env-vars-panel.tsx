@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
+  FileUpIcon,
   KeyRoundIcon,
   PlusIcon,
   SaveIcon,
@@ -136,6 +137,7 @@ export function EnvVarsPanel({ appId }: EnvVarsPanelProps) {
   const deferredQuery = useDeferredValue(query)
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
+  const [importing, setImporting] = useState(false)
 
   const filtered = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase()
@@ -187,6 +189,22 @@ export function EnvVarsPanel({ appId }: EnvVarsPanelProps) {
     }
   }
 
+  async function handleImport() {
+    setImporting(true)
+    try {
+      const res = await api.envVars.importEnv(appId)
+      if (res.cancelled) return
+      setVars(res.vars ?? [])
+      toast.success(
+        `Imported ${res.imported ?? 0} env var(s) from ${res.path ?? "file"}`
+      )
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to import")
+    } finally {
+      setImporting(false)
+    }
+  }
+
   if (loading) {
     return <p className="text-sm text-muted-foreground">Loading…</p>
   }
@@ -218,10 +236,20 @@ export function EnvVarsPanel({ appId }: EnvVarsPanelProps) {
               }}
             />
           </Field>
-          <Button disabled={adding} onClick={() => void handleAdd()}>
-            <PlusIcon data-icon="inline-start" />
-            {adding ? "Adding…" : "Add"}
-          </Button>
+          <div className="flex gap-2">
+            <Button disabled={adding} onClick={() => void handleAdd()}>
+              <PlusIcon data-icon="inline-start" />
+              {adding ? "Adding…" : "Add"}
+            </Button>
+            <Button
+              variant="outline"
+              disabled={importing}
+              onClick={() => void handleImport()}
+            >
+              <FileUpIcon data-icon="inline-start" />
+              {importing ? "Importing…" : "Import .env"}
+            </Button>
+          </div>
         </div>
       </FieldGroup>
 

@@ -131,6 +131,14 @@ export const api = {
       }),
     delete: (id: number) =>
       request<void>(`/api/env-vars/${id}`, { method: "DELETE" }),
+    /** Open a native file dialog, parse the chosen .env file, and import it. */
+    importEnv: (appId: number) =>
+      request<{
+        cancelled: boolean
+        path?: string
+        imported?: number
+        vars?: EnvVar[]
+      }>(`/api/apps/${appId}/env-vars/import`, { method: "POST" }),
   },
 
   templates: {

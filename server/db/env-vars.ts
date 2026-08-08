@@ -54,6 +54,13 @@ export const envVarsRepo = {
     return db.delete(envVars).where(eq(envVars.id, id)).run().changes > 0
   },
 
+  /** Insert a var, or update the value if the key already exists. */
+  upsertByKey(configSetId: number, key: string, value: string): EnvVar {
+    const existing = this.listByConfigSet(configSetId).find((v) => v.key === key)
+    if (existing) return this.update(existing.id, { value }) ?? existing
+    return this.create({ config_set_id: configSetId, key, value })
+  },
+
   toRecord(configSetId: number): Record<string, string> {
     return Object.fromEntries(
       this.listByConfigSet(configSetId).map((v) => [v.key, v.value])

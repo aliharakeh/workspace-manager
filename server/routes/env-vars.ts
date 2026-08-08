@@ -1,12 +1,67 @@
+import { readFileSync } from "node:fs"
 import { appsRepo } from "../db/apps"
 import { configSetsRepo } from "../db/config-sets"
 import { envVarsRepo } from "../db/env-vars"
 import { error, json, notFound, parseId, readJson } from "../lib/http"
+import { EnvParseError, parseEnvFile } from "../lib/parse-env"
+import { pickNativeFile } from "../../native/dialog"
 
 export async function handleEnvVars(
   req: Request,
   pathname: string
 ): Promise<Response | null> {
+  const importMatch = pathname.match(
+    /^\/api\/apps\/(\d+)\/env-vars\/import$/
+  )
+  if (importMatch && req.method === "POST") {
+    const appId = parseId(importMatch[1])
+    if (!appId) return error("Invalid app id")
+    const app = appsRepo.get(appId)
+    if (!app) return notFound("App not found")
+
+    const picked = await pickNativeFile(app.project_path)
+    if (!picked.ok) {
+      if ("cancelled" in picked && picked.cancelled) {
+        return json({ cancelled: true })
+      }
+      return error(
+        "error" in picked ? picked.error : "File dialog failed",
+        500
+      )
+    }
+
+    let content: string
+    try {
+      content = readFileSync(picked.path, "utf8")
+    } catch (err) {
+      return error(
+        err instanceof Error ? err.message : "Failed to read selected file"
+      )
+    }
+
+    let entries
+    try {
+      entries = parseEnvFile(content)
+    } catch (err) {
+      if (err instanceof EnvParseError) {
+        return error(`Not a valid .env file: ${err.message}`, 400)
+      }
+      return error("Failed to parse the selected file as a .env file")
+    }
+
+    const set = configSetsRepo.resolveActive(appId)
+    const imported = entries.map((e) =>
+      envVarsRepo.upsertByKey(set.id, e.key, e.value)
+    )
+
+    return json({
+      cancelled: false,
+      path: picked.path,
+      imported: imported.length,
+      vars: envVarsRepo.listByConfigSet(set.id),
+    })
+  }
+
   const listMatch = pathname.match(/^\/api\/apps\/(\d+)\/env-vars$/)
   if (listMatch) {
     const appId = parseId(listMatch[1])
