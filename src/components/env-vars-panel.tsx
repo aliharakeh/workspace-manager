@@ -1,5 +1,21 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react"
-import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group"
+import { api } from "@/lib/api"
+import type { EnvVar } from "@/lib/types"
 import {
   FileUpIcon,
   KeyRoundIcon,
@@ -9,24 +25,8 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react"
-import { api } from "@/lib/api"
-import type { EnvVar } from "@/lib/types"
-import { Button } from "@/components/ui/button"
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from "@/components/ui/input-group"
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty"
+import { useDeferredValue, useEffect, useMemo, useState } from "react"
+import { toast } from "sonner"
 
 type EnvVarsPanelProps = {
   appId: number
@@ -196,8 +196,17 @@ export function EnvVarsPanel({ appId }: EnvVarsPanelProps) {
       if (res.cancelled) return
       setVars(res.vars ?? [])
       toast.success(
-        `Imported ${res.imported ?? 0} env var(s) from ${res.path ?? "file"}`
+        `Imported ${res.imported ?? 0} variable(s) from ${res.path ?? "file"}`
       )
+      if (res.template) {
+        toast.success(
+          res.template.created
+            ? `Template added for ${res.template.file_path} with {{KEY}} placeholders`
+            : `Template updated for ${res.template.file_path} with {{KEY}} placeholders`
+        )
+      } else {
+        toast.warning("Template was not created for the imported file")
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to import")
     } finally {
@@ -245,9 +254,10 @@ export function EnvVarsPanel({ appId }: EnvVarsPanelProps) {
               variant="outline"
               disabled={importing}
               onClick={() => void handleImport()}
+              title="Import variables and create a template from a .env, .yaml or .yml file"
             >
               <FileUpIcon data-icon="inline-start" />
-              {importing ? "Importing…" : "Import .env"}
+              {importing ? "Importing…" : "Import file"}
             </Button>
           </div>
         </div>

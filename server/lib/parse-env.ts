@@ -65,3 +65,33 @@ export function parseEnvFile(content: string): ParsedEnvEntry[] {
 
   return entries
 }
+
+/**
+ * Build a Handlebars template from `.env`-style content, replacing each
+ * variable's value with `{{KEY}}` so it resolves from the app's env vars at
+ * render time. Comments and blank lines are preserved.
+ */
+export function envFileToTemplate(content: string): string {
+  const out: string[] = []
+  for (const raw of content.split(/\r?\n/)) {
+    const trimmed = raw.trim()
+    if (!trimmed || trimmed.startsWith("#")) {
+      out.push(raw)
+      continue
+    }
+    let head = trimmed
+    let prefix = ""
+    if (head.startsWith("export ")) {
+      prefix = "export "
+      head = head.slice("export ".length)
+    }
+    const eq = head.indexOf("=")
+    if (eq <= 0) {
+      out.push(raw)
+      continue
+    }
+    const key = head.slice(0, eq).trim()
+    out.push(`${prefix}${key}={{${key}}}`)
+  }
+  return out.join("\n") + "\n"
+}

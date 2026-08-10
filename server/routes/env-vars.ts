@@ -1,18 +1,19 @@
 import { readFileSync } from "node:fs"
+import { basename } from "node:path"
+import { pickNativeFile } from "../../native/dialog"
 import { appsRepo } from "../db/apps"
 import { configSetsRepo } from "../db/config-sets"
 import { envVarsRepo } from "../db/env-vars"
+import { templatesRepo } from "../db/templates"
+import { toProjectRelative } from "../lib/fs"
 import { error, json, notFound, parseId, readJson } from "../lib/http"
-import { EnvParseError, parseEnvFile } from "../lib/parse-env"
-import { pickNativeFile } from "../../native/dialog"
+import { detectImportFormat, type ImportEntry } from "../lib/import-formats"
 
 export async function handleEnvVars(
   req: Request,
   pathname: string
 ): Promise<Response | null> {
-  const importMatch = pathname.match(
-    /^\/api\/apps\/(\d+)\/env-vars\/import$/
-  )
+  const importMatch = pathname.match(/^\/api\/apps\/(\d+)\/env-vars\/import$/)
   if (importMatch && req.method === "POST") {
     const appId = parseId(importMatch[1])
     if (!appId) return error("Invalid app id")
@@ -24,10 +25,7 @@ export async function handleEnvVars(
       if ("cancelled" in picked && picked.cancelled) {
         return json({ cancelled: true })
       }
-      return error(
-        "error" in picked ? picked.error : "File dialog failed",
-        500
-      )
+      return error("error" in picked ? picked.error : "File dialog failed", 500)
     }
 
     let content: string
@@ -39,14 +37,21 @@ export async function handleEnvVars(
       )
     }
 
-    let entries
+    const format = detectImportFormat(picked.path)
+    if (!format) {
+      return error(`Unsupported file format: ${basename(picked.path)}`, 400)
+    }
+
+    let entries: ImportEntry[]
     try {
-      entries = parseEnvFile(content)
+      entries = format.parse(content)
     } catch (err) {
-      if (err instanceof EnvParseError) {
-        return error(`Not a valid .env file: ${err.message}`, 400)
-      }
-      return error("Failed to parse the selected file as a .env file")
+      return error(
+        err instanceof Error
+          ? err.message
+          : `Failed to parse the selected ${format.label} file`,
+        400
+      )
     }
 
     const set = configSetsRepo.resolveActive(appId)
@@ -54,11 +59,50 @@ export async function handleEnvVars(
       envVarsRepo.upsertByKey(set.id, e.key, e.value)
     )
 
+    // Auto-create (or refresh) a template for the picked file so each value
+    // resolves from the app's env vars at render time, e.g. `KEY={{KEY}}`.
+    // Always create it: fall back to the file name if it's outside the project.
+    let template: {
+      id: number
+      file_path: string
+      created: boolean
+    } | null = null
+    try {
+      const relPath =
+        toProjectRelative(app.project_path, picked.path) ??
+        basename(picked.path.replace(/\\/g, "/"))
+      const templateContent = format.toTemplate(content)
+      const existing = templatesRepo
+        .listByConfigSet(set.id)
+        .find((t) => t.file_path === relPath)
+      if (existing) {
+        templatesRepo.update(existing.id, { content: templateContent })
+        template = { id: existing.id, file_path: relPath, created: false }
+      } else {
+        const created = templatesRepo.create({
+          config_set_id: set.id,
+          file_path: relPath,
+          content: templateContent,
+        })
+        template = { id: created.id, file_path: relPath, created: true }
+      }
+      console.log(
+        `[env-vars/import] app=${appId} file="${picked.path}" rel="${relPath}" template=${template.created ? "created" : "updated"}`
+      )
+    } catch (err) {
+      console.error(
+        `[env-vars/import] template creation failed for "${picked.path}":`,
+        err
+      )
+    }
+
     return json({
       cancelled: false,
       path: picked.path,
+      format: format.label,
       imported: imported.length,
       vars: envVarsRepo.listByConfigSet(set.id),
+      template,
     })
   }
 
