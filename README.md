@@ -4,21 +4,24 @@ A local desktop tool for running and managing multiple apps from one place. Grou
 
 Same product, two shells:
 
-| | **V1** (`v1/`) | **V2** (`v2/`) |
+| | **bun_backend** (`bun_backend/`) | **electrobun_backend** (`electrobun_backend/`) |
 |---|---|---|
 | What it is | Compiled **Bun** server + React UI | **Electrobun** desktop app |
 | How you use it | Starts an HTTP server and opens in the browser (or a standalone `.exe`) | Native window; Bun is the main process |
-| Native work | Helpers under `v1/native/` called from the HTTP server | Same kind of work, but through Electrobun RPC from the Bun process |
+| Native work | Helpers under `bun_backend/native/` called from the HTTP server | Same kind of work, but through Electrobun RPC from the Bun process |
+| UI | Shared `frontend/` + `bun_backend/host.ts` (`fetch` / SSE) | Shared `frontend/` + `electrobun_backend/src/host.ts` (RPC) |
 | Live logs | Server-Sent Events (`EventSource`) | Electrobun RPC messages (`runnerEvent`) |
-| Ship it | `bun run compile:{win,mac,linux}` → `release/workspace-manager-*` | `bun run build:stable` on that OS (Electrobun) |
+| Ship it | `bun run bun_backend:compile:{win,mac,linux}` → `bun_backend/release/workspace-manager-*` | `bun run electrobun_backend:build:stable` on that OS (Electrobun) |
 
-Both versions share the same UI and feature set (React, Vite, shadcn/ui, SQLite via Drizzle). V2 is the desktop rewrite: no local HTTP API, no browser tab.
+Both versions share one React UI in `frontend/` and one SQLite database. Each shell provides a small host adapter (`bun_backend/host.ts` via HTTP/SSE, `electrobun_backend/src/host.ts` via Electrobun RPC) so the UI talks to one `api` surface. electrobun_backend is the desktop rewrite: no local HTTP API, no browser tab.
 
-## V1 vs V2
+The database file lives in the OS user-data directory (same path for both shells): Windows `%LOCALAPPDATA%\workspace-manager`, macOS `~/Library/Application Support/workspace-manager`, Linux `$XDG_DATA_HOME/workspace-manager` or `~/.local/share/workspace-manager`.
 
-**V1** is a Bun HTTP server that serves the React app and a JSON/SSE API. In development it sits next to Vite; in production it serves the built frontend from the same origin. `bun run compile` embeds the UI and Drizzle migrations and produces a standalone binary (cross-compile with `compile:win` / `compile:mac` / `compile:linux`). Native bits (folder pickers, process spawn/kill, ports, opening the browser) live in `native/` and are invoked by the server.
+## bun_backend vs electrobun_backend
 
-**V2** is an [Electrobun](https://blackboard.sh/electrobun/docs/) app (not Electron). The Bun main process owns the window, SQLite, process runner, and OS integration. The React UI talks to it over Electrobun RPC instead of `fetch` / SSE. Native processing — spawn, kill, dialogs, ports, open-in-editor — stays in the Bun process (`v2/src/bun/`).
+**bun_backend** is a Bun HTTP server that serves the shared React app and a JSON/SSE API. In development it sits next to Vite; in production it serves the built frontend from the same origin. `bun run bun_backend:compile` embeds the UI and Drizzle migrations and produces a standalone binary (cross-compile with `bun_backend:compile:win` / `bun_backend:compile:mac` / `bun_backend:compile:linux`). Native bits (folder pickers, process spawn/kill, ports, opening the browser) live in `native/` and are invoked by the server. The UI reaches them through `bun_backend/host.ts` (`fetch` + `EventSource`).
+
+**electrobun_backend** is an [Electrobun](https://blackboard.sh/electrobun/docs/) app (not Electron). The Bun main process owns the window, SQLite, process runner, and OS integration. The same `frontend/` UI talks to it through `electrobun_backend/src/host.ts` (Electrobun RPC) instead of `fetch` / SSE. Native processing — spawn, kill, dialogs, ports, open-in-editor — stays in the Bun process (`electrobun_backend/src/bun/`).
 
 ## Features
 
@@ -61,7 +64,7 @@ Handlebars templates written over project files when you hit **Run**. Originals 
 
 ### Live logs
 
-Stdout and stderr stream as they arrive. V1 uses SSE; V2 pushes the same events over Electrobun RPC. ANSI codes are stripped. stdout and stderr are split per process tab, with system lines (commands, exits, template apply/restore) inline.
+Stdout and stderr stream as they arrive. bun_backend uses SSE; electrobun_backend pushes the same events over Electrobun RPC. ANSI codes are stripped. stdout and stderr are split per process tab, with system lines (commands, exits, template apply/restore) inline.
 
 ### Ready URLs
 
@@ -77,32 +80,30 @@ Log lines are matched against configurable regex patterns (named `url` / `port` 
 
 ## Run
 
-**V1**
+From the repo root, `bun install` once (one `package.json`, one `node_modules`). Then:
+
+**bun_backend**
 
 ```bash
-cd v1
-bun install
-bun run dev              # API + Vite
-bun run start            # production (build + serve)
-bun run compile          # this machine → release/workspace-manager(.exe)
-bun run compile:win      # Windows x64 → release/workspace-manager-windows.exe
-bun run compile:mac      # macOS arm64 → release/workspace-manager-macos
-bun run compile:linux    # Linux x64 → release/workspace-manager-linux
+bun run bun_backend:dev              # API + Vite
+bun run bun_backend:start            # production (build + serve)
+bun run bun_backend:compile          # this machine → bun_backend/release/workspace-manager(.exe)
+bun run bun_backend:compile:win      # Windows x64 → bun_backend/release/workspace-manager-windows.exe
+bun run bun_backend:compile:mac      # macOS arm64 → bun_backend/release/workspace-manager-macos
+bun run bun_backend:compile:linux    # Linux x64 → bun_backend/release/workspace-manager-linux
 ```
 
-**V2**
+**electrobun_backend**
 
 Electrobun packages the OS you run the command on (no cross-compile).
 
 ```bash
-cd v2
-bun install
-bun run dev:hmr          # Electrobun + Vite HMR
-bun run dev              # Electrobun without HMR
-bun run build:stable     # production build for this machine
+bun run electrobun_backend:dev:hmr          # Electrobun + Vite HMR
+bun run electrobun_backend:dev              # Electrobun without HMR
+bun run electrobun_backend:build:stable     # production build for this machine
 ```
 
-| | **V1** (`bun run compile:win`) | **V2** (`bun run build:stable`) |
+| | **bun_backend** (`bun run bun_backend:compile:win`) | **electrobun_backend** (`bun run electrobun_backend:build:stable`) |
 |---|---|---|
 | How the OS is chosen | Bun `--target` (cross-compile) | Host OS (`process.platform`) |
 | Build Windows from a Mac | Yes | No — run the command on Windows |
