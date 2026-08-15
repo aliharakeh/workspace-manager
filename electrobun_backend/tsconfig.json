@@ -15,11 +15,16 @@
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
 		"noFallthroughCasesInSwitch": true,
+		"baseUrl": ".",
 		"paths": {
-			"@/*": ["./src/mainview/*"],
-			"@shared/*": ["./src/shared/*"]
+			"@/*": ["../frontend/*"],
+			"@host": ["./src/host.ts"],
+			"@shared/*": ["./src/shared/*"],
+			"@db": ["../db/index.ts"],
+			"@db/*": ["../db/*"],
+			"*": ["../node_modules/@types/*", "../node_modules/*"]
 		}
 	},
-	"include": ["src/mainview", "src/shared"],
+	"include": ["../frontend", "src/host.ts", "src/shared", "entry.ts"],
 	"exclude": ["node_modules", "dist", "build", "src/bun"]
 }

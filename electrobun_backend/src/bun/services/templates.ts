@@ -1,11 +1,11 @@
 import Handlebars from "handlebars"
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, join, normalize, resolve, sep } from "node:path"
-import { appsRepo } from "../db/apps"
-import { configSetsRepo } from "../db/config-sets"
-import { envVarsRepo } from "../db/env-vars"
-import { templatesRepo } from "../db/templates"
-import { dataDir } from "../lib/paths"
+import { appsRepo } from "../../../../db/apps"
+import { configSetsRepo } from "../../../../db/config-sets"
+import { envVarsRepo } from "../../../../db/env-vars"
+import { templatesRepo } from "../../../../db/templates"
+import { dataDir } from "../../../../db/paths"
 
 function backupRoot(appId: number, sessionId: string) {
   return join(dataDir(), "backups", String(appId), sessionId)

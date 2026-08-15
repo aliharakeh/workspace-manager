@@ -1,5 +1,31 @@
-import { rpc } from "./electrobun"
-import type { CopyParts, RunMode } from "./types"
+import { Electroview } from "electrobun/view"
+import type { AppRPC } from "./shared/rpc"
+import type { CopyParts, RunMode, RunnerEvent } from "@/lib/types"
+
+type RunnerEventHandler = (appId: number, event: RunnerEvent) => void
+
+const listeners = new Set<RunnerEventHandler>()
+
+export function onRunnerEvent(handler: RunnerEventHandler, appId?: number) {
+  void appId
+  listeners.add(handler)
+  return () => {
+    listeners.delete(handler)
+  }
+}
+
+const rpc = Electroview.defineRPC<AppRPC>({
+  maxRequestTime: Infinity,
+  handlers: {
+    messages: {
+      runnerEvent: ({ appId, event }) => {
+        for (const handler of listeners) handler(appId, event)
+      },
+    },
+  },
+})
+
+new Electroview({ rpc })
 
 class ApiError extends Error {
   status: number
@@ -34,10 +60,7 @@ export const api = {
     create: (
       workspaceId: number,
       body: { name: string; project_path: string }
-    ) =>
-      call(() =>
-        rpc.request.appsCreate({ workspaceId, ...body })
-      ),
+    ) => call(() => rpc.request.appsCreate({ workspaceId, ...body })),
     update: (id: number, body: { name?: string; project_path?: string }) =>
       call(() => rpc.request.appsUpdate({ id, ...body })),
     delete: (id: number) => call(() => rpc.request.appsDelete({ id })),
@@ -150,15 +173,6 @@ export const api = {
 
   openExternal: (url: string) =>
     call(() => rpc.request.openExternal({ url })),
-}
-
-export function handleReadyUrlClick(
-  event: { preventDefault(): void; stopPropagation(): void },
-  url: string
-) {
-  event.preventDefault()
-  event.stopPropagation()
-  void api.openExternal(url)
 }
 
 export { ApiError }

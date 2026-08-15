@@ -11,7 +11,7 @@
  * If both are present, `url` wins.
  */
 
-import { readyUrlPatternsRepo } from "../db/ready-url-patterns"
+import { readyUrlPatternsRepo } from "../../../../db/ready-url-patterns"
 
 export type ReadyUrlPattern = {
   id: string

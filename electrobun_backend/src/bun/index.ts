@@ -1,6 +1,6 @@
 import { BrowserWindow, Updater } from "electrobun/bun"
-import "./db"
-import { readyUrlPatternsRepo } from "./db/ready-url-patterns"
+import "../../../db"
+import { readyUrlPatternsRepo } from "../../../db/ready-url-patterns"
 import { createAppRPC } from "./rpc"
 import { setRunnerBroadcast } from "./services/runner"
 
@@ -18,7 +18,7 @@ async function getMainViewUrl() {
       return DEV_SERVER_URL
     } catch {
       console.log(
-        "Vite dev server not running. Run 'bun run dev:hmr' for HMR support."
+        "Vite dev server not running. Run 'bun run electrobun_backend:dev:hmr' for HMR support."
       )
     }
   }

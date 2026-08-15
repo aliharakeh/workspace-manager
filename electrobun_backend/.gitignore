@@ -1,0 +1,14 @@
+# Logs
+logs
+*.log
+
+# Build output
+build/
+dist/
+
+# Local data
+data/
+
+# Editor
+.DS_Store
+*.local

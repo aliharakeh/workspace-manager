@@ -3,18 +3,18 @@ import { basename } from "node:path"
 import { BrowserView, Utils } from "electrobun/bun"
 import type { AppRPC } from "../shared/rpc"
 import type { CopyParts } from "../shared/types"
-import { appsRepo } from "./db/apps"
+import { appsRepo } from "../../../db/apps"
 import {
   configSetsRepo,
   type ConfigCopyParts,
-} from "./db/config-sets"
-import { envVarsRepo } from "./db/env-vars"
-import { readyUrlPatternsRepo } from "./db/ready-url-patterns"
-import { runConfigsRepo } from "./db/run-configs"
-import { settingsRepo } from "./db/settings"
-import { templatesRepo } from "./db/templates"
-import { workspacesRepo } from "./db/workspaces"
-import type { RunMode } from "./db/types"
+} from "../../../db/config-sets"
+import { envVarsRepo } from "../../../db/env-vars"
+import { readyUrlPatternsRepo } from "../../../db/ready-url-patterns"
+import { runConfigsRepo } from "../../../db/run-configs"
+import { settingsRepo } from "../../../db/settings"
+import { templatesRepo } from "../../../db/templates"
+import { workspacesRepo } from "../../../db/workspaces"
+import type { RunMode } from "../../../db/types"
 import { detectImportFormat } from "./lib/import-formats"
 import {
   readProjectFile,

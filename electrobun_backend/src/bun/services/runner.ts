@@ -4,11 +4,11 @@ import {
   spawnShell,
   type SpawnedProcess,
 } from "../native/process"
-import { appsRepo } from "../db/apps"
-import { configSetsRepo } from "../db/config-sets"
-import { envVarsRepo } from "../db/env-vars"
-import { runConfigsRepo } from "../db/run-configs"
-import type { RunCommand, RunMode } from "../db/types"
+import { appsRepo } from "../../../../db/apps"
+import { configSetsRepo } from "../../../../db/config-sets"
+import { envVarsRepo } from "../../../../db/env-vars"
+import { runConfigsRepo } from "../../../../db/run-configs"
+import type { RunCommand, RunMode } from "../../../../db/types"
 import { matchReadyUrl } from "./ready-url"
 import { applyTemplates, restoreTemplates } from "./templates"
 
