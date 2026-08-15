@@ -9,7 +9,6 @@ import { configSetsRepo } from "../db/config-sets"
 import { envVarsRepo } from "../db/env-vars"
 import { runConfigsRepo } from "../db/run-configs"
 import type { RunCommand, RunMode } from "../db/types"
-import { stripAnsi } from "../lib/ansi"
 import { matchReadyUrl } from "./ready-url"
 import { applyTemplates, restoreTemplates } from "./templates"
 
@@ -184,11 +183,11 @@ async function pipeStream(
       const parts = pending.split(/\r?\n/)
       pending = parts.pop() ?? ""
       for (const line of parts) {
-        emitLogLine(session, commandId, kind, stripAnsi(line))
+        emitLogLine(session, commandId, kind, Bun.stripANSI(line))
       }
     }
     pending += decoder.decode()
-    const rest = stripAnsi(pending)
+    const rest = Bun.stripANSI(pending)
     if (rest) {
       emitLogLine(session, commandId, kind, rest)
     }

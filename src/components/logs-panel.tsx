@@ -8,7 +8,6 @@ import {
 import { ExternalLinkIcon } from "lucide-react"
 import type { LogLine } from "@/hooks/use-runner-logs"
 import type { ProcessState, StatusEvent } from "@/lib/types"
-import { stripAnsi } from "@/lib/ansi"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
@@ -71,7 +70,7 @@ function LogStreamView({
                     line.stream === "system" && "text-muted-foreground"
                   )}
                 >
-                  {stripAnsi(line.text)}
+                  {line.text}
                 </span>
               ))}
           {bottomRef ? <div ref={bottomRef} /> : null}
