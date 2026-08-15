@@ -1,11 +1,11 @@
 /**
  * compile.ts — production single-binary build.
  *
- * Entry: `bun run compile`
+ * Entry: `bun run compile` | `compile:win` | `compile:mac` | `compile:linux`
  *
  * 1. Builds the Vite frontend → `dist/`
  * 2. Generates `server/embedded-assets.ts` with file embeds for `dist/` + `drizzle/`
- * 3. Compiles `server/index.ts` into `release/app-runner` (`.exe` on Windows)
+ * 3. Compiles `server/index.ts` into `release/workspace-manager*` (cross-compile via Bun `--target`)
  * 4. Restores the empty embeds stub so day-to-day `bun` runs keep using disk paths
  */
 import { readdirSync, writeFileSync } from "node:fs"
@@ -13,7 +13,24 @@ import { join, relative } from "node:path"
 
 const ROOT = join(import.meta.dir, "..")
 const EMBEDS_PATH = join(ROOT, "server", "embedded-assets.ts")
-const OUTFILE = join(ROOT, "release", "app-runner")
+
+const PLATFORMS = {
+  win: { target: "bun-windows-x64", outfile: "workspace-manager-windows" },
+  mac: { target: "bun-darwin-arm64", outfile: "workspace-manager-macos" },
+  linux: { target: "bun-linux-x64", outfile: "workspace-manager-linux" },
+} as const
+
+type Platform = keyof typeof PLATFORMS
+
+const arg = process.argv[2]
+if (arg && !(arg in PLATFORMS)) {
+  console.error(`Unknown platform "${arg}". Use win, mac, or linux.`)
+  process.exit(1)
+}
+
+const platform = arg as Platform | undefined
+const spec = platform ? PLATFORMS[platform] : undefined
+const OUTFILE = join(ROOT, "release", spec?.outfile ?? "workspace-manager")
 
 const STUB = `/**
  * Populated by \`bun run compile\` with \`with { type: "file" }\` imports so the
@@ -100,11 +117,16 @@ if (buildCode !== 0) {
 try {
   genEmbeds()
 
-  console.log(`Compiling standalone binary → ${OUTFILE}`)
+  console.log(
+    spec
+      ? `Compiling standalone binary for ${platform} (${spec.target}) → ${OUTFILE}`
+      : `Compiling standalone binary for this machine → ${OUTFILE}`
+  )
   const result = await Bun.build({
     entrypoints: [join(ROOT, "server", "index.ts")],
     compile: {
       outfile: OUTFILE,
+      ...(spec ? { target: spec.target } : {}),
     },
   })
 
@@ -116,7 +138,6 @@ try {
 
   const built = result.outputs[0]?.path ?? OUTFILE
   console.log(`Done: ${built}`)
-  console.log("Run it with: .\\release\\app-runner.exe   (or ./release/app-runner)")
 } finally {
   writeFileSync(EMBEDS_PATH, STUB)
 }

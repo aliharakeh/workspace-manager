@@ -1,5 +1,5 @@
 {
-  "name": "app-runner-v2",
+  "name": "workspace-manager-v1",
   "private": true,
   "version": "0.0.1",
   "type": "module",
@@ -9,6 +9,9 @@
     "dev:server": "bun run scripts/dev-server.ts",
     "build": "tsc -b && vite build",
     "compile": "bun run scripts/compile.ts",
+    "compile:win": "bun run scripts/compile.ts win",
+    "compile:mac": "bun run scripts/compile.ts mac",
+    "compile:linux": "bun run scripts/compile.ts linux",
     "start": "bun run scripts/start.ts",
     "start:server": "bun run server/index.ts",
     "lint": "eslint .",
