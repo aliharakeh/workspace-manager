@@ -1,4 +1,4 @@
-import { parse as parseYaml, stringify as stringifyYaml } from "yaml"
+import { YAML } from "bun"
 import { envFileToTemplate, parseEnvFile } from "./parse-env"
 
 /**
@@ -77,7 +77,7 @@ function templateifyYaml(value: unknown, prefix: string): unknown {
 
 function parseYamlSafe(content: string): unknown {
   try {
-    return parseYaml(content)
+    return YAML.parse(content)
   } catch (err) {
     throw new Error(
       `Invalid YAML: ${err instanceof Error ? err.message : "parse error"}`,
@@ -100,7 +100,7 @@ const yamlFormat: ImportFormat = {
   },
   toTemplate: (content) => {
     const data = parseYamlSafe(content)
-    const tpl = stringifyYaml(templateifyYaml(data, ""), { lineWidth: 0 })
+    const tpl = YAML.stringify(templateifyYaml(data, ""), null, 2)
     // The YAML serializer quotes {{[...]}} placeholders because they start
     // with "{" (flow-mapping syntax). Strip those quotes — Handlebars
     // substitutes the real values before the file is used, so the template
