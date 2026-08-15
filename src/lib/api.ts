@@ -78,6 +78,10 @@ export const api = {
       }),
     delete: (id: number) =>
       request<void>(`/api/apps/${id}`, { method: "DELETE" }),
+    openInEditor: (id: number) =>
+      request<{ ok: true }>(`/api/apps/${id}/open-in-editor`, {
+        method: "POST",
+      }),
   },
 
   configSets: {

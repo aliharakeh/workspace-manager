@@ -1,3 +1,4 @@
+import { openInEditor } from "../../native/editor"
 import { appsRepo } from "../db/apps"
 import { workspacesRepo } from "../db/workspaces"
 import { validateProjectPath } from "../lib/fs"
@@ -37,6 +38,20 @@ export async function handleApps(
     }
 
     return null
+  }
+
+  const openEditor = pathname.match(/^\/api\/apps\/(\d+)\/open-in-editor$/)
+  if (openEditor && req.method === "POST") {
+    const id = parseId(openEditor[1])
+    if (!id) return error("Invalid app id")
+    const app = appsRepo.get(id)
+    if (!app) return notFound("App not found")
+
+    const pathCheck = validateProjectPath(app.project_path)
+    if (!pathCheck.ok) return error(pathCheck.error!)
+
+    openInEditor(pathCheck.resolved!)
+    return json({ ok: true })
   }
 
   const appMatch = pathname.match(/^\/api\/apps\/(\d+)$/)

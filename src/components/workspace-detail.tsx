@@ -1,4 +1,11 @@
-import { AppWindowIcon, ExternalLinkIcon, PlusIcon } from "lucide-react"
+import { toast } from "sonner"
+import {
+  AppWindowIcon,
+  CodeIcon,
+  ExternalLinkIcon,
+  PlusIcon,
+} from "lucide-react"
+import { api } from "@/lib/api"
 import type { App, StatusEvent, Workspace } from "@/lib/types"
 import { AppRunControls, AppStatusDot } from "@/components/app-run-controls"
 import { ConfigSetPicker } from "@/components/config-set-picker"
@@ -129,6 +136,26 @@ export function WorkspaceDetail({
                     ) : null}
                   </button>
                   <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        void api.apps
+                          .openInEditor(app.id)
+                          .then(() => toast.success("Opened in editor"))
+                          .catch((err) =>
+                            toast.error(
+                              err instanceof Error
+                                ? err.message
+                                : "Failed to open in editor"
+                            )
+                          )
+                      }}
+                    >
+                      <CodeIcon data-icon="inline-start" />
+                      Editor
+                    </Button>
                     <ConfigSetPicker
                       app={app}
                       onAppChange={onAppChange}

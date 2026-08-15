@@ -7,6 +7,7 @@ export {
   type NativePickResult,
 } from "./dialog"
 export { isStandaloneBinary, openBrowser } from "./browser"
+export { openInEditor } from "./editor"
 export {
   findAvailablePort,
   listListeningProcesses,
