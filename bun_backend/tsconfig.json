@@ -10,7 +10,9 @@
       "@/*": ["../frontend/*"],
       "@host": ["./host.ts"],
       "@db": ["../db/index.ts"],
-      "@db/*": ["../db/*"]
+      "@db/*": ["../db/*"],
+      "@native": ["../native/index.ts"],
+      "@native/*": ["../native/*"]
     }
   }
 }

@@ -18,7 +18,7 @@
  * the rebuild and only run the server.
  */
 import { join } from "node:path"
-import { findAvailablePort } from "../native/ports"
+import { findAvailablePort } from "@native/ports"
 
 const REPO_ROOT = join(import.meta.dir, "../..")
 

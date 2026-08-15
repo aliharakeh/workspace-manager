@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { basename } from "node:path"
-import { pickNativeFile } from "../../native/dialog"
+import { pickNativeFile } from "@native/dialog"
 import { appsRepo } from "@db/apps"
 import { configSetsRepo } from "@db/config-sets"
 import { envVarsRepo } from "@db/env-vars"

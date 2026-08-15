@@ -14,7 +14,7 @@
  *
  * Run `dev:server` in another terminal first (or use `dev.ts` for both).
  */
-import { findAvailablePort } from "../native/ports"
+import { findAvailablePort } from "@native/ports"
 
 const preferredWeb = Number(process.env.WEB_PORT) || 5173
 const apiPort = Number(process.env.API_PORT) || 3000

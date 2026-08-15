@@ -2,8 +2,8 @@ import {
   listListeningProcesses,
   USER_PORT_MAX,
   USER_PORT_MIN,
-} from "../../native/ports"
-import { killPid } from "../../native/process"
+} from "@native/ports"
+import { killPid } from "@native/process"
 import { error, json, matchRoute, parseId } from "../lib/http"
 
 export async function handlePorts(

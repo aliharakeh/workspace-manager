@@ -3,7 +3,7 @@ import { appsRepo } from "@db/apps"
 import {
   pickNativeFile,
   pickNativeFolder,
-} from "../../native/dialog"
+} from "@native/dialog"
 import {
   readProjectFile,
   toProjectRelative,

@@ -7,8 +7,8 @@ Same product, two shells:
 | | **bun_backend** (`bun_backend/`) | **electrobun_backend** (`electrobun_backend/`) |
 |---|---|---|
 | What it is | Compiled **Bun** server + React UI | **Electrobun** desktop app |
-| How you use it | Starts an HTTP server and opens in the browser (or a standalone `.exe`) | Native window; Bun is the main process |
-| Native work | Helpers under `bun_backend/native/` called from the HTTP server | Same kind of work, but through Electrobun RPC from the Bun process |
+| How you use it | Starts an HTTP server and opens in the browser (or a standalone compiled app) | Native window; Bun is the main process |
+| Native work | Shared helpers under `native/` called from the HTTP server | Same `native/` helpers, plus Electrobun dialogs, via RPC from the Bun process |
 | UI | Shared `frontend/` + `bun_backend/host.ts` (`fetch` / SSE) | Shared `frontend/` + `electrobun_backend/src/host.ts` (RPC) |
 | Live logs | Server-Sent Events (`EventSource`) | Electrobun RPC messages (`runnerEvent`) |
 | Ship it | `bun run bun_backend:compile:{win,mac,linux}` → `bun_backend/release/workspace-manager-*` | `bun run electrobun_backend:build:stable` on that OS (Electrobun) |
@@ -19,9 +19,9 @@ The database file lives in the OS user-data directory (same path for both shells
 
 ## bun_backend vs electrobun_backend
 
-**bun_backend** is a Bun HTTP server that serves the shared React app and a JSON/SSE API. In development it sits next to Vite; in production it serves the built frontend from the same origin. `bun run bun_backend:compile` embeds the UI and Drizzle migrations and produces a standalone binary (cross-compile with `bun_backend:compile:win` / `bun_backend:compile:mac` / `bun_backend:compile:linux`). Native bits (folder pickers, process spawn/kill, ports, opening the browser) live in `native/` and are invoked by the server. The UI reaches them through `bun_backend/host.ts` (`fetch` + `EventSource`).
+**bun_backend** is a Bun HTTP server that serves the shared React app and a JSON/SSE API. In development it sits next to Vite; in production it serves the built frontend from the same origin. `bun run bun_backend:compile` embeds the UI and Drizzle migrations and produces a standalone binary (cross-compile with `bun_backend:compile:win` / `bun_backend:compile:mac` / `bun_backend:compile:linux`). Native bits (folder pickers, process spawn/kill, ports, opening the browser) live in shared `native/` and are invoked by the server. The UI reaches them through `bun_backend/host.ts` (`fetch` + `EventSource`).
 
-**electrobun_backend** is an [Electrobun](https://blackboard.sh/electrobun/docs/) app (not Electron). The Bun main process owns the window, SQLite, process runner, and OS integration. The same `frontend/` UI talks to it through `electrobun_backend/src/host.ts` (Electrobun RPC) instead of `fetch` / SSE. Native processing — spawn, kill, dialogs, ports, open-in-editor — stays in the Bun process (`electrobun_backend/src/bun/`).
+**electrobun_backend** is an [Electrobun](https://blackboard.sh/electrobun/docs/) app (not Electron). The Bun main process owns the window, SQLite, process runner, and OS integration. The same `frontend/` UI talks to it through `electrobun_backend/src/host.ts` (Electrobun RPC) instead of `fetch` / SSE. Shared native helpers (spawn, kill, ports, open-in-editor) live in `native/`; Electrobun file/folder dialogs stay in `electrobun_backend/src/bun/native/`.
 
 ## Features
 

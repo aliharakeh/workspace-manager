@@ -3,7 +3,7 @@ import {
   mergeSpawnEnv,
   spawnShell,
   type SpawnedProcess,
-} from "../native/process"
+} from "../../../../native/process"
 import { appsRepo } from "../../../../db/apps"
 import { configSetsRepo } from "../../../../db/config-sets"
 import { envVarsRepo } from "../../../../db/env-vars"

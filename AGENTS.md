@@ -1,39 +1,51 @@
-# Agent guidance — workspace-manager
+# Workspace Manager
 
-## Native OS calls and commands
+Same product, two shells. `frontend/` and `db/` are shared. Each shell has its own host adapter and a copy of backend logic that must stay in sync.
 
-All systemic native OS integration lives under [`bun_backend/native/`](./bun_backend/native/) (and `electrobun_backend/src/bun/native/` for the Electrobun shell).
+## Layout
 
-Put new OS-level work there — do **not** scatter `Bun.spawn`, shell wrappers, or platform-specific commands across `server/`, `scripts/`, or the shared `frontend/`.
+| Path | Role |
+|---|---|
+| `frontend/` | Shared React UI. Imports `api` / `onRunnerEvent` from `@host` via `frontend/lib/api.ts`. |
+| `db/` | Shared SQLite + Drizzle. Same user-data DB for both shells. |
+| `native/` | Shared OS helpers (process, ports, editor, browser, run). bun_backend also uses `native/dialog.ts`. |
+| `bun_backend/` | Bun HTTP server + Vite. UI talks over `fetch` / SSE. |
+| `electrobun_backend/` | Electrobun desktop app. UI talks over RPC. |
 
-### What belongs in `native/`
+`@host` is per-shell: `bun_backend/host.ts` (HTTP/SSE) vs `electrobun_backend/src/host.ts` (RPC). Both must export the same `api` shape the UI already calls.
 
-- Spawning OS tools (`powershell`, `osascript`, `zenity`, `netstat`, `lsof`, `open`, `xdg-open`, `cmd`, `sh`, …)
-- Cross-platform helpers that pick an OS command by `process.platform`
-- Process lifecycle helpers used to run/kill child processes
-- Short-lived command runners that capture stdout/stderr
+## Shared vs duplicated
 
-### What does not belong there
+**Edit once (shared):** `frontend/`, `db/`, and most of `native/` (process, ports, editor, browser, run).
 
-- App/domain orchestration (sessions, logging, HTTP routes) — keep in `bun_backend/server/`
-- Dev/prod launchers that only start Bun/Vite (`bun_backend/scripts/dev.ts`, etc.) — those may call `native/` helpers, but stay in `scripts/`
-- Ordinary filesystem path math and project-safe reads — use `bun_backend/server/lib/fs.ts`
-- Frontend code — lives in `frontend/`; call server APIs via `host.ts`, never spawn OS commands from the UI
+**Duplicated — change both shells in the same task.** Do not copy-paste blindly: keep the behavior identical, but write it in that shell’s style.
 
-### Layout
+| Concern | bun_backend | electrobun_backend |
+|---|---|---|
+| Host / `api` | `host.ts` (`fetch`, `EventSource`) | `src/host.ts` (RPC) |
+| API surface | `server/routes/*.ts` | `src/bun/rpc.ts` + `src/shared/rpc.ts` |
+| Runner / templates / ready URLs | `server/services/` | `src/bun/services/` |
+| fs / parse-env / import-formats | `server/lib/` | `src/bun/lib/` |
+| File/folder pickers | `native/dialog.ts` | `src/bun/native/dialog.ts` (Electrobun `Utils.openFileDialog`) |
+| UI types | `frontend/lib/types.ts` | also `src/shared/types.ts` (keep aligned with frontend types) |
 
-| Module | Role |
-|--------|------|
-| `bun_backend/native/run.ts` | Capture stdout/stderr from a short-lived command |
-| `bun_backend/native/dialog.ts` | Native file/folder pickers |
-| `bun_backend/native/browser.ts` | Open default browser; detect standalone binary |
-| `bun_backend/native/ports.ts` | List listening ports / find a free TCP port |
-| `bun_backend/native/process.ts` | Shell spawn, env merge, process kill |
-| `bun_backend/native/index.ts` | Re-exports (prefer importing the specific module) |
+## Dual-update rule
 
-### Adding a new native capability
+If you change behavior, an endpoint, runner logic, or the `api` surface in **one** shell, update the **other** shell in the same change. Adapt to that backend; do not leave one shell stale.
 
-1. Add a focused helper file under `native/` (or extend an existing module if it clearly fits).
-2. Keep platform branches inside that helper; export a small, stable API.
-3. Import the helper from server/scripts — do not inline `Bun.spawn` for OS tools elsewhere.
-4. Prefer `native/run.ts` for fire-and-forget command capture.
+**bun_backend**
+
+- HTTP JSON routes and status codes in `server/routes/`
+- Live logs via SSE (`EventSource` in `host.ts`)
+- Imports: `@db`, `@native`
+- Dialogs: `@native/dialog`
+
+**electrobun_backend**
+
+- RPC request handlers in `src/bun/rpc.ts` and matching types in `src/shared/rpc.ts`
+- Live logs via `rpc.send.runnerEvent` (not SSE)
+- Imports from `src/bun/` are relative (`../../../db`, `../../../native`) — that tree is outside the Electrobun UI tsconfig aliases
+- Dialogs: `src/bun/native/dialog.ts`, not `native/dialog.ts`
+- `openExternal` goes through RPC, not `window.open`
+
+Frontend-only UI that does not change `api` needs no backend dual update. A `db/` schema change is shared, but if the API shape changes, update both hosts and both backends.

@@ -21,13 +21,14 @@ import {
   toProjectRelative,
   validateProjectPath,
 } from "./lib/fs"
+import { openInEditor } from "../../../native/editor"
 import { pickNativeFile, pickNativeFolder } from "./native/dialog"
 import {
   listListeningProcesses,
   USER_PORT_MAX,
   USER_PORT_MIN,
-} from "./native/ports"
-import { killPid } from "./native/process"
+} from "../../../native/ports"
+import { killPid } from "../../../native/process"
 import {
   invalidateReadyUrlPatternsCache,
   validateReadyUrlPattern,
@@ -156,7 +157,7 @@ export function createAppRPC() {
           const app = requireApp(id)
           const pathCheck = validateProjectPath(app.project_path)
           if (!pathCheck.ok) throw new Error(pathCheck.error)
-          Bun.openInEditor(pathCheck.resolved!)
+          openInEditor(pathCheck.resolved!)
           return { ok: true as const }
         },
 

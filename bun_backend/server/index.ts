@@ -1,6 +1,6 @@
 import "@db"
 import { readyUrlPatternsRepo } from "@db/ready-url-patterns"
-import { findAvailablePort } from "../native/ports"
+import { findAvailablePort } from "@native/ports"
 
 // Persist built-in log URL patterns so they show up in Settings by default.
 readyUrlPatternsRepo.ensureSeeded()
@@ -16,7 +16,7 @@ import { handleRunner } from "./routes/runner"
 import { handlePorts } from "./routes/ports"
 import { handleReadyUrlPatterns } from "./routes/ready-url-patterns"
 import { handleSettings } from "./routes/settings"
-import { isStandaloneBinary, openBrowser } from "../native/browser"
+import { isStandaloneBinary, openBrowser } from "@native/browser"
 import { hasFrontendBuild, serveStatic } from "./static"
 
 const preferredPort = Number(process.env.PORT || process.env.API_PORT) || 3000
