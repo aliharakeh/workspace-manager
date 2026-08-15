@@ -2,7 +2,7 @@ import { asc, eq, sql } from "drizzle-orm"
 import { db } from "./index"
 import { readyUrlPatterns } from "./schema"
 import type { ReadyUrlPatternRow } from "./types"
-import { DEFAULT_READY_URL_PATTERNS } from "../services/ready-url-defaults"
+import { DEFAULT_READY_URL_PATTERNS } from "./ready-url-defaults"
 
 export const readyUrlPatternsRepo = {
   list(): ReadyUrlPatternRow[] {
