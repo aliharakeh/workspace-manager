@@ -53,7 +53,7 @@ export async function killPid(pid: number): Promise<void> {
     throw new Error("Invalid pid")
   }
   if (pid === process.pid) {
-    throw new Error("Refusing to kill the App Runner process")
+    throw new Error("Refusing to kill the Workspace Manager process")
   }
 
   if (process.platform === "win32") {

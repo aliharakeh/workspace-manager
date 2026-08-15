@@ -2,8 +2,8 @@ import type { ElectrobunConfig } from "electrobun"
 
 export default {
 	app: {
-		name: "App Runner",
-		identifier: "app-runner.electrobun.dev",
+		name: "Workspace Manager",
+		identifier: "workspace-manager.app",
 		version: "0.0.1",
 	},
 	build: {

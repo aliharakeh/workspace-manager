@@ -7,7 +7,7 @@ import { dataDir, migrationsFolder } from "../lib/paths"
 import * as schema from "./schema"
 
 const DATA_DIR = dataDir()
-const DB_PATH = join(DATA_DIR, "app-runner.sqlite")
+const DB_PATH = join(DATA_DIR, "workspace-manager.sqlite")
 
 mkdirSync(DATA_DIR, { recursive: true })
 

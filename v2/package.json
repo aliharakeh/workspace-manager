@@ -1,7 +1,7 @@
 {
-    "name": "app-runner",
+    "name": "workspace-manager",
     "version": "1.0.0",
-    "description": "Desktop app runner built with Electrobun",
+    "description": "Desktop workspace manager built with Electrobun",
     "scripts": {
         "start": "vite build && electrobun dev",
         "dev": "electrobun dev --watch",

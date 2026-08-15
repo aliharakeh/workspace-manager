@@ -404,7 +404,7 @@ function AppContent() {
                   {selectedApp ? ` / ${selectedApp.name}` : ""}
                 </span>
               ) : (
-                <span className="text-muted-foreground">App Runner</span>
+                <span className="text-muted-foreground">Workspace Manager</span>
               )}
             </div>
             <Button

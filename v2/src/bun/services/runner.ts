@@ -63,7 +63,7 @@ type RunnerStore = {
   listeners: Map<number, Set<(event: RunnerEvent) => void>>
 }
 
-const globalKey = "__appRunnerStore" as const
+const globalKey = "__workspaceManagerStore" as const
 
 function getStore(): RunnerStore {
   const g = globalThis as typeof globalThis & {

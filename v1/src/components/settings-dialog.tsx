@@ -28,7 +28,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         <DialogHeader className="shrink-0 border-b p-4 pr-12">
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
-            Manage local tools, keyboard shortcuts, and how App Runner detects
+            Manage local tools, keyboard shortcuts, and how Workspace Manager detects
             ready URLs from logs.
           </DialogDescription>
         </DialogHeader>

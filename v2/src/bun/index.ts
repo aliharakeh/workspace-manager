@@ -29,7 +29,7 @@ const rpc = createAppRPC()
 const url = await getMainViewUrl()
 
 const mainWindow = new BrowserWindow<typeof rpc>({
-  title: "App Runner",
+  title: "Workspace Manager",
   url,
   rpc,
   frame: {
@@ -44,4 +44,4 @@ setRunnerBroadcast((appId, event) => {
   mainWindow.webview.rpc?.send.runnerEvent({ appId, event })
 })
 
-console.log("App Runner started")
+console.log("Workspace Manager started")

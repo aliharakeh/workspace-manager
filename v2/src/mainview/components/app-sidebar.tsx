@@ -79,7 +79,7 @@ export function AppSidebar({
             <AppWindowIcon className="size-4" />
           </div>
           <div className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
-            <span className="truncate text-sm font-medium">App Runner</span>
+            <span className="truncate text-sm font-medium">Workspace Manager</span>
             <span className="truncate text-xs text-muted-foreground">
               Local workspaces
             </span>

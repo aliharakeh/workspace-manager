@@ -1,4 +1,4 @@
-# Agent guidance — app-runner-v2
+# Agent guidance — workspace-manager-v1
 
 ## Native OS calls and commands
 

@@ -18,7 +18,7 @@ function isProcessGone(detail: string): boolean {
 
 /**
  * Recursively kill a Unix process and its descendants.
- * Avoids process-group kills (negative PIDs), which can take down App Runner itself
+ * Avoids process-group kills (negative PIDs), which can take down Workspace Manager itself
  * when the child shares the parent's group.
  */
 async function killUnixTree(pid: number): Promise<void> {
@@ -53,7 +53,7 @@ export async function killPid(pid: number): Promise<void> {
     throw new Error("Invalid pid")
   }
   if (pid === process.pid) {
-    throw new Error("Refusing to kill the App Runner process")
+    throw new Error("Refusing to kill the Workspace Manager process")
   }
 
   if (process.platform === "win32") {
