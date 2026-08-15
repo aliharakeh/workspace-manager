@@ -8,16 +8,79 @@ import type {
   ReadyUrlPattern,
   RunConfig,
   RunMode,
+  RunnerEvent,
+  RunnerLogsSnapshot,
   StatusEvent,
   Template,
   Workspace,
-} from "./types"
+} from "@/lib/types"
 
 class ApiError extends Error {
   status: number
   constructor(message: string, status: number) {
     super(message)
     this.status = status
+  }
+}
+
+type RunnerEventHandler = (appId: number, event: RunnerEvent) => void
+
+const listeners = new Set<RunnerEventHandler>()
+
+type AppWatch = {
+  refs: number
+  source: EventSource | null
+  retry?: ReturnType<typeof setTimeout>
+}
+
+const watches = new Map<number, AppWatch>()
+
+function dispatch(appId: number, event: RunnerEvent) {
+  for (const handler of listeners) handler(appId, event)
+}
+
+function connect(appId: number, watch: AppWatch) {
+  if (watch.refs <= 0) return
+  const source = new EventSource(`/api/apps/${appId}/run/logs`)
+  watch.source = source
+  source.onmessage = (event) => {
+    try {
+      dispatch(appId, JSON.parse(event.data) as RunnerEvent)
+    } catch {
+      // ignore malformed payloads
+    }
+  }
+  source.onerror = () => {
+    source.close()
+    if (watch.source === source) watch.source = null
+    if (watch.refs <= 0) return
+    watch.retry = setTimeout(() => connect(appId, watch), 1500)
+  }
+}
+
+function watchApp(appId: number) {
+  let watch = watches.get(appId)
+  if (!watch) {
+    watch = { refs: 0, source: null }
+    watches.set(appId, watch)
+  }
+  watch.refs++
+  if (watch.refs === 1) connect(appId, watch)
+  return () => {
+    watch.refs--
+    if (watch.refs > 0) return
+    if (watch.retry) clearTimeout(watch.retry)
+    watch.source?.close()
+    watches.delete(appId)
+  }
+}
+
+export function onRunnerEvent(handler: RunnerEventHandler, appId?: number) {
+  listeners.add(handler)
+  const release = appId != null ? watchApp(appId) : undefined
+  return () => {
+    listeners.delete(handler)
+    release?.()
   }
 }
 
@@ -135,7 +198,6 @@ export const api = {
       }),
     delete: (id: number) =>
       request<void>(`/api/env-vars/${id}`, { method: "DELETE" }),
-    /** Open a native file dialog, parse the chosen file (.env/.yaml/…), and import it. */
     importEnv: (appId: number) =>
       request<{
         cancelled: boolean
@@ -188,6 +250,8 @@ export const api = {
       request<StatusEvent>(`/api/apps/${appId}/run/status`),
     workspaceStatus: (workspaceId: number) =>
       request<StatusEvent[]>(`/api/workspaces/${workspaceId}/run-status`),
+    logs: (appId: number) =>
+      request<RunnerLogsSnapshot>(`/api/apps/${appId}/run/snapshot`),
     run: (appId: number) =>
       request<StatusEvent>(`/api/apps/${appId}/run`, { method: "POST" }),
     stop: (appId: number) =>
@@ -246,13 +310,11 @@ export const api = {
           body: JSON.stringify({ path }),
         }
       ),
-    /** Opens the OS native folder dialog. */
     pickFolder: (opts?: { startDir?: string }) =>
       request<{ cancelled: boolean; path?: string }>("/api/fs/pick-folder", {
         method: "POST",
         body: JSON.stringify(opts ?? {}),
       }),
-    /** Opens the OS native file dialog. Paths are relative when scoped to an app. */
     pickFile: (opts?: { startDir?: string; appId?: number }) =>
       request<{
         cancelled: boolean
@@ -278,6 +340,11 @@ export const api = {
           body: JSON.stringify({ path }),
         }
       ),
+  },
+
+  openExternal: (url: string) => {
+    window.open(url, "_blank", "noopener,noreferrer")
+    return Promise.resolve({ ok: true as const })
   },
 }
 

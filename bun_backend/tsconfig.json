@@ -5,8 +5,12 @@
     { "path": "./tsconfig.node.json" }
   ],
   "compilerOptions": {
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["../frontend/*"],
+      "@host": ["./host.ts"],
+      "@db": ["../db/index.ts"],
+      "@db/*": ["../db/*"]
     }
   }
 }

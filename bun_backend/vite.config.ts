@@ -7,6 +7,8 @@ import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
+const repoRoot = path.resolve(rootDir, "..")
+const frontendDir = path.resolve(repoRoot, "frontend")
 const apiPort = Number(process.env.API_PORT || process.env.VITE_API_PORT) || 3000
 const webPort = Number(process.env.WEB_PORT) || 5173
 const apiOrigin = `http://localhost:${apiPort}`
@@ -90,19 +92,50 @@ async function pipeSse(
   }
 }
 
-// https://vite.dev/config/
+function resolveDepsFrom(hostImporter: string): Plugin {
+  return {
+    name: "resolve-deps-from-host",
+    enforce: "pre",
+    async resolveId(id, importer, options) {
+      if (!id || id.startsWith("\0")) return null
+      if (id.startsWith(".") || path.isAbsolute(id)) return null
+      if (id === "@host" || id.startsWith("@/")) return null
+      if (!importer) return null
+      const fromFrontend =
+        path.normalize(importer).startsWith(path.normalize(frontendDir))
+      if (!fromFrontend) return null
+      return this.resolve(id, hostImporter, {
+        ...options,
+        skipSelf: true,
+      })
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), sseProxyPlugin(apiOrigin)],
+  root: rootDir,
+  plugins: [
+    resolveDepsFrom(path.resolve(rootDir, "host.ts")),
+    react(),
+    tailwindcss(),
+    sseProxyPlugin(apiOrigin),
+  ],
   resolve: {
     alias: {
-      "@": path.resolve(rootDir, "./src"),
+      "@": frontendDir,
+      "@host": path.resolve(rootDir, "host.ts"),
     },
+  },
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
   },
   server: {
     port: webPort,
-    // Prefer the pre-selected port from scripts; still allow Vite to recover
-    // if something races us between check and bind.
     strictPort: false,
+    fs: {
+      allow: [repoRoot, rootDir, frontendDir],
+    },
     proxy: {
       "/api": {
         target: apiOrigin,

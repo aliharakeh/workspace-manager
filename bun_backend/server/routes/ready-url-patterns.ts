@@ -1,4 +1,4 @@
-import { readyUrlPatternsRepo } from "../db/ready-url-patterns"
+import { readyUrlPatternsRepo } from "@db/ready-url-patterns"
 import { error, json, notFound, parseId, readJson } from "../lib/http"
 import {
   invalidateReadyUrlPatternsCache,

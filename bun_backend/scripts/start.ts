@@ -1,10 +1,10 @@
 /**
  * start.ts — production launcher (build + single Bun server).
  *
- * Entry: `bun run start`
+ * Entry: `bun run bun_backend:start`
  *
  * What it does:
- * 1. Runs `bun run build` (TypeScript check + Vite production bundle → `dist/`)
+ * 1. Runs `bun run bun_backend:build` (TypeScript check + Vite production bundle → `dist/`)
  * 2. Picks a free listen port (prefers 3000, or `PORT` / `API_PORT`)
  * 3. Starts `server/index.ts` in production mode
  *
@@ -14,13 +14,17 @@
  * Env (optional):
  * - `PORT` / `API_PORT` — preferred listen port
  *
- * If you already built (`bun run build`), use `bun run start:server` to skip
+ * If you already built (`bun run bun_backend:build`), use `bun run bun_backend:start:server` to skip
  * the rebuild and only run the server.
  */
+import { join } from "node:path"
 import { findAvailablePort } from "../native/ports"
 
+const REPO_ROOT = join(import.meta.dir, "../..")
+
 console.log("Building frontend…")
-const build = Bun.spawn(["bun", "run", "build"], {
+const build = Bun.spawn(["bun", "run", "bun_backend:build"], {
+  cwd: REPO_ROOT,
   stdout: "inherit",
   stderr: "inherit",
   stdin: "inherit",

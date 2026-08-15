@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import { appsRepo } from "../db/apps"
+import { appsRepo } from "@db/apps"
 import {
   pickNativeFile,
   pickNativeFolder,

@@ -1,4 +1,4 @@
-import { workspacesRepo } from "../db/workspaces"
+import { workspacesRepo } from "@db/workspaces"
 import { error, json, notFound, parseId, readJson } from "../lib/http"
 
 export async function handleWorkspaces(

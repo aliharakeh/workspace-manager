@@ -1,11 +1,11 @@
-import { appsRepo } from "../db/apps"
+import { appsRepo } from "@db/apps"
 import {
   configSetsRepo,
   type ConfigCopyParts,
-} from "../db/config-sets"
-import { envVarsRepo } from "../db/env-vars"
-import { runConfigsRepo } from "../db/run-configs"
-import { templatesRepo } from "../db/templates"
+} from "@db/config-sets"
+import { envVarsRepo } from "@db/env-vars"
+import { runConfigsRepo } from "@db/run-configs"
+import { templatesRepo } from "@db/templates"
 import { error, json, notFound, parseId, readJson } from "../lib/http"
 
 function parseListPart<T>(

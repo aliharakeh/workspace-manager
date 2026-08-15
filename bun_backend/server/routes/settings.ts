@@ -1,4 +1,4 @@
-import { settingsRepo } from "../db/settings"
+import { settingsRepo } from "@db/settings"
 import { error, json, readJson } from "../lib/http"
 
 export async function handleSettings(

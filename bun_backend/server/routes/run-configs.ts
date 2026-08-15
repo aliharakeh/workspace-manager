@@ -1,7 +1,7 @@
-import { appsRepo } from "../db/apps"
-import { configSetsRepo } from "../db/config-sets"
-import { runConfigsRepo } from "../db/run-configs"
-import type { RunMode } from "../db/types"
+import { appsRepo } from "@db/apps"
+import { configSetsRepo } from "@db/config-sets"
+import { runConfigsRepo } from "@db/run-configs"
+import type { RunMode } from "@db/types"
 import { error, json, notFound, parseId, readJson } from "../lib/http"
 
 export async function handleRunConfigs(

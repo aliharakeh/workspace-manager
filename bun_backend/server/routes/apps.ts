@@ -1,6 +1,6 @@
 import { openInEditor } from "../../native/editor"
-import { appsRepo } from "../db/apps"
-import { workspacesRepo } from "../db/workspaces"
+import { appsRepo } from "@db/apps"
+import { workspacesRepo } from "@db/workspaces"
 import { validateProjectPath } from "../lib/fs"
 import { error, json, notFound, parseId, readJson } from "../lib/http"
 

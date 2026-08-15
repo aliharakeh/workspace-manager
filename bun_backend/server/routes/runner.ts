@@ -1,4 +1,4 @@
-import { appsRepo } from "../db/apps"
+import { appsRepo } from "@db/apps"
 import { error, json, notFound, parseId } from "../lib/http"
 import { runner, type RunnerEvent } from "../services/runner"
 
@@ -76,6 +76,13 @@ export async function handleRunner(
     )
   }
 
+  const snapshotMatch = pathname.match(/^\/api\/apps\/(\d+)\/run\/snapshot$/)
+  if (snapshotMatch && req.method === "GET") {
+    const appId = parseId(snapshotMatch[1])
+    if (!appId) return error("Invalid app id")
+    return json(runner.getSnapshot(appId))
+  }
+
   const logsMatch = pathname.match(/^\/api\/apps\/(\d+)\/run\/logs$/)
   if (logsMatch && req.method === "GET") {
     const appId = parseId(logsMatch[1])
@@ -105,7 +112,7 @@ export async function handleRunner(
         // Initial comment so the client knows the stream is alive
         safeEnqueue(`: connected\n\n`)
 
-        unsubscribe = runner.subscribe(appId, send)
+        unsubscribe = runner.subscribe(appId, send, { replay: false })
         heartbeat = setInterval(() => {
           safeEnqueue(`: ping\n\n`)
         }, 10000)

@@ -1,5 +1,5 @@
-import "./db"
-import { readyUrlPatternsRepo } from "./db/ready-url-patterns"
+import "@db"
+import { readyUrlPatternsRepo } from "@db/ready-url-patterns"
 import { findAvailablePort } from "../native/ports"
 
 // Persist built-in log URL patterns so they show up in Settings by default.
@@ -95,7 +95,7 @@ const server = Bun.serve({
         {
           error: servingFrontend
             ? "Not found"
-            : "Frontend not built. Run `bun run build` or use `bun run start`.",
+            : "Frontend not built. Run `bun run bun_backend:build` or use `bun run bun_backend:start`.",
         },
         { status: 404 }
       )
@@ -113,6 +113,6 @@ if (servingFrontend) {
 } else {
   console.log(`API listening on ${url}`)
   console.log(
-    `(No dist/ build found — API only. Use bun run start for production.)`
+    `(No dist/ build found — API only. Use bun run bun_backend:start for production.)`
   )
 }

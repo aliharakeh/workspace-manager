@@ -1,6 +1,6 @@
-import { appsRepo } from "../db/apps"
-import { configSetsRepo } from "../db/config-sets"
-import { templatesRepo } from "../db/templates"
+import { appsRepo } from "@db/apps"
+import { configSetsRepo } from "@db/config-sets"
+import { templatesRepo } from "@db/templates"
 import { error, json, notFound, parseId, readJson } from "../lib/http"
 
 export async function handleTemplates(
