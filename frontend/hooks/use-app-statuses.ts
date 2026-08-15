@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { api } from "@/lib/api"
+import { api, onRunnerEvent } from "@/lib/api"
 import type { StatusEvent } from "@/lib/types"
 
 const POLL_MS = 4000
@@ -38,14 +38,21 @@ export function useAppStatuses(workspaceIds: number[]) {
 
   useEffect(() => {
     void refresh()
-    if (!idsKey) return
+    const unsubscribe = onRunnerEvent((_appId, event) => {
+      if (event.type !== "status") return
+      setAppStatus(event)
+    })
+    if (!idsKey) return unsubscribe
 
     const timer = setInterval(() => {
       void refresh()
     }, POLL_MS)
 
-    return () => clearInterval(timer)
-  }, [idsKey, refresh])
+    return () => {
+      unsubscribe()
+      clearInterval(timer)
+    }
+  }, [idsKey, refresh, setAppStatus])
 
   return { statusByAppId, setAppStatus, refresh }
 }

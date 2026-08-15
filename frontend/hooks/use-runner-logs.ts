@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react"
-import { api } from "@/lib/api"
-import { onRunnerEvent } from "@/lib/electrobun"
+import { api, onRunnerEvent } from "@/lib/api"
 import type { LogEvent, RunnerEvent, StatusEvent } from "@/lib/types"
 
 export type LogLine = LogEvent & { id: number }
@@ -71,7 +70,7 @@ export function useRunnerLogs(appId: number | null) {
     const unsubscribe = onRunnerEvent((eventAppId, event) => {
       if (cancelled || eventAppId !== appId) return
       applyEvent(event, sessionIdRef, lineIdRef, setStatus, setLogs)
-    })
+    }, appId)
 
     return () => {
       cancelled = true
