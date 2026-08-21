@@ -24,6 +24,10 @@
     "electrobun_backend:hmr": "vite --config electrobun_backend/vite.config.ts --port 5173",
     "electrobun_backend:build:canary": "vite build --config electrobun_backend/vite.config.ts && cd electrobun_backend && electrobun build --env=canary",
     "electrobun_backend:build:stable": "vite build --config electrobun_backend/vite.config.ts && cd electrobun_backend && electrobun build --env=stable",
+    "wails_backend:dev": "cd wails_backend && wails dev",
+    "wails_backend:build": "cd wails_backend && wails build",
+    "wails_backend:sqlc": "cd wails_backend && sqlc generate",
+    "wails_backend:generate": "cd wails_backend && wails generate module",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio"
   },

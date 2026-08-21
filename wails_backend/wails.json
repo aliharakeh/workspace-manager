@@ -1,0 +1,14 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "workspace-manager",
+  "outputfilename": "workspace-manager",
+  "frontend:install": "bun install --cwd ../..",
+  "frontend:build": "bun run --cwd ../.. vite build --config wails_backend/frontend/vite.config.ts",
+  "frontend:dev:watcher": "bun run --cwd ../.. vite --config wails_backend/frontend/vite.config.ts",
+  "frontend:dev:serverUrl": "auto",
+  "wailsjsdir": "./frontend",
+  "author": {
+    "name": "Ali Harakeh",
+    "email": "34475779+aliharakeh@users.noreply.github.com"
+  }
+}

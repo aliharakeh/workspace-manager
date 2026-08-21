@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { flushSync } from "react-dom"
 import { FolderOpenIcon } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
@@ -55,7 +56,8 @@ export function AppDialog({
   }, [open, app])
 
   async function handleBrowse() {
-    setBrowsing(true)
+    flushSync(() => setBrowsing(true))
+    await new Promise((r) => window.setTimeout(r, 0))
     try {
       const picked = await api.fs.pickFolder({
         startDir: projectPath.trim() || undefined,
@@ -101,7 +103,15 @@ export function AppDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      modal={!browsing}
+      disablePointerDismissal={browsing}
+      onOpenChange={(next) => {
+        if (browsing && !next) return
+        onOpenChange(next)
+      }}
+    >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit app" : "New app"}</DialogTitle>

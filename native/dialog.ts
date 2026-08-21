@@ -6,6 +6,7 @@
  * Linux: zenity, then kdialog
  */
 
+import { statSync } from "node:fs"
 import { resolve, sep } from "node:path"
 import { run } from "./run"
 
@@ -16,6 +17,18 @@ export type NativePickResult =
 
 function quotePwsh(value: string) {
   return `'${value.replace(/'/g, "''")}'`
+}
+
+/** Absolute existing directory, or undefined so the picker still opens. */
+function existingDir(startDir?: string): string | undefined {
+  if (!startDir?.trim()) return undefined
+  try {
+    const dir = resolve(startDir.trim())
+    if (statSync(dir).isDirectory()) return dir
+  } catch {
+    // missing / inaccessible
+  }
+  return undefined
 }
 
 async function pickFileWindows(startDir?: string): Promise<NativePickResult> {
@@ -118,8 +131,7 @@ async function pickFileLinux(startDir?: string): Promise<NativePickResult> {
 export async function pickNativeFile(
   startDir?: string
 ): Promise<NativePickResult> {
-  const dir =
-    startDir && startDir.trim() ? resolve(startDir.trim()) : undefined
+  const dir = existingDir(startDir)
 
   if (process.platform === "win32") return pickFileWindows(dir)
   if (process.platform === "darwin") return pickFileMac(dir)
@@ -135,8 +147,21 @@ Add-Type -AssemblyName System.Windows.Forms | Out-Null
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
 $dialog.Description = "Select project folder"
 $dialog.ShowNewFolderButton = $true
+$dialog.RootFolder = [Environment+SpecialFolder]::MyComputer
 $dialog.SelectedPath = ${initial}
-$result = $dialog.ShowDialog()
+$owner = New-Object System.Windows.Forms.Form
+$owner.TopMost = $true
+$owner.ShowInTaskbar = $false
+$owner.FormBorderStyle = 'None'
+$owner.Size = New-Object System.Drawing.Size(1, 1)
+$owner.StartPosition = 'Manual'
+$owner.Location = New-Object System.Drawing.Point(-2000, -2000)
+$null = $owner.Show()
+try {
+  $result = $dialog.ShowDialog($owner)
+} finally {
+  $owner.Dispose()
+}
 if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
   [Console]::Out.Write($dialog.SelectedPath)
 } else {
@@ -226,8 +251,7 @@ async function pickFolderLinux(startDir?: string): Promise<NativePickResult> {
 export async function pickNativeFolder(
   startDir?: string
 ): Promise<NativePickResult> {
-  const dir =
-    startDir && startDir.trim() ? resolve(startDir.trim()) : undefined
+  const dir = existingDir(startDir)
 
   if (process.platform === "win32") return pickFolderWindows(dir)
   if (process.platform === "darwin") return pickFolderMac(dir)

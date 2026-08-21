@@ -1,3 +1,5 @@
+import { statSync } from "node:fs"
+import { resolve } from "node:path"
 import { Utils } from "electrobun/bun"
 
 export type NativePickResult =
@@ -11,6 +13,17 @@ function firstPath(paths: string[] | string | null | undefined): string | null {
   return path || null
 }
 
+function existingDir(startDir?: string): string | undefined {
+  if (!startDir?.trim()) return undefined
+  try {
+    const dir = resolve(startDir.trim())
+    if (statSync(dir).isDirectory()) return dir
+  } catch {
+    // missing / inaccessible
+  }
+  return undefined
+}
+
 async function pick(opts: {
   startDir?: string
   files: boolean
@@ -18,7 +31,10 @@ async function pick(opts: {
 }): Promise<NativePickResult> {
   try {
     const paths = await Utils.openFileDialog({
-      startingFolder: opts.startDir || Utils.paths.documents || Utils.paths.home,
+      startingFolder:
+        existingDir(opts.startDir) ||
+        Utils.paths.documents ||
+        Utils.paths.home,
       allowedFileTypes: "*",
       canChooseFiles: opts.files,
       canChooseDirectory: opts.directories,

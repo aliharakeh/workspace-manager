@@ -1,0 +1,10 @@
+{
+  "name": "wails-frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --cwd ../.. vite --config wails_backend/frontend/vite.config.ts",
+    "build": "bun run --cwd ../.. vite build --config wails_backend/frontend/vite.config.ts"
+  }
+}
