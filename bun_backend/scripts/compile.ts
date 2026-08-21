@@ -45,7 +45,7 @@ export const staticFiles: Record<string, string> = {}
 const MIGRATION_STUB = `/**
  * Populated by \`bun run compile\` with \`with { type: "file" }\` imports so
  * drizzle migrations ship inside the bun_backend standalone binary.
- * Empty in normal \`bun\` / Electrobun workflows — those read from disk instead.
+ * Empty in normal \`bun\` / \`vite\` workflows — those read from disk instead.
  */
 export const migrationFiles: Record<string, string> = {}
 `
