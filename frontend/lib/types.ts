@@ -174,3 +174,45 @@ export type AIConfigInfo = {
   providers: AIConnectionInfo[]
   active: string
 }
+
+export type GitBranchInfo = {
+  name: string
+  updated?: string
+}
+
+export type GitRemoteInfo = {
+  name: string
+  url: string
+  web?: string
+  host?: string
+  ssh: boolean
+}
+
+export type GitCommitNode = {
+  hash: string
+  branch: string
+  timestamp: string
+  author: string
+  subject: string
+  isMerge: boolean
+  tags?: string[]
+}
+
+export type GitMergeEvent = {
+  hash: string
+  sourceBranch: string
+  targetBranch: string
+  sourceHash: string
+  timestamp: string
+  author: string
+  subject: string
+  commitCount: number
+}
+
+export type GitRepoGraph = {
+  path: string
+  commitUrl?: string
+  branches: string[]
+  commits: GitCommitNode[]
+  merges: GitMergeEvent[]
+}

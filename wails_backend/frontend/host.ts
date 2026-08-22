@@ -57,6 +57,22 @@ export const api = {
       call(() => Go.AppsUpdate(id, body)),
     delete: (id: number) => call(() => Go.AppsDelete(id)),
     openInEditor: (id: number) => call(() => Go.AppsOpenInEditor(id)),
+    git: {
+      branches: (id: number) => call(() => Go.GitGraphBranches(id)),
+      remote: (id: number) => call(() => Go.GitGraphRemote(id)),
+      fetch: (id: number) => call(() => Go.GitGraphFetch(id)),
+      load: (
+        id: number,
+        body: { branches: string[]; since?: string; until?: string }
+      ) =>
+        call(() =>
+          Go.GitGraphLoad(id, {
+            branches: body.branches,
+            since: body.since ?? "",
+            until: body.until ?? "",
+          })
+        ),
+    },
   },
 
   configSets: {

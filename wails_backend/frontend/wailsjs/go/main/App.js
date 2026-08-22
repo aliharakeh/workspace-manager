@@ -122,6 +122,22 @@ export function FsValidatePath(arg1) {
   return window['go']['main']['App']['FsValidatePath'](arg1);
 }
 
+export function GitGraphBranches(arg1) {
+  return window['go']['main']['App']['GitGraphBranches'](arg1);
+}
+
+export function GitGraphFetch(arg1) {
+  return window['go']['main']['App']['GitGraphFetch'](arg1);
+}
+
+export function GitGraphLoad(arg1, arg2) {
+  return window['go']['main']['App']['GitGraphLoad'](arg1, arg2);
+}
+
+export function GitGraphRemote(arg1) {
+  return window['go']['main']['App']['GitGraphRemote'](arg1);
+}
+
 export function OpenExternal(arg1) {
   return window['go']['main']['App']['OpenExternal'](arg1);
 }

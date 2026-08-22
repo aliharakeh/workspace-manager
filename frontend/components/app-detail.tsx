@@ -12,6 +12,7 @@ import { EnvVarsPanel } from "@/components/env-vars-panel"
 import { TemplatesPanel } from "@/components/templates-panel"
 import { RunConfigPanel } from "@/components/run-config-panel"
 import { LogsPanel } from "@/components/logs-panel"
+import { GitGraphPanel } from "@/components/git-graph-panel"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -153,6 +154,7 @@ export function AppDetail({
           <TabsTrigger value="run">Run</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
+          <TabsTrigger value="git">Git</TabsTrigger>
         </TabsList>
         <TabsContent value="env" className="mt-4 min-h-0 overflow-y-auto">
           <EnvVarsPanel key={panelKey} appId={app.id} />
@@ -171,6 +173,13 @@ export function AppDetail({
         </TabsContent>
         <TabsContent value="logs" className="mt-4 min-h-0 overflow-y-auto">
           <LogsPanel status={status} logs={logs} connected={connected} />
+        </TabsContent>
+        <TabsContent
+          value="git"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden pt-4"
+          keepMounted
+        >
+          <GitGraphPanel appId={app.id} projectPath={app.project_path} />
         </TabsContent>
       </Tabs>
     </div>

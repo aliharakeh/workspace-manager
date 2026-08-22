@@ -6,6 +6,9 @@ import type {
   ConfigSetDetail,
   CopyParts,
   EnvVar,
+  GitBranchInfo,
+  GitRemoteInfo,
+  GitRepoGraph,
   ListeningProcess,
   ReadyUrlPattern,
   RunConfig,
@@ -184,6 +187,22 @@ export const api = {
       request<{ ok: true }>(`/api/apps/${id}/open-in-editor`, {
         method: "POST",
       }),
+    git: {
+      branches: (id: number) =>
+        request<GitBranchInfo[]>(`/api/apps/${id}/git/branches`),
+      remote: (id: number) =>
+        request<GitRemoteInfo>(`/api/apps/${id}/git/remote`),
+      fetch: (id: number) =>
+        request<{ ok: true }>(`/api/apps/${id}/git/fetch`, { method: "POST" }),
+      load: (
+        id: number,
+        body: { branches: string[]; since?: string; until?: string }
+      ) =>
+        request<GitRepoGraph>(`/api/apps/${id}/git/graph`, {
+          method: "POST",
+          body: JSON.stringify(body),
+        }),
+    },
   },
 
   configSets: {

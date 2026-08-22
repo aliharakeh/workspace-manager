@@ -393,6 +393,12 @@ type AppAIStreamEvent struct {
 	Error string         `json:"error,omitempty"`
 }
 
+type GitGraphLoadInput struct {
+	Branches []string `json:"branches"`
+	Since    string   `json:"since"`
+	Until    string   `json:"until"`
+}
+
 // AITestResult echoes whether the connection worked plus the model's reply.
 type AITestResult struct {
 	Ok   bool   `json:"ok"`
