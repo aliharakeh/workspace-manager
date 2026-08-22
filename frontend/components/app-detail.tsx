@@ -65,7 +65,7 @@ export function AppDetail({
   const panelKey = `${app.active_config_set_id ?? "none"}-${panelEpoch}`
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 md:p-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 md:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -145,7 +145,7 @@ export function AppDetail({
         onValueChange={(value) => {
           if (value) onTabChange(value as AppTab)
         }}
-        className="min-h-0 flex-1"
+        className="min-h-0 flex-1 overflow-hidden"
       >
         <TabsList>
           <TabsTrigger value="env">Env</TabsTrigger>
@@ -154,22 +154,22 @@ export function AppDetail({
           <TabsTrigger value="ai">AI</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
         </TabsList>
-        <TabsContent value="env" className="mt-4">
+        <TabsContent value="env" className="mt-4 min-h-0 overflow-y-auto">
           <EnvVarsPanel key={panelKey} appId={app.id} />
         </TabsContent>
-        <TabsContent value="templates" className="mt-4 min-h-0">
+        <TabsContent value="templates" className="mt-4 min-h-0 overflow-y-auto">
           <TemplatesPanel key={panelKey} appId={app.id} />
         </TabsContent>
-        <TabsContent value="run" className="mt-4">
+        <TabsContent value="run" className="mt-4 min-h-0 overflow-y-auto">
           <RunConfigPanel key={panelKey} appId={app.id} />
         </TabsContent>
-        <TabsContent value="ai" className="mt-4 flex min-h-0 flex-col" keepMounted>
+        <TabsContent value="ai" className="flex min-h-0 flex-1 flex-col overflow-hidden pt-4" keepMounted>
           <AppAIPanel
             app={app}
             onApplied={() => setPanelEpoch((n) => n + 1)}
           />
         </TabsContent>
-        <TabsContent value="logs" className="mt-4">
+        <TabsContent value="logs" className="mt-4 min-h-0 overflow-y-auto">
           <LogsPanel status={status} logs={logs} connected={connected} />
         </TabsContent>
       </Tabs>
