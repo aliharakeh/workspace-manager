@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { BotIcon, SparklesIcon, XIcon } from "lucide-react"
 import { toast } from "sonner"
 import { DiffModeEnum, DiffView } from "@git-diff-view/react"
@@ -25,6 +25,13 @@ import type { App, ConfigSetDetail } from "@/lib/types"
 import { useTheme } from "@/components/theme-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Field,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@/components/ui/field"
 import { Toggle } from "@/components/ui/toggle"
 import {
   Empty,
@@ -219,13 +226,55 @@ async function applyAppAIPatch(
   }
 }
 
+function syncTemplateSelection(
+  paths: string[],
+  prevPaths: string[],
+  prevSelected: Set<string>
+): Set<string> {
+  const known = new Set(prevPaths)
+  const next = new Set<string>()
+  for (const p of paths) {
+    if (!known.has(p) || prevSelected.has(p)) next.add(p)
+  }
+  return next
+}
+
 export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
   const [sending, setSending] = useState(false)
   const [applyingId, setApplyingId] = useState<number | null>(null)
+  const [templatePaths, setTemplatePaths] = useState<string[]>([])
+  const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(
+    new Set()
+  )
   const setId = app.active_config_set_id
   const setName = app.active_config_set_name
+
+  useEffect(() => {
+    if (setId == null) {
+      setTemplatePaths([])
+      setSelectedTemplates(new Set())
+      return
+    }
+    let cancelled = false
+    void api.configSets.getDetail(setId).then(
+      (d) => {
+        if (cancelled) return
+        const paths = d.templates.map((t) => t.file_path)
+        setTemplatePaths(paths)
+        setSelectedTemplates(new Set(paths))
+      },
+      () => {
+        if (cancelled) return
+        setTemplatePaths([])
+        setSelectedTemplates(new Set())
+      }
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [setId])
 
   async function handleSend() {
     const instruction = input.trim()
@@ -253,18 +302,34 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
         toast.error("Config set changed — send again against the selected set")
         return
       }
+      const paths = detail.templates.map((t) => t.file_path)
+      setTemplatePaths(paths)
+      setSelectedTemplates((prev) =>
+        syncTemplateSelection(paths, templatePaths, prev)
+      )
+      const included =
+        templatePaths.length === 0
+          ? paths
+          : paths.filter((p) => selectedTemplates.has(p))
       const prompt = buildAppAIPrompt({
         appName: app.name,
         projectPath: app.project_path,
         configSet: detail,
         history,
         instruction,
+        templatePaths: included,
       })
       const res = await api.ai.chat({
         system: APP_AI_SYSTEM_PROMPT,
         prompt,
       })
-      const patch = parseAppAIResponse(res.text)
+      const parsed = parseAppAIResponse(res.text)
+      const allow = new Set(included)
+      const patch: AppAIPatch = {
+        ...parsed,
+        templates: parsed.templates?.filter((t) => allow.has(t.file_path)),
+      }
+      if (patch.templates?.length === 0) delete patch.templates
       const diff = patchHasEdits(patch)
         ? buildAppAIDiff(detail, patch)
         : undefined
@@ -357,6 +422,60 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
           Clear
         </Button>
       </div>
+
+      {templatePaths.length > 0 ? (
+        <details className="rounded-lg border px-3 py-2">
+          <summary className="cursor-pointer text-sm text-muted-foreground">
+            Templates in prompt ({selectedTemplates.size} of{" "}
+            {templatePaths.length})
+          </summary>
+          <FieldSet className="mt-2 gap-2">
+            <FieldLegend className="sr-only">Templates to send</FieldLegend>
+            <Field orientation="horizontal">
+              <Checkbox
+                id="ai-templates-all"
+                checked={selectedTemplates.size === templatePaths.length}
+                onCheckedChange={(checked) =>
+                  setSelectedTemplates(
+                    checked === true
+                      ? new Set(templatePaths)
+                      : new Set()
+                  )
+                }
+              />
+              <FieldLabel htmlFor="ai-templates-all">Select all</FieldLabel>
+            </Field>
+            <div className="flex max-h-40 flex-col gap-1 overflow-y-auto">
+              {templatePaths.map((path, index) => {
+                const id = `ai-template-${index}`
+                return (
+                  <Field key={path} orientation="horizontal" className="min-w-0">
+                    <Checkbox
+                      id={id}
+                      checked={selectedTemplates.has(path)}
+                      onCheckedChange={(checked) => {
+                        setSelectedTemplates((prev) => {
+                          const next = new Set(prev)
+                          if (checked === true) next.add(path)
+                          else next.delete(path)
+                          return next
+                        })
+                      }}
+                    />
+                    <FieldLabel
+                      htmlFor={id}
+                      className="min-w-0 truncate font-normal"
+                      title={path}
+                    >
+                      {path}
+                    </FieldLabel>
+                  </Field>
+                )
+              })}
+            </div>
+          </FieldSet>
+        </details>
+      ) : null}
 
       <ScrollArea className="min-h-0 flex-1 rounded-lg border">
         <div className="flex flex-col gap-3 p-3">

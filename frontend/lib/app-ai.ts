@@ -5,12 +5,12 @@ You edit ONLY the currently selected config set of the current app.
 
 You may:
 - upsert or delete environment variables for this config set
-- update content of existing templates (Handlebars {{VAR_NAME}} for env placeholders)
+- update content of templates whose full content is included (Handlebars {{VAR_NAME}} for env placeholders)
 - change run mode and run commands for this config set
 
 You must NOT:
 - create, rename, delete, or edit any other config set
-- invent template file paths that are not listed
+- invent template file paths, or edit templates listed as omitted
 - reformat template files unless the user asked
 
 Reply with a single JSON object (no markdown fences, no extra text):
@@ -58,27 +58,43 @@ export function buildAppAIPrompt({
   configSet,
   history,
   instruction,
+  templatePaths,
 }: {
   appName: string
   projectPath: string
   configSet: ConfigSetDetail
   history: AppAIChatTurn[]
   instruction: string
+  /** If set, only these template paths are sent with content. */
+  templatePaths?: string[]
 }): string {
   const envLines =
     configSet.env_vars.length > 0
       ? configSet.env_vars.map((v) => `${v.key}=${v.value}`).join("\n")
       : "(none)"
 
+  const allow =
+    templatePaths === undefined ? null : new Set(templatePaths)
+  const included = allow
+    ? configSet.templates.filter((t) => allow.has(t.file_path))
+    : configSet.templates
+  const omitted = allow
+    ? configSet.templates.filter((t) => !allow.has(t.file_path))
+    : []
+
   const templateBlocks =
-    configSet.templates.length > 0
-      ? configSet.templates
+    included.length > 0
+      ? included
           .map(
             (t) =>
               `--- file_path: ${t.file_path}\n${t.content}`
           )
           .join("\n\n")
       : "(none)"
+  const omittedBlock =
+    omitted.length > 0
+      ? `\n\nTemplates omitted (do not edit):\n${omitted.map((t) => t.file_path).join("\n")}`
+      : ""
 
   const run = configSet.run_config
   const runBlock = run
@@ -112,7 +128,7 @@ Environment variables:
 ${envLines}
 
 Templates:
-${templateBlocks}
+${templateBlocks}${omittedBlock}
 
 Run config:
 ${runBlock}

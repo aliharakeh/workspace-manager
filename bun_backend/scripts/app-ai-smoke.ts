@@ -125,6 +125,35 @@ check("prompt includes prior chat", prompt.includes("what is PORT?"), true)
 check("prompt includes instruction", prompt.includes("set PORT to 5173"), true)
 check("system forbids other sets", APP_AI_SYSTEM_PROMPT.includes("any other config set"), true)
 
+const filtered = buildAppAIPrompt({
+  appName: "shop",
+  projectPath: "/src/shop",
+  configSet: {
+    ...detail,
+    templates: [
+      detail.templates[0]!,
+      { ...detail.templates[0]!, id: 9, file_path: "other.env", content: "SECRET=1" },
+    ],
+  },
+  history: [],
+  instruction: "go",
+  templatePaths: [".env"],
+})
+check("prompt omits unselected template content", filtered.includes("SECRET=1"), false)
+check("prompt lists omitted template path", filtered.includes("other.env"), true)
+check(
+  "empty selection sends no template content",
+  buildAppAIPrompt({
+    appName: "shop",
+    projectPath: "/src/shop",
+    configSet: detail,
+    history: [],
+    instruction: "go",
+    templatePaths: [],
+  }).includes("PORT=3000\n\nTemplates:\n(none)"),
+  true
+)
+
 const envDiff = buildAppAIDiff(detail, {
   message: "x",
   env: { upsert: [{ key: "PORT", value: "5173" }, { key: "HOST", value: "localhost" }], delete: ["MISSING"] },
