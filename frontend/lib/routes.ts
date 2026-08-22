@@ -1,6 +1,6 @@
-export type AppTab = "env" | "templates" | "run" | "logs"
+export type AppTab = "env" | "templates" | "run" | "ai" | "logs"
 
-export const APP_TABS: AppTab[] = ["env", "templates", "run", "logs"]
+export const APP_TABS: AppTab[] = ["env", "templates", "run", "ai", "logs"]
 
 export type Route = {
   workspaceId: number | null

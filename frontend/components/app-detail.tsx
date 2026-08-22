@@ -7,6 +7,7 @@ import type { LogLine } from "@/hooks/use-runner-logs"
 import type { AppTab } from "@/lib/routes"
 import { AppRunControls } from "@/components/app-run-controls"
 import { ConfigSetSwitcher } from "@/components/config-set-switcher"
+import { AppAIPanel } from "@/components/app-ai-panel"
 import { EnvVarsPanel } from "@/components/env-vars-panel"
 import { TemplatesPanel } from "@/components/templates-panel"
 import { RunConfigPanel } from "@/components/run-config-panel"
@@ -150,6 +151,7 @@ export function AppDetail({
           <TabsTrigger value="env">Env</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="run">Run</TabsTrigger>
+          <TabsTrigger value="ai">AI</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
         </TabsList>
         <TabsContent value="env" className="mt-4">
@@ -160,6 +162,12 @@ export function AppDetail({
         </TabsContent>
         <TabsContent value="run" className="mt-4">
           <RunConfigPanel key={panelKey} appId={app.id} />
+        </TabsContent>
+        <TabsContent value="ai" className="mt-4 flex min-h-0 flex-col" keepMounted>
+          <AppAIPanel
+            app={app}
+            onApplied={() => setPanelEpoch((n) => n + 1)}
+          />
         </TabsContent>
         <TabsContent value="logs" className="mt-4">
           <LogsPanel status={status} logs={logs} connected={connected} />

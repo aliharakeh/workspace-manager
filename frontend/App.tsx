@@ -444,6 +444,7 @@ function AppContent() {
             </div>
           ) : selectedApp ? (
             <AppDetail
+              key={selectedApp.id}
               app={selectedApp}
               status={status ?? statusByAppId[selectedApp.id] ?? null}
               logs={logs}

@@ -30,6 +30,8 @@
     "@fontsource-variable/geist": "^5.3.0",
     "@genkit-ai/compat-oai": "^1.41.0",
     "@genkit-ai/googleai": "^1.28.0",
+    "@git-diff-view/file": "^0.1.7",
+    "@git-diff-view/react": "^0.1.7",
     "@tailwindcss/vite": "^4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
