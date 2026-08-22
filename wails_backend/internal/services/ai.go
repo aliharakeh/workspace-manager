@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -144,7 +145,11 @@ func runGeneration(ctx context.Context, provider string, cfg AIProviderConfig, s
 
 	opts := []ai.GenerateOption{
 		ai.WithModelName(model),
-		ai.WithMessages(ai.NewSystemTextMessage(system), ai.NewUserTextMessage(prompt)),
+	}
+	if strings.TrimSpace(system) != "" {
+		opts = append(opts, ai.WithMessages(ai.NewSystemTextMessage(system), ai.NewUserTextMessage(prompt)))
+	} else {
+		opts = append(opts, ai.WithMessages(ai.NewUserTextMessage(prompt)))
 	}
 	if provider != "google" && resolved.Temperature != nil {
 		opts = append(opts, ai.WithConfig(oaiChatConfig{Temperature: resolved.Temperature}))
