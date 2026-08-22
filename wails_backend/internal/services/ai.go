@@ -131,7 +131,7 @@ func buildAI(ctx context.Context, provider string, cfg AIProviderConfig) (g *gen
 
 // runGeneration sends one request through the (cached) runtime for the given
 // connection. Both ChatAI and TestAI go through here.
-func runGeneration(ctx context.Context, provider string, cfg AIProviderConfig, system, prompt string) (string, error) {
+func runGeneration(ctx context.Context, provider string, cfg AIProviderConfig, system, prompt string, tools []ai.ToolRef, onText func(string)) (string, error) {
 	resolved, err := ResolveAIConfig(provider, cfg)
 	if err != nil {
 		return "", err
@@ -151,8 +151,22 @@ func runGeneration(ctx context.Context, provider string, cfg AIProviderConfig, s
 	} else {
 		opts = append(opts, ai.WithMessages(ai.NewUserTextMessage(prompt)))
 	}
+	if len(tools) > 0 {
+		opts = append(opts, ai.WithTools(tools...), ai.WithMaxTurns(16))
+	}
 	if provider != "google" && resolved.Temperature != nil {
 		opts = append(opts, ai.WithConfig(oaiChatConfig{Temperature: resolved.Temperature}))
+	}
+	if onText != nil {
+		opts = append(opts, ai.WithStreaming(func(_ context.Context, chunk *ai.ModelResponseChunk) error {
+			if chunk == nil {
+				return nil
+			}
+			if t := chunk.Text(); t != "" {
+				onText(t)
+			}
+			return nil
+		}))
 	}
 	return genkit.GenerateText(ctx, g, opts...)
 }
@@ -172,7 +186,7 @@ func ChatAI(ctx context.Context, system, prompt string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return runGeneration(ctx, conn.Provider, conn, system, prompt)
+	return runGeneration(ctx, conn.Provider, conn, system, prompt, nil, nil)
 }
 
 // TestAI tries one minimal generation against an unsaved connection payload.
@@ -182,5 +196,5 @@ func TestAI(ctx context.Context, provider string, cfg AIProviderConfig) (string,
 	if provider == "" {
 		return "", fmt.Errorf("provider is required")
 	}
-	return runGeneration(ctx, provider, cfg, "", "Reply with exactly: OK")
+	return runGeneration(ctx, provider, cfg, "", "Reply with exactly: OK", nil, nil)
 }

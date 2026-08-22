@@ -1,6 +1,24 @@
 import { googleAI } from "@genkit-ai/googleai"
 import { openAICompatible } from "@genkit-ai/compat-oai"
 import { genkit, type Genkit } from "genkit"
+import { appsRepo } from "@db/apps"
+import { configSetsRepo } from "@db/config-sets"
+import { envVarsRepo } from "@db/env-vars"
+import { runConfigsRepo } from "@db/run-configs"
+import { templatesRepo } from "@db/templates"
+import type {
+  AppAIChatTurn,
+  AppAIPatch,
+  AppAIStreamEvent,
+  AppAIToolCall,
+} from "@/lib/app-ai"
+import { patchHasEdits } from "@/lib/app-ai"
+import {
+  APP_AI_AGENT_SYSTEM,
+  AppAIAgentState,
+  bindAppAITools,
+  buildAppAIAgentPrompt,
+} from "../lib/app-ai-agent"
 import {
   activeAIConnection,
   aiConfigInfo,
@@ -72,24 +90,39 @@ function ensureAI(cfg: AIProviderConfig): { ai: Genkit; model: string } {
   return cache!
 }
 
+type GenerateOpts = {
+  system?: string
+  prompt?: string
+  tools?: ReturnType<typeof bindAppAITools>
+  onText?: (text: string) => void
+}
+
 // runGeneration sends one request through the (cached) runtime for the given
-// connection. Both aiChat and aiTest go through here.
+// connection. aiChat, aiAppChat, and aiTest go through here.
 async function runGeneration(
   cfg: AIProviderConfig,
-  system?: string,
-  prompt?: string
+  opts: GenerateOpts
 ): Promise<string> {
   const resolved = resolveAIConfig(cfg)
   const { ai, model } = ensureAI(resolved)
-  const res = await ai.generate({
+  const genOpts = {
     model,
-    prompt: prompt ?? "",
-    ...(system ? { system } : {}),
+    prompt: opts.prompt ?? "",
+    ...(opts.system ? { system: opts.system } : {}),
+    ...(opts.tools?.length ? { tools: opts.tools, maxTurns: 16 } : {}),
     ...(resolved.provider !== "google" && resolved.temperature != null
       ? { config: { temperature: resolved.temperature } }
       : {}),
-  })
-  return res.text
+  }
+  if (!opts.onText) {
+    const res = await ai.generate(genOpts)
+    return res.text
+  }
+  const { stream, response } = ai.generateStream(genOpts)
+  for await (const chunk of stream) {
+    if (chunk.text) opts.onText(chunk.text)
+  }
+  return (await response).text
 }
 
 // aiChat runs one generation against the active connection and returns the
@@ -102,7 +135,70 @@ export async function aiChat(system?: string, prompt?: string): Promise<string> 
     throw new Error(
       "no default AI connection configured — pick one in Settings → AI connection"
     )
-  return runGeneration(conn, system, prompt)
+  return runGeneration(conn, { system, prompt })
+}
+
+export async function aiAppChat(
+  input: {
+    appId: number
+    configSetId: number
+    history?: AppAIChatTurn[]
+    instruction: string
+  },
+  onEvent?: (ev: AppAIStreamEvent) => void
+): Promise<{ text: string; patch: AppAIPatch; toolCalls: AppAIToolCall[] }> {
+  const instruction = input.instruction.trim()
+  if (!instruction) throw new Error("instruction is required")
+
+  const app = appsRepo.get(input.appId)
+  if (!app) throw new Error("App not found")
+  const set = configSetsRepo.get(input.configSetId)
+  if (!set || set.app_id !== app.id) throw new Error("Config set not found")
+
+  const detail = {
+    ...set,
+    env_vars: envVarsRepo.listByConfigSet(set.id),
+    templates: templatesRepo.listByConfigSet(set.id),
+    run_config: runConfigsRepo.getByConfigSet(set.id),
+  }
+  const state = new AppAIAgentState(detail, app.project_path)
+  if (onEvent) {
+    state.onTool = (call) => onEvent({ type: "tool", call })
+  }
+
+  const conn = activeAIConnection(loadAIStore())
+  if (!conn)
+    throw new Error(
+      "no default AI connection configured — pick one in Settings → AI connection"
+    )
+
+  const resolved = resolveAIConfig(conn)
+  const { ai } = ensureAI(resolved)
+  const text = await runGeneration(conn, {
+    system: APP_AI_AGENT_SYSTEM,
+    prompt: buildAppAIAgentPrompt({
+      appName: app.name,
+      projectPath: app.project_path,
+      configSetId: set.id,
+      configSetName: set.name,
+      history: input.history ?? [],
+      instruction,
+    }),
+    tools: bindAppAITools(ai, state),
+    onText: onEvent ? (delta) => onEvent({ type: "text", text: delta }) : undefined,
+  })
+
+  const patch = state.patch()
+  patch.message = text.trim() || "Done."
+  const toolCalls = state.toolCalls
+  if (!patchHasEdits(patch)) {
+    return {
+      text: patch.message,
+      patch: { message: patch.message },
+      toolCalls,
+    }
+  }
+  return { text: patch.message, patch, toolCalls }
 }
 
 // aiTest tries one minimal generation against an unsaved connection payload.
@@ -110,7 +206,7 @@ export async function aiChat(system?: string, prompt?: string): Promise<string> 
 // when saving and chatting would.
 export async function aiTest(cfg: AIProviderConfig): Promise<string> {
   if (!cfg.provider?.trim()) throw new Error("provider is required")
-  return runGeneration(cfg, undefined, "Reply with exactly: OK")
+  return runGeneration(cfg, { prompt: "Reply with exactly: OK" })
 }
 
 // aiInfo is the config payload served to the UI (no secrets).

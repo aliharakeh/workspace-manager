@@ -99,13 +99,13 @@ type ProcessState struct {
 }
 
 type StatusEvent struct {
-	Type       string         `json:"type"`
-	SessionID  string         `json:"sessionId"`
-	AppID      int64          `json:"appId"`
-	Running    bool           `json:"running"`
-	Processes  []ProcessState `json:"processes"`
-	Error      string         `json:"error,omitempty"`
-	Ts         int64          `json:"ts"`
+	Type      string         `json:"type"`
+	SessionID string         `json:"sessionId"`
+	AppID     int64          `json:"appId"`
+	Running   bool           `json:"running"`
+	Processes []ProcessState `json:"processes"`
+	Error     string         `json:"error,omitempty"`
+	Ts        int64          `json:"ts"`
 }
 
 type LogEvent struct {
@@ -328,6 +328,69 @@ type AITestInput struct {
 
 type AIChatResult struct {
 	Text string `json:"text"`
+}
+
+type AppAIChatTurn struct {
+	Role string `json:"role"`
+	Text string `json:"text"`
+}
+
+type AppAIEnvUpsert struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+type AppAIEnvPatch struct {
+	Upsert []AppAIEnvUpsert `json:"upsert,omitempty"`
+	Delete []string         `json:"delete,omitempty"`
+}
+
+type AppAITemplatePatch struct {
+	FilePath string `json:"file_path"`
+	Content  string `json:"content"`
+}
+
+type AppAIRunCommand struct {
+	Label   *string `json:"label"`
+	Command string  `json:"command"`
+}
+
+type AppAIRunPatch struct {
+	Mode     *string           `json:"mode,omitempty"`
+	Commands []AppAIRunCommand `json:"commands,omitempty"`
+}
+
+type AppAIPatch struct {
+	Message   string               `json:"message"`
+	Env       *AppAIEnvPatch       `json:"env,omitempty"`
+	Templates []AppAITemplatePatch `json:"templates,omitempty"`
+	Run       *AppAIRunPatch       `json:"run,omitempty"`
+}
+
+type AppAIChatInput struct {
+	AppID       int64           `json:"appId"`
+	ConfigSetID int64           `json:"configSetId"`
+	History     []AppAIChatTurn `json:"history"`
+	Instruction string          `json:"instruction"`
+}
+
+type AppAIToolCall struct {
+	Name   string `json:"name"`
+	Input  any    `json:"input"`
+	Output any    `json:"output"`
+}
+
+type AppAIChatResult struct {
+	Text      string          `json:"text"`
+	Patch     AppAIPatch      `json:"patch"`
+	ToolCalls []AppAIToolCall `json:"toolCalls,omitempty"`
+}
+
+type AppAIStreamEvent struct {
+	Type  string         `json:"type"`
+	Text  string         `json:"text,omitempty"`
+	Call  *AppAIToolCall `json:"call,omitempty"`
+	Error string         `json:"error,omitempty"`
 }
 
 // AITestResult echoes whether the connection worked plus the model's reply.

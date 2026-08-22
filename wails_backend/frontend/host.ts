@@ -1,4 +1,5 @@
 import type { AIProviderConfig, CopyParts, RunMode, RunnerEvent } from "@/lib/types"
+import type { AppAIChatResult, AppAIStreamEvent } from "@/lib/app-ai"
 import { EventsOn } from "./wailsjs/runtime/runtime"
 import * as Go from "./wailsjs/go/main/App"
 
@@ -146,6 +147,24 @@ export const api = {
     activate: (name: string) => call(() => Go.AIConfigActivate({ name })),
     chat: (body: { system?: string; prompt: string }) =>
       call(() => Go.AIChat(body)),
+    appChat: async (
+      body: {
+        appId: number
+        configSetId: number
+        history?: { role: "user" | "assistant"; text: string }[]
+        instruction: string
+      },
+      onEvent?: (ev: AppAIStreamEvent) => void
+    ): Promise<AppAIChatResult> => {
+      const off = onEvent
+        ? EventsOn("appAIEvent", (ev: AppAIStreamEvent) => onEvent(ev))
+        : undefined
+      try {
+        return (await call(() => Go.AIAppChat(body))) as AppAIChatResult
+      } finally {
+        off?.()
+      }
+    },
     test: (body: AIProviderConfig) => call(() => Go.AITest(body)),
   },
 

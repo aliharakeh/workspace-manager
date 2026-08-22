@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState } from "react"
+import Markdown, { type Components } from "react-markdown"
 import { BotIcon, SparklesIcon, XIcon } from "lucide-react"
 import { toast } from "sonner"
 import { DiffModeEnum, DiffView } from "@git-diff-view/react"
@@ -6,12 +7,12 @@ import { generateDiffFile } from "@git-diff-view/file"
 import "@git-diff-view/react/styles/diff-view.css"
 import { api } from "@/lib/api"
 import {
-  APP_AI_SYSTEM_PROMPT,
-  buildAppAIPrompt,
-  parseAppAIResponse,
   patchHasEdits,
+  summarizeAIToolInput,
   type AppAIChatTurn,
   type AppAIPatch,
+  type AppAIStreamEvent,
+  type AppAIToolCall,
 } from "@/lib/app-ai"
 import {
   appAIDiffCount,
@@ -25,13 +26,6 @@ import type { App, ConfigSetDetail } from "@/lib/types"
 import { useTheme } from "@/components/theme-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Field,
-  FieldLabel,
-  FieldLegend,
-  FieldSet,
-} from "@/components/ui/field"
 import { Toggle } from "@/components/ui/toggle"
 import {
   Empty,
@@ -57,9 +51,79 @@ type ReviewStatus = "pending" | "applied" | "discarded"
 
 type ChatMessage = AppAIChatTurn & {
   id: number
+  tools?: AppAIToolCall[]
   diff?: AppAIDiff
   patch?: AppAIPatch
   status?: ReviewStatus
+}
+
+function jsonBlock(value: unknown) {
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
+const mdComponents: Components = {
+  h1: ({ children }) => <p className="font-medium">{children}</p>,
+  h2: ({ children }) => <p className="font-medium">{children}</p>,
+  h3: ({ children }) => <p className="font-medium">{children}</p>,
+  ul: ({ children }) => <ul className="list-disc pl-4">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-4">{children}</ol>,
+  pre: ({ children }) => (
+    <pre className="overflow-auto rounded-md bg-muted p-2 font-mono text-xs">
+      {children}
+    </pre>
+  ),
+  code: ({ className, children }) =>
+    className ? (
+      <code className={className}>{children}</code>
+    ) : (
+      <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
+        {children}
+      </code>
+    ),
+  a: ({ href, children }) => (
+    <a
+      href={href}
+      className="underline underline-offset-3"
+      target="_blank"
+      rel="noreferrer"
+    >
+      {children}
+    </a>
+  ),
+  blockquote: ({ children }) => (
+    <blockquote className="border-l pl-3 text-muted-foreground">
+      {children}
+    </blockquote>
+  ),
+}
+
+function AssistantMarkdown({ text }: { text: string }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Markdown components={mdComponents}>{text}</Markdown>
+    </div>
+  )
+}
+
+function AppAIToolCallRow({ call }: { call: AppAIToolCall }) {
+  const hint = summarizeAIToolInput(call.input)
+  return (
+    <details className="rounded-lg border px-3 py-2">
+      <summary className="cursor-pointer truncate text-xs">
+        <span className="font-mono font-medium">{call.name}</span>
+        {hint ? (
+          <span className="ml-2 text-muted-foreground">{hint}</span>
+        ) : null}
+      </summary>
+      <pre className="mt-2 max-h-40 overflow-auto rounded-md bg-muted p-2 text-xs">
+        {jsonBlock({ input: call.input, output: call.output })}
+      </pre>
+    </details>
+  )
 }
 
 function SplitDiff({
@@ -226,55 +290,18 @@ async function applyAppAIPatch(
   }
 }
 
-function syncTemplateSelection(
-  paths: string[],
-  prevPaths: string[],
-  prevSelected: Set<string>
-): Set<string> {
-  const known = new Set(prevPaths)
-  const next = new Set<string>()
-  for (const p of paths) {
-    if (!known.has(p) || prevSelected.has(p)) next.add(p)
-  }
-  return next
-}
-
 export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
   const [sending, setSending] = useState(false)
   const [applyingId, setApplyingId] = useState<number | null>(null)
-  const [templatePaths, setTemplatePaths] = useState<string[]>([])
-  const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(
-    new Set()
-  )
+  const inputRef = useRef<HTMLInputElement>(null)
   const setId = app.active_config_set_id
   const setName = app.active_config_set_name
 
   useEffect(() => {
-    if (setId == null) {
-      setTemplatePaths([])
-      setSelectedTemplates(new Set())
-      return
-    }
-    let cancelled = false
-    void api.configSets.getDetail(setId).then(
-      (d) => {
-        if (cancelled) return
-        const paths = d.templates.map((t) => t.file_path)
-        setTemplatePaths(paths)
-        setSelectedTemplates(new Set(paths))
-      },
-      () => {
-        if (cancelled) return
-        setTemplatePaths([])
-        setSelectedTemplates(new Set())
-      }
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [setId])
+    if (!sending) inputRef.current?.focus()
+  }, [sending])
 
   async function handleSend() {
     const instruction = input.trim()
@@ -293,6 +320,25 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
     setMessages((prev) => [...prev, userMsg])
     setInput("")
     setSending(true)
+    const assistantId = Date.now() + 1
+    setMessages((prev) => [
+      ...prev,
+      { id: assistantId, role: "assistant", text: "", tools: [] },
+    ])
+    const applyEvent = (ev: AppAIStreamEvent) => {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== assistantId) return m
+          if (ev.type === "tool") {
+            return { ...m, tools: [...(m.tools ?? []), ev.call] }
+          }
+          if (ev.type === "text") {
+            return { ...m, text: m.text + ev.text }
+          }
+          return m
+        })
+      )
+    }
     try {
       const [detail, latestApp] = await Promise.all([
         api.configSets.getDetail(setId),
@@ -300,53 +346,49 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
       ])
       if (latestApp.active_config_set_id !== setId) {
         toast.error("Config set changed — send again against the selected set")
+        setMessages((prev) => prev.filter((m) => m.id !== assistantId))
         return
       }
-      const paths = detail.templates.map((t) => t.file_path)
-      setTemplatePaths(paths)
-      setSelectedTemplates((prev) =>
-        syncTemplateSelection(paths, templatePaths, prev)
+      const res = await api.ai.appChat(
+        {
+          appId: app.id,
+          configSetId: setId,
+          history,
+          instruction,
+        },
+        applyEvent
       )
-      const included =
-        templatePaths.length === 0
-          ? paths
-          : paths.filter((p) => selectedTemplates.has(p))
-      const prompt = buildAppAIPrompt({
-        appName: app.name,
-        projectPath: app.project_path,
-        configSet: detail,
-        history,
-        instruction,
-        templatePaths: included,
-      })
-      const res = await api.ai.chat({
-        system: APP_AI_SYSTEM_PROMPT,
-        prompt,
-      })
-      const parsed = parseAppAIResponse(res.text)
-      const allow = new Set(included)
       const patch: AppAIPatch = {
-        ...parsed,
-        templates: parsed.templates?.filter((t) => allow.has(t.file_path)),
+        message: res.text.trim() || res.patch.message || "Done.",
+        env: res.patch.env,
+        templates: res.patch.templates,
+        run: res.patch.run,
       }
-      if (patch.templates?.length === 0) delete patch.templates
       const diff = patchHasEdits(patch)
         ? buildAppAIDiff(detail, patch)
         : undefined
       const pending = diff && diff.files.length > 0
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now() + 1,
-          role: "assistant",
-          text: patch.message,
-          diff,
-          patch: pending ? patch : undefined,
-          status: pending ? "pending" : undefined,
-        },
-      ])
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? {
+                ...m,
+                text: m.text.trim() || patch.message,
+                tools: res.toolCalls?.length ? res.toolCalls : m.tools,
+                diff,
+                patch: pending ? patch : undefined,
+                status: pending ? "pending" : undefined,
+              }
+            : m
+        )
+      )
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "AI request failed")
+      setMessages((prev) =>
+        prev.filter(
+          (m) => m.id !== assistantId || !!m.text || !!m.tools?.length
+        )
+      )
     } finally {
       setSending(false)
     }
@@ -400,8 +442,8 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm text-muted-foreground">
             Ask to change env vars, templates, or run commands. Review, then
@@ -423,61 +465,7 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
         </Button>
       </div>
 
-      {templatePaths.length > 0 ? (
-        <details className="rounded-lg border px-3 py-2">
-          <summary className="cursor-pointer text-sm text-muted-foreground">
-            Templates in prompt ({selectedTemplates.size} of{" "}
-            {templatePaths.length})
-          </summary>
-          <FieldSet className="mt-2 gap-2">
-            <FieldLegend className="sr-only">Templates to send</FieldLegend>
-            <Field orientation="horizontal">
-              <Checkbox
-                id="ai-templates-all"
-                checked={selectedTemplates.size === templatePaths.length}
-                onCheckedChange={(checked) =>
-                  setSelectedTemplates(
-                    checked === true
-                      ? new Set(templatePaths)
-                      : new Set()
-                  )
-                }
-              />
-              <FieldLabel htmlFor="ai-templates-all">Select all</FieldLabel>
-            </Field>
-            <div className="flex max-h-40 flex-col gap-1 overflow-y-auto">
-              {templatePaths.map((path, index) => {
-                const id = `ai-template-${index}`
-                return (
-                  <Field key={path} orientation="horizontal" className="min-w-0">
-                    <Checkbox
-                      id={id}
-                      checked={selectedTemplates.has(path)}
-                      onCheckedChange={(checked) => {
-                        setSelectedTemplates((prev) => {
-                          const next = new Set(prev)
-                          if (checked === true) next.add(path)
-                          else next.delete(path)
-                          return next
-                        })
-                      }}
-                    />
-                    <FieldLabel
-                      htmlFor={id}
-                      className="min-w-0 truncate font-normal"
-                      title={path}
-                    >
-                      {path}
-                    </FieldLabel>
-                  </Field>
-                )
-              })}
-            </div>
-          </FieldSet>
-        </details>
-      ) : null}
-
-      <ScrollArea className="min-h-0 flex-1 rounded-lg border">
+      <ScrollArea className="min-h-0 flex-1 overflow-hidden rounded-lg border">
         <div className="flex flex-col gap-3 p-3">
           {messages.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -486,41 +474,54 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
             </p>
           ) : (
             messages.map((m) => (
-              <div
-                key={m.id}
-                className={
-                  m.role === "user"
-                    ? "ml-8 rounded-lg bg-muted px-3 py-2 text-sm"
-                    : m.diff
-                      ? "rounded-lg border px-3 py-2 text-sm"
-                      : "mr-8 rounded-lg border px-3 py-2 text-sm"
-                }
-              >
-                <p className="whitespace-pre-wrap">{m.text}</p>
-                {m.diff ? (
-                  <AppAIDiffView
-                    diff={m.diff}
-                    status={m.status}
-                    applying={applyingId === m.id}
-                    onApply={() => void handleApply(m)}
-                    onDiscard={() => handleDiscard(m.id)}
-                  />
+              <Fragment key={m.id}>
+                {m.role === "assistant" && m.tools?.length
+                  ? m.tools.map((c, i) => (
+                      <AppAIToolCallRow key={`${m.id}-${c.name}-${i}`} call={c} />
+                    ))
+                  : null}
+                {m.role === "user" || m.text || m.diff ? (
+                <div
+                  className={
+                    m.role === "user"
+                      ? "ml-8 rounded-lg bg-muted px-3 py-2 text-sm"
+                      : m.diff
+                        ? "rounded-lg border px-3 py-2 text-sm"
+                        : "mr-8 rounded-lg border px-3 py-2 text-sm"
+                  }
+                >
+                  {m.role === "user" ? (
+                    <p className="whitespace-pre-wrap">{m.text}</p>
+                  ) : (
+                    <AssistantMarkdown text={m.text} />
+                  )}
+                  {m.diff ? (
+                    <AppAIDiffView
+                      diff={m.diff}
+                      status={m.status}
+                      applying={applyingId === m.id}
+                      onApply={() => void handleApply(m)}
+                      onDiscard={() => handleDiscard(m.id)}
+                    />
+                  ) : null}
+                </div>
                 ) : null}
-              </div>
+              </Fragment>
             ))
           )}
           {sending ? (
-            <p className="text-xs text-muted-foreground">Updating…</p>
+            <p className="text-xs text-muted-foreground">Working…</p>
           ) : null}
         </div>
       </ScrollArea>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <InputGroup className="flex-1">
           <InputGroupAddon align="inline-start">
             <BotIcon />
           </InputGroupAddon>
           <InputGroupInput
+            ref={inputRef}
             value={input}
             disabled={sending}
             onChange={(e) => setInput(e.target.value)}
@@ -550,7 +551,7 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
           onClick={() => void handleSend()}
         >
           <SparklesIcon data-icon="inline-start" />
-          {sending ? "Updating…" : "Ask AI"}
+          {sending ? "Working…" : "Ask AI"}
         </Button>
       </div>
     </div>

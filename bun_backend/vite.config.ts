@@ -49,8 +49,23 @@ async function pipeSse(
   req.on("close", onClose)
 
   try {
+    const method = (req.method ?? "GET").toUpperCase()
+    const chunks: Buffer[] = []
+    if (method !== "GET" && method !== "HEAD") {
+      for await (const chunk of req) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+      }
+    }
+    const headers: Record<string, string> = {
+      Accept: "text/event-stream",
+    }
+    const contentType = req.headers["content-type"]
+    if (typeof contentType === "string") headers["Content-Type"] = contentType
+
     const upstream = await fetch(`${target}${req.url}`, {
-      headers: { Accept: "text/event-stream" },
+      method,
+      headers,
+      body: chunks.length ? Buffer.concat(chunks) : undefined,
       signal: ac.signal,
     })
 

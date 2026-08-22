@@ -16,6 +16,7 @@ import type {
   Template,
   Workspace,
 } from "@/lib/types"
+import type { AppAIChatResult, AppAIStreamEvent } from "@/lib/app-ai"
 
 class ApiError extends Error {
   status: number
@@ -105,6 +106,42 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     )
   }
   return data as T
+}
+
+async function readAppChatStream(
+  res: Response,
+  onEvent?: (ev: AppAIStreamEvent) => void
+): Promise<AppAIChatResult> {
+  if (!res.body) throw new ApiError("empty stream", 502)
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buf = ""
+  let result: AppAIChatResult | undefined
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    const parts = buf.split("\n\n")
+    buf = parts.pop() ?? ""
+    for (const part of parts) {
+      for (const line of part.split("\n")) {
+        if (!line.startsWith("data: ")) continue
+        const ev = JSON.parse(line.slice(6)) as AppAIStreamEvent
+        if (ev.type === "error") throw new ApiError(ev.error, 500)
+        if (ev.type === "done") {
+          result = {
+            text: ev.text,
+            patch: ev.patch,
+            toolCalls: ev.toolCalls,
+          }
+          continue
+        }
+        onEvent?.(ev)
+      }
+    }
+  }
+  if (!result) throw new ApiError("AI stream ended early", 502)
+  return result
 }
 
 export const api = {
@@ -324,6 +361,32 @@ export const api = {
         method: "POST",
         body: JSON.stringify(body),
       }),
+    appChat: async (
+      body: {
+        appId: number
+        configSetId: number
+        history?: { role: "user" | "assistant"; text: string }[]
+        instruction: string
+      },
+      onEvent?: (ev: AppAIStreamEvent) => void
+    ) => {
+      const res = await fetch("/api/ai/app-chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new ApiError(
+          typeof data.error === "string" ? data.error : res.statusText,
+          res.status
+        )
+      }
+      return readAppChatStream(res, onEvent)
+    },
     test: (body: AIProviderConfig) =>
       request<{ ok: true; text: string }>("/api/ai/test", {
         method: "POST",

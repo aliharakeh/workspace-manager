@@ -3,38 +3,52 @@ import type { ConfigSetDetail, RunMode } from "./types"
 export const APP_AI_SYSTEM_PROMPT = `You are a configuration assistant for Workspace Manager.
 You edit ONLY the currently selected config set of the current app.
 
-You may:
-- upsert or delete environment variables for this config set
-- update content of templates whose full content is included (Handlebars {{VAR_NAME}} for env placeholders)
-- change run mode and run commands for this config set
+Use tools to inspect and change this set. Do not expect env vars, templates, or run config in the user message.
 
 You must NOT:
 - create, rename, delete, or edit any other config set
-- invent template file paths, or edit templates listed as omitted
+- invent template file paths
 - reformat template files unless the user asked
 
-Reply with a single JSON object (no markdown fences, no extra text):
-{
-  "message": "short reply to the user",
-  "env": {
-    "upsert": [{ "key": "NAME", "value": "..." }],
-    "delete": ["OLD_KEY"]
-  },
-  "templates": [{ "file_path": "exact/path", "content": "full new file contents" }],
-  "run": {
-    "mode": "parallel" | "sequential",
-    "commands": [{ "label": "web", "command": "npm run dev" }]
-  }
-}
-
-Omit env, templates, and/or run when unchanged. Always include message.
-For questions with no edits, return only { "message": "..." }.
-When updating a template, return its complete new content.
-When updating run commands, return the full command list (not a partial diff).`
+Reply in short markdown (lists, inline code). No JSON. No headings. Edits are applied through tools.`
 
 export type AppAIChatTurn = {
   role: "user" | "assistant"
   text: string
+}
+
+export type AppAIToolCall = {
+  name: string
+  input: unknown
+  output: unknown
+}
+
+export type AppAIStreamEvent =
+  | { type: "tool"; call: AppAIToolCall }
+  | { type: "text"; text: string }
+  | {
+      type: "done"
+      text: string
+      patch: AppAIPatch
+      toolCalls?: AppAIToolCall[]
+    }
+  | { type: "error"; error: string }
+
+export type AppAIChatResult = {
+  text: string
+  patch: AppAIPatch
+  toolCalls?: AppAIToolCall[]
+}
+
+export function summarizeAIToolInput(input: unknown, max = 72): string {
+  let s: string
+  try {
+    s = JSON.stringify(input) ?? ""
+  } catch {
+    s = String(input)
+  }
+  if (s === "{}" || s === "null" || s === "") return ""
+  return s.length <= max ? s : `${s.slice(0, max - 1)}…`
 }
 
 export type AppAIEnvUpsert = { key: string; value: string }
@@ -58,58 +72,15 @@ export function buildAppAIPrompt({
   configSet,
   history,
   instruction,
-  templatePaths,
 }: {
   appName: string
   projectPath: string
   configSet: ConfigSetDetail
   history: AppAIChatTurn[]
   instruction: string
-  /** If set, only these template paths are sent with content. */
+  /** @deprecated templates are fetched via tools */
   templatePaths?: string[]
 }): string {
-  const envLines =
-    configSet.env_vars.length > 0
-      ? configSet.env_vars.map((v) => `${v.key}=${v.value}`).join("\n")
-      : "(none)"
-
-  const allow =
-    templatePaths === undefined ? null : new Set(templatePaths)
-  const included = allow
-    ? configSet.templates.filter((t) => allow.has(t.file_path))
-    : configSet.templates
-  const omitted = allow
-    ? configSet.templates.filter((t) => !allow.has(t.file_path))
-    : []
-
-  const templateBlocks =
-    included.length > 0
-      ? included
-          .map(
-            (t) =>
-              `--- file_path: ${t.file_path}\n${t.content}`
-          )
-          .join("\n\n")
-      : "(none)"
-  const omittedBlock =
-    omitted.length > 0
-      ? `\n\nTemplates omitted (do not edit):\n${omitted.map((t) => t.file_path).join("\n")}`
-      : ""
-
-  const run = configSet.run_config
-  const runBlock = run
-    ? `mode: ${run.mode}\ncommands:\n${
-        run.commands.length > 0
-          ? run.commands
-              .map(
-                (c, i) =>
-                  `  ${i + 1}. label=${c.label ?? ""} command=${c.command}`
-              )
-              .join("\n")
-          : "  (none)"
-      }`
-    : "(none)"
-
   const historyBlock =
     history.length > 0
       ? history
@@ -123,15 +94,6 @@ Project path: ${projectPath}
 Active config set (ONLY edit this one):
 id: ${configSet.id}
 name: ${configSet.name}
-
-Environment variables:
-${envLines}
-
-Templates:
-${templateBlocks}${omittedBlock}
-
-Run config:
-${runBlock}
 
 Prior conversation:
 ${historyBlock}

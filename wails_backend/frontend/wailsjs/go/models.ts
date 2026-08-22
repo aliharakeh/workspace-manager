@@ -177,6 +177,256 @@ export namespace types {
 	        this.updated_at = source["updated_at"];
 	    }
 	}
+	export class AppAIChatTurn {
+	    role: string;
+	    text: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIChatTurn(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.role = source["role"];
+	        this.text = source["text"];
+	    }
+	}
+	export class AppAIChatInput {
+	    appId: number;
+	    configSetId: number;
+	    history: AppAIChatTurn[];
+	    instruction: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIChatInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.appId = source["appId"];
+	        this.configSetId = source["configSetId"];
+	        this.history = this.convertValues(source["history"], AppAIChatTurn);
+	        this.instruction = source["instruction"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AppAIToolCall {
+	    name: string;
+	    input: any;
+	    output: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIToolCall(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.input = source["input"];
+	        this.output = source["output"];
+	    }
+	}
+	export class AppAIRunCommand {
+	    label?: string;
+	    command: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIRunCommand(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.command = source["command"];
+	    }
+	}
+	export class AppAIRunPatch {
+	    mode?: string;
+	    commands?: AppAIRunCommand[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIRunPatch(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mode = source["mode"];
+	        this.commands = this.convertValues(source["commands"], AppAIRunCommand);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AppAITemplatePatch {
+	    file_path: string;
+	    content: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAITemplatePatch(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.file_path = source["file_path"];
+	        this.content = source["content"];
+	    }
+	}
+	export class AppAIEnvUpsert {
+	    key: string;
+	    value: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIEnvUpsert(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.value = source["value"];
+	    }
+	}
+	export class AppAIEnvPatch {
+	    upsert?: AppAIEnvUpsert[];
+	    delete?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIEnvPatch(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.upsert = this.convertValues(source["upsert"], AppAIEnvUpsert);
+	        this.delete = source["delete"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AppAIPatch {
+	    message: string;
+	    env?: AppAIEnvPatch;
+	    templates?: AppAITemplatePatch[];
+	    run?: AppAIRunPatch;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIPatch(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.message = source["message"];
+	        this.env = this.convertValues(source["env"], AppAIEnvPatch);
+	        this.templates = this.convertValues(source["templates"], AppAITemplatePatch);
+	        this.run = this.convertValues(source["run"], AppAIRunPatch);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AppAIChatResult {
+	    text: string;
+	    patch: AppAIPatch;
+	    toolCalls?: AppAIToolCall[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIChatResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.text = source["text"];
+	        this.patch = this.convertValues(source["patch"], AppAIPatch);
+	        this.toolCalls = this.convertValues(source["toolCalls"], AppAIToolCall);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	
+	
+	
+	
+	
+	
 	export class AppCreateInput {
 	    name: string;
 	    project_path: string;

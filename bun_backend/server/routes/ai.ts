@@ -1,4 +1,5 @@
 import type { AIProviderConfig } from "@/lib/types"
+import type { AppAIStreamEvent } from "@/lib/app-ai"
 import {
   activateAIConnection,
   deleteAIConnection,
@@ -7,8 +8,15 @@ import {
   slugify,
   upsertAIConnection,
 } from "../lib/ai-config"
-import { aiInfo, aiChat, aiTest } from "../services/ai"
+import { aiInfo, aiChat, aiAppChat, aiTest } from "../services/ai"
 import { error, json, readJson } from "../lib/http"
+
+const sseHeaders = {
+  "Content-Type": "text/event-stream; charset=utf-8",
+  "Cache-Control": "no-cache, no-transform",
+  Connection: "keep-alive",
+  "X-Accel-Buffering": "no",
+}
 
 export async function handleAI(
   req: Request,
@@ -74,6 +82,89 @@ export async function handleAI(
     try {
       const text = await aiChat(body?.system, body?.prompt)
       return json({ text })
+    } catch (err) {
+      return error(err instanceof Error ? err.message : String(err), 500)
+    }
+  }
+
+  if (pathname === "/api/ai/app-chat" && req.method === "POST") {
+    const body = await readJson<{
+      appId?: number
+      configSetId?: number
+      history?: { role?: string; text?: string }[]
+      instruction?: string
+    }>(req)
+    if (!body?.appId || !body.configSetId) {
+      return error("appId and configSetId are required")
+    }
+    if (!body.instruction?.trim()) return error("instruction is required")
+    const appId = body.appId
+    const configSetId = body.configSetId
+    const instruction = body.instruction
+    const history = (body.history ?? [])
+      .filter(
+        (t): t is { role: "user" | "assistant"; text: string } =>
+          (t.role === "user" || t.role === "assistant") &&
+          typeof t.text === "string"
+      )
+      .map((t) => ({ role: t.role, text: t.text }))
+    try {
+      const wantsStream = req.headers
+        .get("accept")
+        ?.includes("text/event-stream")
+      if (!wantsStream) {
+        return json(
+          await aiAppChat({
+            appId,
+            configSetId,
+            history,
+            instruction,
+          })
+        )
+      }
+
+      const stream = new ReadableStream({
+        async start(controller) {
+          const encoder = new TextEncoder()
+          let closed = false
+          const send = (ev: AppAIStreamEvent) => {
+            if (closed) return
+            try {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify(ev)}\n\n`)
+              )
+            } catch {
+              closed = true
+            }
+          }
+          try {
+            const result = await aiAppChat(
+              {
+                appId,
+                configSetId,
+                history,
+                instruction,
+              },
+              send
+            )
+            send({ type: "done", ...result })
+          } catch (err) {
+            send({
+              type: "error",
+              error: err instanceof Error ? err.message : String(err),
+            })
+          } finally {
+            if (!closed) {
+              try {
+                controller.close()
+              } catch {
+                // already closed
+              }
+            }
+          }
+        },
+      })
+      return new Response(stream, { headers: sseHeaders })
     } catch (err) {
       return error(err instanceof Error ? err.message : String(err), 500)
     }

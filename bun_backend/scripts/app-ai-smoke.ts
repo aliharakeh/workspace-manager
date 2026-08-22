@@ -4,13 +4,18 @@ import {
   parseAppAIResponse,
   patchHasEdits,
   stripAIFences,
+  summarizeAIToolInput,
 } from "../../frontend/lib/app-ai"
 import {
   appAIDiffCount,
   buildAppAIDiff,
   normalizeNewlines,
 } from "../../frontend/lib/app-ai-diff"
-import type { ConfigSetDetail } from "../../frontend/lib/types"
+import { mkdirSync, writeFileSync, rmSync } from "node:fs"
+import { join } from "node:path"
+import { spawnSync } from "node:child_process"
+import { AppAIAgentState } from "../server/lib/app-ai-agent"
+import { globToRegExp, searchProjectFiles } from "../server/lib/gitignore-glob"
 
 let failures = 0
 function check(name: string, got: unknown, want: unknown) {
@@ -104,6 +109,8 @@ check(
   { message: "just an answer" }
 )
 check("empty patch has no edits", patchHasEdits({ message: "ok" }), false)
+check("tool input summary truncates", summarizeAIToolInput({ content: "x".repeat(80) }).endsWith("…"), true)
+check("empty object input summary", summarizeAIToolInput({}), "")
 check(
   "env patch has edits",
   patchHasEdits({ message: "ok", env: { delete: ["X"] } }),
@@ -118,41 +125,12 @@ const prompt = buildAppAIPrompt({
   instruction: "set PORT to 5173",
 })
 check("prompt names active set only", prompt.includes("name: local") && prompt.includes("id: 7"), true)
-check("prompt includes env", prompt.includes("PORT=3000"), true)
-check("prompt includes template", prompt.includes("file_path: .env"), true)
-check("prompt includes run command", prompt.includes("npm run dev"), true)
+check("prompt omits env dump", prompt.includes("PORT=3000"), false)
+check("prompt omits template dump", prompt.includes("file_path: .env"), false)
+check("prompt omits run dump", prompt.includes("npm run dev"), false)
 check("prompt includes prior chat", prompt.includes("what is PORT?"), true)
 check("prompt includes instruction", prompt.includes("set PORT to 5173"), true)
 check("system forbids other sets", APP_AI_SYSTEM_PROMPT.includes("any other config set"), true)
-
-const filtered = buildAppAIPrompt({
-  appName: "shop",
-  projectPath: "/src/shop",
-  configSet: {
-    ...detail,
-    templates: [
-      detail.templates[0]!,
-      { ...detail.templates[0]!, id: 9, file_path: "other.env", content: "SECRET=1" },
-    ],
-  },
-  history: [],
-  instruction: "go",
-  templatePaths: [".env"],
-})
-check("prompt omits unselected template content", filtered.includes("SECRET=1"), false)
-check("prompt lists omitted template path", filtered.includes("other.env"), true)
-check(
-  "empty selection sends no template content",
-  buildAppAIPrompt({
-    appName: "shop",
-    projectPath: "/src/shop",
-    configSet: detail,
-    history: [],
-    instruction: "go",
-    templatePaths: [],
-  }).includes("PORT=3000\n\nTemplates:\n(none)"),
-  true
-)
 
 const envDiff = buildAppAIDiff(detail, {
   message: "x",
@@ -197,5 +175,64 @@ const crlfOnly = buildAppAIDiff(
   { message: "x", templates: [{ file_path: ".env", content: "PORT=3000\n" }] }
 )
 check("line-ending-only template omitted", crlfOnly.files.length, 0)
+
+const agent = new AppAIAgentState(detail, ".")
+check("agent starts with no tool calls", agent.toolCalls.length, 0)
+check("list vars", agent.listVars(), [{ key: "PORT", value: "3000" }])
+agent.updateVar("PORT", "5173")
+agent.updateVar("HOST", "localhost")
+check("get after update", agent.getVar("PORT"), { key: "PORT", value: "5173" })
+const envPatch = agent.patch()
+check(
+  "agent env patch",
+  (envPatch.env?.upsert ?? []).slice().sort((a, b) => a.key.localeCompare(b.key)),
+  [
+    { key: "HOST", value: "localhost" },
+    { key: "PORT", value: "5173" },
+  ]
+)
+agent.deleteVar("HOST")
+check("delete new key leaves no upsert", agent.patch().env?.upsert, [{ key: "PORT", value: "5173" }])
+agent.updateTemplate(".env", "PORT={{PORT}}")
+check("agent template patch", agent.patch().templates, [
+  { file_path: ".env", content: "PORT={{PORT}}" },
+])
+check("unknown template rejected", agent.updateTemplate("nope", "x").error, "template not on this config set: nope")
+agent.updateRun({ mode: "sequential", commands: [{ label: "api", command: "go run ." }] })
+check("agent run patch mode", agent.patch().run?.mode, "sequential")
+
+check("glob **/*.env", globToRegExp("**/*.env").test("a/.env") && globToRegExp("**/*.env").test(".env"), true)
+check("glob rejects parent", "error" in (searchProjectFiles(".", "../x") as object), true)
+
+const tmp = join(process.cwd(), ".tmp-app-ai-glob")
+rmSync(tmp, { recursive: true, force: true })
+mkdirSync(join(tmp, "src"), { recursive: true })
+writeFileSync(join(tmp, ".gitignore"), "secret.txt\n")
+writeFileSync(join(tmp, "keep.ts"), "a")
+writeFileSync(join(tmp, "secret.txt"), "no")
+writeFileSync(join(tmp, "src", "app.ts"), "b")
+const gitInit = spawnSync("git", ["-C", tmp, "init"], { encoding: "utf8", windowsHide: true })
+if (gitInit.status === 0) {
+  const found = searchProjectFiles(tmp, "**/*.ts")
+  if ("error" in found) {
+    check("glob git search", found, { files: ["keep.ts", "src/app.ts"] })
+  } else {
+    check(
+      "glob git search",
+      found.files.slice().sort(),
+      ["keep.ts", "src/app.ts"]
+    )
+    check("glob omits gitignored", found.files.includes("secret.txt"), false)
+  }
+} else {
+  console.log("skip glob git test (git init failed)")
+}
+const reader = new AppAIAgentState(detail, tmp)
+check("read_file", reader.readFile("src/app.ts"), {
+  file_path: "src/app.ts",
+  content: "b",
+})
+check("read_file escape", "error" in reader.readFile("../package.json"), true)
+rmSync(tmp, { recursive: true, force: true })
 
 console.log(failures === 0 ? "\nAll app AI tests passed!" : `\n${failures} FAILURES`)

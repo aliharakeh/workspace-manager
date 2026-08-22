@@ -12,3 +12,7 @@ func EventsEmitRunner(ctx context.Context, appID int64, event any) {
 		"event": event,
 	})
 }
+
+func EventsEmitAppAI(ctx context.Context, event any) {
+	runtime.EventsEmit(ctx, "appAIEvent", event)
+}

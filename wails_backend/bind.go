@@ -720,6 +720,30 @@ func (a *App) AIChat(body types.AIChatInput) (types.AIChatResult, error) {
 	return types.AIChatResult{Text: text}, nil
 }
 
+func (a *App) AIAppChat(body types.AppAIChatInput) (types.AppAIChatResult, error) {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return services.AppChatAI(ctx, a.db, body.AppID, body.ConfigSetID, body.History, body.Instruction, func(ev types.AppAIStreamEvent) {
+		if a.ctx == nil {
+			return
+		}
+		payload := map[string]any{"type": ev.Type}
+		if ev.Text != "" {
+			payload["text"] = ev.Text
+		}
+		if ev.Call != nil {
+			payload["call"] = map[string]any{
+				"name":   ev.Call.Name,
+				"input":  ev.Call.Input,
+				"output": ev.Call.Output,
+			}
+		}
+		EventsEmitAppAI(a.ctx, payload)
+	})
+}
+
 // AITest runs one minimal generation against an unsaved connection payload so
 // the UI can verify credentials before saving. Nothing is persisted.
 func (a *App) AITest(body types.AITestInput) (types.AITestResult, error) {
