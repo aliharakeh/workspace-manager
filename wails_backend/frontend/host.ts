@@ -1,4 +1,4 @@
-import type { CopyParts, RunMode, RunnerEvent } from "@/lib/types"
+import type { AIProviderConfig, CopyParts, RunMode, RunnerEvent } from "@/lib/types"
 import { EventsOn } from "./wailsjs/runtime/runtime"
 import * as Go from "./wailsjs/go/main/App"
 
@@ -137,6 +137,16 @@ export const api = {
   settings: {
     get: () => call(() => Go.SettingsGet()),
     set: (key: string, value: string) => call(() => Go.SettingsSet(key, value)),
+  },
+
+  ai: {
+    getConfig: () => call(() => Go.AIConfigGet()),
+    saveConfig: (body: AIProviderConfig) => call(() => Go.AIConfigSave(body)),
+    deleteConfig: (name: string) => call(() => Go.AIConfigDelete(name)),
+    activate: (name: string) => call(() => Go.AIConfigActivate({ name })),
+    chat: (body: { system?: string; prompt: string }) =>
+      call(() => Go.AIChat(body)),
+    test: (body: AIProviderConfig) => call(() => Go.AITest(body)),
   },
 
   fs: {

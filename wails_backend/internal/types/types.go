@@ -275,3 +275,63 @@ type FsPickFileInput struct {
 	StartDir *string `json:"startDir"`
 	AppID    *int64  `json:"appId"`
 }
+
+// AIProviderConfigInput is the save payload for one AI connection. The API key
+// is write-only: empty keeps the stored key, ClearAPIKey removes it. It is
+// never persisted or returned to the UI. Name is the user-chosen connection
+// name; one provider may have several connections under different names.
+type AIProviderConfigInput struct {
+	Name        string   `json:"name"`
+	Provider    string   `json:"provider"`
+	BaseURL     string   `json:"baseURL,omitempty"`
+	APIKey      string   `json:"apiKey,omitempty"`
+	Model       string   `json:"model,omitempty"`
+	Temperature *float64 `json:"temperature,omitempty"`
+	ClearAPIKey bool     `json:"clearApiKey,omitempty"`
+}
+
+// AIConnectionInfo is one saved connection as the frontend sees it: no secret,
+// plus a flag for whether a key is stored.
+type AIConnectionInfo struct {
+	Name        string   `json:"name"`
+	Provider    string   `json:"provider"`
+	BaseURL     string   `json:"baseURL,omitempty"`
+	Model       string   `json:"model,omitempty"`
+	HasAPIKey   bool     `json:"hasApiKey"`
+	Temperature *float64 `json:"temperature,omitempty"`
+}
+
+// AIConfigInfo is the full config payload: every saved connection plus the
+// active (default) connection name.
+type AIConfigInfo struct {
+	Providers []AIConnectionInfo `json:"providers"`
+	Active    string             `json:"active"`
+}
+
+type AIActivateInput struct {
+	Name string `json:"name"`
+}
+
+type AIChatInput struct {
+	System string `json:"system,omitempty"`
+	Prompt string `json:"prompt"`
+}
+
+// AITestInput carries an unsaved connection payload for a test request.
+type AITestInput struct {
+	Provider    string   `json:"provider"`
+	BaseURL     string   `json:"baseURL,omitempty"`
+	APIKey      string   `json:"apiKey,omitempty"`
+	Model       string   `json:"model,omitempty"`
+	Temperature *float64 `json:"temperature,omitempty"`
+}
+
+type AIChatResult struct {
+	Text string `json:"text"`
+}
+
+// AITestResult echoes whether the connection worked plus the model's reply.
+type AITestResult struct {
+	Ok   bool   `json:"ok"`
+	Text string `json:"text"`
+}

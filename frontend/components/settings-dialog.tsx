@@ -1,5 +1,6 @@
 import { useState } from "react"
-import { KeyboardIcon, Link2Icon, NetworkIcon } from "lucide-react"
+import { BotIcon, KeyboardIcon, Link2Icon, NetworkIcon } from "lucide-react"
+import { AIPanel } from "@/components/ai-panel"
 import { KeyboardShortcutsPanel } from "@/components/keyboard-shortcuts-panel"
 import { PortsPanel } from "@/components/ports-panel"
 import { ReadyUrlPatternsPanel } from "@/components/ready-url-patterns-panel"
@@ -17,7 +18,7 @@ type SettingsDialogProps = {
   onOpenChange: (open: boolean) => void
 }
 
-type SettingsTab = "ports" | "ready-urls" | "shortcuts"
+type SettingsTab = "ai" | "ports" | "ready-urls" | "shortcuts"
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [tab, setTab] = useState<SettingsTab>("ports")
@@ -28,8 +29,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         <DialogHeader className="shrink-0 border-b p-4 pr-12">
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
-            Manage local tools, keyboard shortcuts, and how Workspace Manager detects
-            ready URLs from logs.
+            Manage AI provider connections, listening ports, keyboard shortcuts,
+            and how Workspace Manager detects ready URLs from logs.
           </DialogDescription>
         </DialogHeader>
 
@@ -37,6 +38,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           value={tab}
           onValueChange={(value) => {
             if (
+              value === "ai" ||
               value === "ports" ||
               value === "ready-urls" ||
               value === "shortcuts"
@@ -51,6 +53,10 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             variant="line"
             className="h-auto w-48 shrink-0 flex-col items-stretch justify-start rounded-none border-r p-2"
           >
+            <TabsTrigger value="ai" className="justify-start">
+              <BotIcon data-icon="inline-start" />
+              AI connection
+            </TabsTrigger>
             <TabsTrigger value="ports" className="justify-start">
               <NetworkIcon data-icon="inline-start" />
               Listening ports
@@ -66,6 +72,12 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           </TabsList>
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-4">
+            <TabsContent
+              value="ai"
+              className="mt-0 flex min-h-0 flex-1 flex-col data-hidden:hidden"
+            >
+              <AIPanel active={open && tab === "ai"} />
+            </TabsContent>
             <TabsContent
               value="ports"
               className="mt-0 flex min-h-0 flex-1 flex-col data-hidden:hidden"

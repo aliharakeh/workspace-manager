@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"wails_backend/internal/db"
@@ -620,6 +622,122 @@ func (a *App) SettingsSet(key string, value string) (map[string]string, error) {
 		return nil, err
 	}
 	return a.db.SettingsMap(a.ctx)
+}
+
+// aiConnectionInfo maps a stored connection to what the UI sees (no API key).
+func aiConnectionInfo(name string, cfg services.AIProviderConfig) types.AIConnectionInfo {
+	return types.AIConnectionInfo{
+		Name:        name,
+		Provider:    cfg.Provider,
+		BaseURL:     cfg.BaseURL,
+		Model:       cfg.Model,
+		HasAPIKey:   cfg.APIKey != "",
+		Temperature: cfg.Temperature,
+	}
+}
+
+func aiConfigInfo(store services.AIStore) types.AIConfigInfo {
+	info := types.AIConfigInfo{
+		Providers: make([]types.AIConnectionInfo, 0, len(store.Providers)),
+		Active:    store.Active,
+	}
+	names := make([]string, 0, len(store.Providers))
+	for name := range store.Providers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		info.Providers = append(info.Providers, aiConnectionInfo(name, store.Providers[name]))
+	}
+	return info
+}
+
+func (a *App) AIConfigGet() (types.AIConfigInfo, error) {
+	store, err := services.LoadAIStore()
+	if err != nil {
+		return types.AIConfigInfo{}, err
+	}
+	return aiConfigInfo(store), nil
+}
+
+// AIConfigSave upserts one connection keyed by its normalized name.
+func (a *App) AIConfigSave(body types.AIProviderConfigInput) (types.AIConfigInfo, error) {
+	store, err := services.LoadAIStore()
+	if err != nil {
+		return types.AIConfigInfo{}, err
+	}
+	if err := store.UpsertAIConnection(body.Name, body.Provider, services.AIProviderConfig{
+		BaseURL:     body.BaseURL,
+		APIKey:      body.APIKey,
+		Model:       body.Model,
+		Temperature: body.Temperature,
+	}, body.ClearAPIKey); err != nil {
+		return types.AIConfigInfo{}, err
+	}
+	if err := services.SaveAIStore(store); err != nil {
+		return types.AIConfigInfo{}, err
+	}
+	return aiConfigInfo(store), nil
+}
+
+func (a *App) AIConfigDelete(name string) (types.AIConfigInfo, error) {
+	store, err := services.LoadAIStore()
+	if err != nil {
+		return types.AIConfigInfo{}, err
+	}
+	if !store.DeleteAIConnection(name) {
+		return types.AIConfigInfo{}, fmt.Errorf("Connection not found")
+	}
+	if err := services.SaveAIStore(store); err != nil {
+		return types.AIConfigInfo{}, err
+	}
+	return aiConfigInfo(store), nil
+}
+
+func (a *App) AIConfigActivate(body types.AIActivateInput) (types.AIConfigInfo, error) {
+	store, err := services.LoadAIStore()
+	if err != nil {
+		return types.AIConfigInfo{}, err
+	}
+	if err := store.ActivateAIConnection(body.Name); err != nil {
+		return types.AIConfigInfo{}, err
+	}
+	if err := services.SaveAIStore(store); err != nil {
+		return types.AIConfigInfo{}, err
+	}
+	return aiConfigInfo(store), nil
+}
+
+func (a *App) AIChat(body types.AIChatInput) (types.AIChatResult, error) {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	text, err := services.ChatAI(ctx, body.System, body.Prompt)
+	if err != nil {
+		return types.AIChatResult{}, err
+	}
+	return types.AIChatResult{Text: text}, nil
+}
+
+// AITest runs one minimal generation against an unsaved connection payload so
+// the UI can verify credentials before saving. Nothing is persisted.
+func (a *App) AITest(body types.AITestInput) (types.AITestResult, error) {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	slug := services.NormalizeProvider(body.Provider)
+	text, err := services.TestAI(ctx, slug, services.AIProviderConfig{
+		BaseURL:     body.BaseURL,
+		APIKey:      body.APIKey,
+		Model:       body.Model,
+		Temperature: body.Temperature,
+	})
+	if err != nil {
+		return types.AITestResult{}, err
+	}
+	return types.AITestResult{Ok: true, Text: text}, nil
 }
 
 func (a *App) FsValidatePath(path string) (types.ValidatePathResult, error) {

@@ -1,4 +1,6 @@
 import type {
+  AIConfigInfo,
+  AIProviderConfig,
   App,
   ConfigSet,
   ConfigSetDetail,
@@ -298,6 +300,34 @@ export const api = {
       request<Record<string, string>>("/api/settings", {
         method: "PUT",
         body: JSON.stringify({ key, value }),
+      }),
+  },
+
+  ai: {
+    getConfig: () => request<AIConfigInfo>("/api/ai/config"),
+    saveConfig: (body: AIProviderConfig) =>
+      request<AIConfigInfo>("/api/ai/config", {
+        method: "PUT",
+        body: JSON.stringify(body),
+      }),
+    deleteConfig: (name: string) =>
+      request<AIConfigInfo>(`/api/ai/config/${encodeURIComponent(name)}`, {
+        method: "DELETE",
+      }),
+    activate: (name: string) =>
+      request<AIConfigInfo>("/api/ai/config/activate", {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      }),
+    chat: (body: { system?: string; prompt: string }) =>
+      request<{ text: string }>("/api/ai/chat", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    test: (body: AIProviderConfig) =>
+      request<{ ok: true; text: string }>("/api/ai/test", {
+        method: "POST",
+        body: JSON.stringify(body),
       }),
   },
 

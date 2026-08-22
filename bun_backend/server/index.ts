@@ -16,6 +16,7 @@ import { handleRunner } from "./routes/runner"
 import { handlePorts } from "./routes/ports"
 import { handleReadyUrlPatterns } from "./routes/ready-url-patterns"
 import { handleSettings } from "./routes/settings"
+import { handleAI } from "./routes/ai"
 import { isStandaloneBinary, openBrowser } from "@native/browser"
 import { hasFrontendBuild, serveStatic } from "./static"
 
@@ -74,6 +75,7 @@ const server = Bun.serve({
       handlePorts,
       handleReadyUrlPatterns,
       handleSettings,
+      handleAI,
     ]
 
     for (const handler of handlers) {

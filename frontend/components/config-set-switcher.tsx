@@ -13,6 +13,7 @@ import {
 import { api } from "@/lib/api"
 import type { App, ConfigSet, ConfigSetDetail, CopyParts } from "@/lib/types"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -48,6 +49,16 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 type CategorySel = { all: boolean; items: string[] }
@@ -157,18 +168,18 @@ function CategoryPicker({
           ) : null}
         </InputGroup>
       ) : null}
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
+      <Field orientation="horizontal">
+        <Checkbox
+          id="category-select-all"
           checked={allChecked}
           disabled={count === 0}
-          onChange={() =>
+          onCheckedChange={() =>
             onChange(
               allChecked ? { all: false, items: [] } : { all: true, items: [] }
             )
           }
         />
-        <span className="font-medium">Select all</span>
+        <FieldLabel htmlFor="category-select-all">Select all</FieldLabel>
         <span className="text-xs text-muted-foreground">
           {count === 0
             ? "(none)"
@@ -176,7 +187,7 @@ function CategoryPicker({
               ? `All ${count}`
               : `${sel.items.length} of ${count}`}
         </span>
-      </label>
+      </Field>
       {count > 0 && !sel.all ? (
         <div className="flex max-h-52 flex-col gap-1 overflow-y-auto rounded-lg border p-2 text-sm">
           {visible.length === 0 ? (
@@ -184,27 +195,38 @@ function CategoryPicker({
               No items match “{query.trim()}”.
             </p>
           ) : (
-            visible.map((item) => (
-              <label key={item.id} className="flex min-w-0 items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={sel.items.includes(item.id)}
-                  onChange={(e) => {
-                    const next = new Set(sel.items)
-                    if (e.target.checked) next.add(item.id)
-                    else next.delete(item.id)
-                    onChange(
-                      next.size === count
-                        ? { all: true, items: [] }
-                        : { all: false, items: [...next] }
-                    )
-                  }}
-                />
-                <span className="truncate" title={item.sub ?? item.title}>
-                  {item.title}
-                </span>
-              </label>
-            ))
+            visible.map((item, index) => {
+              const checkboxId = `category-item-${index}`
+              return (
+                <Field
+                  key={item.id}
+                  orientation="horizontal"
+                  className="min-w-0"
+                >
+                  <Checkbox
+                    id={checkboxId}
+                    checked={sel.items.includes(item.id)}
+                    onCheckedChange={(checked) => {
+                      const next = new Set(sel.items)
+                      if (checked) next.add(item.id)
+                      else next.delete(item.id)
+                      onChange(
+                        next.size === count
+                          ? { all: true, items: [] }
+                          : { all: false, items: [...next] }
+                      )
+                    }}
+                  />
+                  <FieldLabel
+                    htmlFor={checkboxId}
+                    className="min-w-0 truncate font-normal"
+                    title={item.sub ?? item.title}
+                  >
+                    {item.title}
+                  </FieldLabel>
+                </Field>
+              )
+            })
           )}
         </div>
       ) : null}
@@ -591,26 +613,41 @@ export function ConfigSetSwitcher({
             </Field>
             <Field>
               <FieldLabel htmlFor="config-set-copy">Copy from</FieldLabel>
-              <select
-                id="config-set-copy"
-                className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
-                value={copyFromId === "" ? "" : String(copyFromId)}
-                onChange={(e) => {
-                  const next =
-                    e.target.value === "" ? "" : Number(e.target.value)
+              <Select
+                items={[
+                  { value: null, label: "Empty (start fresh)" },
+                  ...sets.map((set) => ({
+                    value: String(set.id),
+                    label: set.name,
+                  })),
+                ]}
+                value={copyFromId === "" ? null : String(copyFromId)}
+                onValueChange={(value) => {
+                  const next = value === null ? "" : Number(value)
                   setCopyFromId(next)
                   setSel(blankSel())
                   resetSource()
                   if (next !== "") loadSourceDetail(next)
                 }}
               >
-                <option value="">Empty (start fresh)</option>
-                {sets.map((set) => (
-                  <option key={set.id} value={set.id}>
-                    {set.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="config-set-copy" className="w-full">
+                  <SelectValue placeholder="Empty (start fresh)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value={null}>Empty (start fresh)</SelectItem>
+                  </SelectGroup>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel>Config sets</SelectLabel>
+                    {sets.map((set) => (
+                      <SelectItem key={set.id} value={String(set.id)}>
+                        {set.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </Field>
             {copyFromId !== "" ? (
               <PartsPicker
@@ -676,27 +713,36 @@ export function ConfigSetSwitcher({
           <div className="flex flex-col gap-3">
             <Field>
               <FieldLabel htmlFor="copy-source">Source set</FieldLabel>
-              <select
-                id="copy-source"
-                className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
-                value={copySourceId === "" ? "" : String(copySourceId)}
-                onChange={(e) => {
-                  const next =
-                    e.target.value === "" ? "" : Number(e.target.value)
+              <Select
+                items={sets.map((set) => ({
+                  value: String(set.id),
+                  label: set.name,
+                }))}
+                value={copySourceId === "" ? null : String(copySourceId)}
+                onValueChange={(value) => {
+                  const next = value === null ? "" : Number(value)
                   setCopySourceId(next)
                   setSel(blankSel())
                   resetSource()
                   if (next !== "") loadSourceDetail(next)
                 }}
               >
-                {sets
-                  .filter((s) => s.id !== active?.id)
-                  .map((set) => (
-                    <option key={set.id} value={set.id}>
-                      {set.name}
-                    </option>
-                  ))}
-              </select>
+                <SelectTrigger id="copy-source" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Config sets</SelectLabel>
+                    {sets
+                      .filter((s) => s.id !== active?.id)
+                      .map((set) => (
+                        <SelectItem key={set.id} value={String(set.id)}>
+                          {set.name}
+                        </SelectItem>
+                      ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </Field>
             <PartsPicker
               detail={sourceDetail}

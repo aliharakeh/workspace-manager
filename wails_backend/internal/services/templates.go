@@ -5,27 +5,25 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/aymerick/raymond"
 
 	"wails_backend/internal/db"
 	"wails_backend/internal/lib"
 )
 
-var hbRe = regexp.MustCompile(`\{\{\s*\[?([^\]}]+?)\]?\s*\}\}`)
-
-func renderHandlebars(content string, env map[string]string) string {
-	return hbRe.ReplaceAllStringFunc(content, func(m string) string {
-		sub := hbRe.FindStringSubmatch(m)
-		if len(sub) < 2 {
-			return ""
-		}
-		if v, ok := env[strings.TrimSpace(sub[1])]; ok {
-			return v
-		}
-		return ""
-	})
+func renderHandlebars(content string, env map[string]string) (string, error) {
+	tpl, err := raymond.Parse(content)
+	if err != nil {
+		return "", err
+	}
+	ctx := make(map[string]any, len(env))
+	for k, v := range env {
+		ctx[k] = raymond.SafeString(v)
+	}
+	return tpl.Exec(ctx)
 }
 
 func backupRoot(appID int64, sessionID string) string {
@@ -77,7 +75,11 @@ func ApplyTemplates(ctx context.Context, d *db.DB, appID int64, sessionID string
 			_ = RestoreTemplates(ctx, d, appID, sessionID)
 			return err
 		}
-		rendered := renderHandlebars(template.Content, env)
+		rendered, err := renderHandlebars(template.Content, env)
+		if err != nil {
+			_ = RestoreTemplates(ctx, d, appID, sessionID)
+			return fmt.Errorf("failed to render template %s: %w", template.FilePath, err)
+		}
 		if err := os.WriteFile(targetPath, []byte(rendered), 0o644); err != nil {
 			_ = RestoreTemplates(ctx, d, appID, sessionID)
 			return err

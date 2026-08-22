@@ -1,5 +1,156 @@
 export namespace types {
 	
+	export class AIActivateInput {
+	    name: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIActivateInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	    }
+	}
+	export class AIChatInput {
+	    system?: string;
+	    prompt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIChatInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.system = source["system"];
+	        this.prompt = source["prompt"];
+	    }
+	}
+	export class AIChatResult {
+	    text: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIChatResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.text = source["text"];
+	    }
+	}
+	export class AIConnectionInfo {
+	    name: string;
+	    provider: string;
+	    baseURL?: string;
+	    model?: string;
+	    hasApiKey: boolean;
+	    temperature?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIConnectionInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.provider = source["provider"];
+	        this.baseURL = source["baseURL"];
+	        this.model = source["model"];
+	        this.hasApiKey = source["hasApiKey"];
+	        this.temperature = source["temperature"];
+	    }
+	}
+	export class AIConfigInfo {
+	    providers: AIConnectionInfo[];
+	    active: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIConfigInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.providers = this.convertValues(source["providers"], AIConnectionInfo);
+	        this.active = source["active"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class AIProviderConfigInput {
+	    name: string;
+	    provider: string;
+	    baseURL?: string;
+	    apiKey?: string;
+	    model?: string;
+	    temperature?: number;
+	    clearApiKey?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIProviderConfigInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.provider = source["provider"];
+	        this.baseURL = source["baseURL"];
+	        this.apiKey = source["apiKey"];
+	        this.model = source["model"];
+	        this.temperature = source["temperature"];
+	        this.clearApiKey = source["clearApiKey"];
+	    }
+	}
+	export class AITestInput {
+	    provider: string;
+	    baseURL?: string;
+	    apiKey?: string;
+	    model?: string;
+	    temperature?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AITestInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.provider = source["provider"];
+	        this.baseURL = source["baseURL"];
+	        this.apiKey = source["apiKey"];
+	        this.model = source["model"];
+	        this.temperature = source["temperature"];
+	    }
+	}
+	export class AITestResult {
+	    ok: boolean;
+	    text: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AITestResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.text = source["text"];
+	    }
+	}
 	export class App {
 	    id: number;
 	    workspace_id: number;

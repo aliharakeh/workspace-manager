@@ -144,3 +144,33 @@ export type RunnerLogsSnapshot = {
   status: StatusEvent
   logs: LogEvent[]
 }
+
+/** One saved AI connection (save payload). Each connection has a user-chosen
+ * name (its key) plus the provider it talks to, so several connections can
+ * share one provider. The API key is write-only: the UI never reads it back.
+ * Empty apiKey keeps the stored key; clearApiKey removes it. */
+export type AIProviderConfig = {
+  name?: string
+  provider: string
+  baseURL?: string
+  apiKey?: string
+  model?: string
+  temperature?: number
+  clearApiKey?: boolean
+}
+
+/** A saved connection as the UI sees it: no secret, plus hasApiKey. */
+export type AIConnectionInfo = {
+  name: string
+  provider: string
+  baseURL?: string
+  model?: string
+  hasApiKey: boolean
+  temperature?: number
+}
+
+/** All saved connections plus which name is the active default for chat. */
+export type AIConfigInfo = {
+  providers: AIConnectionInfo[]
+  active: string
+}
