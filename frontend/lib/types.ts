@@ -191,15 +191,19 @@ export type GitRemoteInfo = {
 export type GitCommitNode = {
   hash: string
   branch: string
+  on?: string[]
+  parents?: string[]
   timestamp: string
   author: string
   subject: string
   isMerge: boolean
   tags?: string[]
+  lanes?: string[]
 }
 
 export type GitMergeEvent = {
   hash: string
+  kind?: string
   sourceBranch: string
   targetBranch: string
   sourceHash: string

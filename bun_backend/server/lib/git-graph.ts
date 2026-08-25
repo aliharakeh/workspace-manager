@@ -5,15 +5,19 @@ import { spawnSync } from "node:child_process"
 export type GitCommitNode = {
   hash: string
   branch: string
+  on?: string[]
+  parents?: string[]
   timestamp: string
   author: string
   subject: string
   isMerge: boolean
   tags?: string[]
+  lanes?: string[]
 }
 
 export type GitMergeEvent = {
   hash: string
+  kind?: string
   sourceBranch: string
   targetBranch: string
   sourceHash: string
@@ -55,6 +59,7 @@ type RawCommit = {
   branch: string
   assigned: boolean
   on: string[]
+  fp: string[]
 }
 
 const mergeBranch =
@@ -143,7 +148,6 @@ export async function loadGraphAt(
   const root = gitRoot(path)
   const allTips = listBranchTips(root)
   let branchTips = allTips
-  let revs: string[] | null = null
   if (only != null) {
     branchTips = filterTips(allTips, only)
     if (Object.keys(branchTips).length === 0) {
@@ -155,33 +159,23 @@ export async function loadGraphAt(
         merges: [],
       }
     }
-    revs = Object.values(branchTips)
   }
   const windowed = !!(since || until)
-  let commits: Record<string, RawCommit>
-  if (windowed) {
-    commits = listCommitsRange(root, branchTips, since, until)
-  } else {
-    commits = listCommits(root, revs)
-  }
+  const commits = windowed ? listCommitsRange(root, since, until) : listCommits(root)
   const tagByHash = listTags(root)
-  let order = sortBranchNames(Object.keys(branchTips))
-  if (!windowed) {
-    assignLanes(claimOrder(order), branchTips, commits)
-    assignOffSpineMerges(commits, order)
-    if (only == null) {
-      order = [...order, ...ensureMergeSourceLanes(root, branchTips, commits)]
-    }
-  }
-  if (only != null && Object.keys(allTips).length > Object.keys(branchTips).length) {
-    reassignToOriginalViaFirstParent(root, commits, allTips)
-  }
+  const order = sortBranchNames(Object.keys(branchTips))
+  const ranked = claimOrder(order)
+  assignLanes(root, ranked, branchTips, commits)
+  assignReachable(root, ranked, branchTips, commits, since, until)
+  assignOffSpineMerges(commits, order)
+  absorbDeletedMergeSources(root, branchTips, commits, since, until)
 
   const nodes: GitCommitNode[] = []
   const merges: GitMergeEvent[] = []
   const used: Record<string, boolean> = {}
   const known: Record<string, boolean> = {}
   for (const name of order) known[laneName(name)] = true
+  preferParentLanes(commits, known)
 
   for (const c of Object.values(commits)) {
     if (!c.assigned || !c.branch) continue
@@ -206,7 +200,11 @@ export async function loadGraphAt(
       subject: c.subject,
       isMerge: c.parents.length > 1,
     }
+    if (c.on.length) node.on = c.on
+    if (c.parents.length) node.parents = c.parents
     if (tagByHash[c.hash]?.length) node.tags = tagByHash[c.hash]
+    const lanes = laneList(c)
+    if (lanes.length) node.lanes = lanes
     nodes.push(node)
     if (c.parents.length < 2) continue
     for (const srcHash of c.parents.slice(1)) {
@@ -216,7 +214,7 @@ export async function loadGraphAt(
       if (!srcBranch) srcBranch = shortHash(srcHash)
       srcBranch = laneName(srcBranch)
       if (srcBranch === laneName(target)) srcBranch = target
-      else if (srcBranch) used[srcBranch] = true
+      else if (srcBranch && known[srcBranch]) used[srcBranch] = true
       merges.push({
         hash: c.hash,
         sourceBranch: srcBranch,
@@ -229,6 +227,8 @@ export async function loadGraphAt(
       })
     }
   }
+
+  merges.push(...branchStarts(commits, known))
 
   const branches: string[] = []
   const seenBr: Record<string, boolean> = {}
@@ -325,49 +325,16 @@ function filterTips(tips: Record<string, string>, want: string[]): Record<string
   return out
 }
 
-function listCommits(root: string, revs: string[] | null): Record<string, RawCommit> {
-  const args = ["log", "--pretty=format:%H%x1f%P%x1f%an%x1f%aI%x1f%s"]
-  if (!revs?.length) args.push("--all")
-  else args.push(...revs)
-  return parseLog(root, args)
+function listCommits(root: string): Record<string, RawCommit> {
+  return parseLog(root, ["log", "--pretty=format:%H%x1f%P%x1f%an%x1f%aI%x1f%s", "--all"])
 }
 
-function listCommitsRange(
-  root: string,
-  tips: Record<string, string>,
-  since: Date | null,
-  until: Date | null
-): Record<string, RawCommit> {
-  const commits: Record<string, RawCommit> = {}
-  for (const name of claimOrder(Object.keys(tips))) {
-    const lane = laneName(name)
-    const chunk = parseLog(root, rangeLogArgs(tips[name]!, since, until, "--first-parent"))
-    for (const [hash, c] of Object.entries(chunk)) {
-      const existing = commits[hash]
-      if (existing) {
-        markOn(existing, lane)
-        continue
-      }
-      c.assigned = true
-      c.branch = lane
-      markOn(c, lane)
-      commits[hash] = c
-    }
-    const side = parseLog(root, rangeLogArgs(tips[name]!, since, until, "--merges"))
-    for (const [hash, c] of Object.entries(side)) {
-      if (commits[hash]) continue
-      if (!belongsOnLane(c, lane, commits)) continue
-      c.assigned = true
-      c.branch = lane
-      markOn(c, lane)
-      commits[hash] = c
-    }
-  }
-  return commits
+function listCommitsRange(root: string, since: Date | null, until: Date | null): Record<string, RawCommit> {
+  return parseLog(root, rangeLogArgs("--all", since, until))
 }
 
-function rangeLogArgs(tip: string, since: Date | null, until: Date | null, extra: string): string[] {
-  const args = ["log", "--pretty=format:%H%x1f%P%x1f%an%x1f%aI%x1f%s", extra, tip]
+function rangeLogArgs(tip: string, since: Date | null, until: Date | null, ...extra: string[]): string[] {
+  const args = ["log", "--pretty=format:%H%x1f%P%x1f%an%x1f%aI%x1f%s", ...extra, tip]
   if (since) args.push(`--since=${since.toISOString()}`)
   if (until) args.push(`--until=${until.toISOString()}`)
   return args
@@ -398,25 +365,67 @@ function parseLog(root: string, args: string[]): Record<string, RawCommit> {
       branch: "",
       assigned: false,
       on: [],
+      fp: [],
     }
   }
   return commits
 }
 
-function assignLanes(order: string[], tips: Record<string, string>, commits: Record<string, RawCommit>) {
+function assignLanes(
+  root: string,
+  order: string[],
+  tips: Record<string, string>,
+  commits: Record<string, RawCommit>
+) {
   for (const name of order) {
     const lane = laneName(name)
-    let walk = tips[name] ?? ""
-    while (walk) {
-      const c = commits[walk]
-      if (!c) break
+    const tip = tips[name]
+    if (!tip) continue
+    let out = ""
+    try {
+      out = gitOutput(root, ["rev-list", "--first-parent", tip])
+    } catch {
+      continue
+    }
+    for (const line of out.split("\n")) {
+      const c = commits[line.trim()]
+      if (!c) continue
+      markFP(c, lane)
       markOn(c, lane)
       if (!c.assigned) {
         c.assigned = true
         c.branch = lane
       }
-      if (!c.parents.length) break
-      walk = c.parents[0]!
+    }
+  }
+}
+
+function assignReachable(
+  root: string,
+  order: string[],
+  tips: Record<string, string>,
+  commits: Record<string, RawCommit>,
+  since: Date | null,
+  until: Date | null
+) {
+  for (const name of order) {
+    const lane = laneName(name)
+    const tip = tips[name]
+    if (!tip) continue
+    let chunk: Record<string, RawCommit>
+    try {
+      chunk = parseLog(root, rangeLogArgs(tip, since, until))
+    } catch {
+      continue
+    }
+    for (const hash of Object.keys(chunk)) {
+      const c = commits[hash]
+      if (!c) continue
+      if (!c.assigned) {
+        c.assigned = true
+        c.branch = lane
+      }
+      markOn(c, lane)
     }
   }
 }
@@ -454,86 +463,85 @@ function destLane(subject: string): string {
   return parseMergeSubject(subject)[1]
 }
 
-function belongsOnLane(c: RawCommit, lane: string, commits: Record<string, RawCommit>): boolean {
-  const d = destLane(c.subject)
-  if (d === lane) return true
-  if (d) return false
-  const s = c.subject.trim().toLowerCase()
-  const l = lane.toLowerCase()
-  if (s.endsWith(" into " + l) || s.endsWith(" into '" + l + "'")) return true
-  if (c.parents[0]) {
-    const p = commits[c.parents[0]]
-    if (p?.assigned && p.branch === lane) return true
-  }
-  return mergePR.test(c.subject) || mergeBB.test(c.subject)
-}
-
-function ensureMergeSourceLanes(
-  root: string,
-  tips: Record<string, string>,
-  commits: Record<string, RawCommit>
-): string[] {
-  const seen: Record<string, boolean> = {}
-  for (const name of Object.keys(tips)) seen[laneName(name)] = true
-  const pending: { hash: string; subject: string }[] = []
+function branchStarts(commits: Record<string, RawCommit>, known: Record<string, boolean>): GitMergeEvent[] {
+  const out: GitMergeEvent[] = []
   for (const c of Object.values(commits)) {
-    if (c.parents.length < 2 || !c.assigned) continue
-    for (const srcHash of c.parents.slice(1)) {
-      const parent = commits[srcHash]
-      if (!parent || (parent.assigned && parent.branch)) continue
-      pending.push({ hash: srcHash, subject: c.subject })
-    }
+    if (!c.assigned || !c.branch || c.parents.length !== 1) continue
+    const dst = laneName(c.branch)
+    if (!known[dst]) continue
+    const p = commits[c.parents[0]!]
+    if (!p?.assigned || !p.branch) continue
+    const src = laneName(p.branch)
+    if (src === dst || !known[src]) continue
+    out.push({
+      hash: c.hash,
+      kind: "branch",
+      sourceBranch: src,
+      targetBranch: dst,
+      sourceHash: p.hash,
+      timestamp: new Date(c.at).toISOString(),
+      author: c.author,
+      subject: "Branch from " + src,
+      commitCount: 1,
+    })
   }
-  const query = pending.filter((p) => !parseMergeSubject(p.subject)[0]).map((p) => p.hash)
-  const revs = nameRevs(root, query)
-  const extra: string[] = []
-  for (const p of pending) {
-    let [name, fromMsg] = mergeSourceName(p.subject, revs[p.hash] ?? "")
-    if (!name) name = "lost/" + shortHash(p.hash)
-    else if (seen[name]) {
-      if (fromMsg) {
-        assignLanes([name], { [name]: p.hash }, commits)
-        continue
-      }
-      name = "lost/" + shortHash(p.hash)
-    }
-    if (seen[name]) continue
-    seen[name] = true
-    tips[name] = p.hash
-    extra.push(name)
-  }
-  extra.sort()
-  assignLanes(extra, tips, commits)
-  return extra
+  return out
 }
 
-function mergeSourceName(subject: string, rev: string): [string, boolean] {
-  let name = cleanLaneName(parseMergeSubject(subject)[0])
-  if (name) return [name, true]
-  return [cleanLaneName(rev), false]
-}
-
-function cleanLaneName(name: string): string {
-  name = stripRemotePrefix(stripNameRev(name))
-  if (!name || name === "undefined") return ""
-  return name
-}
-
-function nameRevs(root: string, hashes: string[]): Record<string, string> {
+function firstParentSet(root: string, tips: Record<string, string>): Record<string, boolean> {
+  const hashes = Object.values(tips)
   if (!hashes.length) return {}
   let out = ""
   try {
-    out = gitOutput(root, ["name-rev", "--name-only", "--stdin"], hashes.join("\n") + "\n")
+    out = gitOutput(root, ["rev-list", "--first-parent", ...hashes])
   } catch {
     return {}
   }
   if (!out) return {}
-  const lines = out.split("\n")
-  const names: Record<string, string> = {}
-  hashes.forEach((h, i) => {
-    if (lines[i] != null) names[h] = lines[i]!
-  })
-  return names
+  const live: Record<string, boolean> = {}
+  for (const line of out.split("\n")) {
+    const h = line.trim()
+    if (h) live[h] = true
+  }
+  return live
+}
+
+function absorbDeletedMergeSources(
+  root: string,
+  tips: Record<string, string>,
+  commits: Record<string, RawCommit>,
+  since: Date | null,
+  until: Date | null
+) {
+  const live = firstParentSet(root, tips)
+  for (const c of Object.values(commits)) {
+    if (c.parents.length < 2 || !c.assigned || !c.branch) continue
+    let lane = c.branch
+    const d = destLane(c.subject)
+    if (d) {
+      for (const name of Object.keys(tips)) {
+        if (laneName(name) === d) {
+          lane = d
+          break
+        }
+      }
+    }
+    for (const srcHash of c.parents.slice(1)) {
+      if (live[srcHash]) continue
+      if (!commits[srcHash]) {
+        try {
+          const chunk = parseLog(root, rangeLogArgs(srcHash, since, until, "--first-parent"))
+          for (const [h, nc] of Object.entries(chunk)) {
+            if (!commits[h]) commits[h] = nc
+          }
+        } catch {
+          continue
+        }
+      }
+      if (!commits[srcHash]) continue
+      assignLanes(root, [lane], { [lane]: srcHash }, commits)
+    }
+  }
 }
 
 function countExclusive(from: string, exclude: string, commits: Record<string, RawCommit>): number {
@@ -571,6 +579,12 @@ export function parseMergeSubject(subject: string): [string, string] {
   m = mergeBB.exec(s)
   if (m) return [cleanLaneName(m[1]!), ""]
   return ["", ""]
+}
+
+function cleanLaneName(name: string): string {
+  name = stripRemotePrefix(stripNameRev(name))
+  if (!name || name === "undefined") return ""
+  return name
 }
 
 function stripNameRev(name: string): string {
@@ -642,6 +656,59 @@ function pickTrunk(lanes: string[]): string {
   return ""
 }
 
+function preferParentLanes(commits: Record<string, RawCommit>, known: Record<string, boolean>) {
+  const list = Object.values(commits).filter((c) => c.assigned)
+  list.sort((a, b) => (a.at !== b.at ? a.at - b.at : a.hash.localeCompare(b.hash)))
+  for (const c of list) {
+    const b = pickShownLane(c, known, commits)
+    if (b) c.branch = b
+  }
+}
+
+function pickShownLane(
+  c: RawCommit,
+  known: Record<string, boolean>,
+  commits: Record<string, RawCommit>
+): string {
+  return pickShownFrom(c, known, commits, c.fp) || pickShownFrom(c, known, commits, c.on) || (known[laneName(c.branch)] ? c.branch : "")
+}
+
+function pickShownFrom(
+  c: RawCommit,
+  known: Record<string, boolean>,
+  commits: Record<string, RawCommit>,
+  lanes: string[]
+): string {
+  const allow: Record<string, boolean> = {}
+  for (const l of lanes) {
+    if (known[l]) allow[l] = true
+  }
+  if (!Object.keys(allow).length) return ""
+  for (const h of c.parents) {
+    const p = commits[h]
+    if (p && allow[laneName(p.branch)]) return p.branch
+  }
+  for (const l of lanes) {
+    if (allow[l]) return l
+  }
+  return ""
+}
+
+function laneList(c: RawCommit): string[] {
+  const seen: Record<string, boolean> = {}
+  const out: string[] = []
+  for (const l of [...c.fp, ...c.on]) {
+    if (!l || seen[l]) continue
+    seen[l] = true
+    out.push(l)
+  }
+  return out
+}
+
+function markFP(c: RawCommit, lane: string) {
+  if (!c.fp.includes(lane)) c.fp.push(lane)
+}
+
 function markOn(c: RawCommit, lane: string) {
   if (!c.on.includes(lane)) c.on.push(lane)
 }
@@ -710,40 +777,6 @@ function remoteHost(web: string): string {
 function isSSHURL(u: string): boolean {
   u = u.trim()
   return u.startsWith("git@") || u.startsWith("ssh://")
-}
-
-function reassignToOriginalViaFirstParent(
-  root: string,
-  commits: Record<string, RawCommit>,
-  allTips: Record<string, string>
-) {
-  if (!Object.keys(commits).length || !Object.keys(allTips).length) return
-  const orderAll = claimOrder(sortBranchNames(Object.keys(allTips)))
-  const sets: Record<string, Set<string>> = {}
-  for (const name of orderAll) {
-    const tip = allTips[name]
-    if (!tip) continue
-    try {
-      const out = gitOutput(root, ["rev-list", "--first-parent", tip])
-      sets[name] = new Set(out.split("\n").map((l) => l.trim()).filter(Boolean))
-    } catch {
-      /* skip */
-    }
-  }
-  for (const c of Object.values(commits)) {
-    if (!c.assigned) continue
-    let orig = ""
-    for (const name of orderAll) {
-      if (sets[name]?.has(c.hash)) {
-        orig = laneName(name)
-        break
-      }
-    }
-    if (orig && orig !== c.branch) {
-      c.branch = orig
-      markOn(c, orig)
-    }
-  }
 }
 
 export function parseISO(s: string): Date | null {

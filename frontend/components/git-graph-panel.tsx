@@ -4,7 +4,6 @@ import {
   ChevronRightIcon,
   CloudDownloadIcon,
   ExternalLinkIcon,
-  FilterIcon,
   GitMergeIcon,
   Loader2Icon,
   RefreshCwIcon,
@@ -15,7 +14,6 @@ import { toast } from "sonner"
 import { api, handleReadyUrlClick } from "@/lib/api"
 import type {
   GitBranchInfo,
-  GitCommitNode,
   GitRemoteInfo,
   GitRepoGraph,
 } from "@/lib/types"
@@ -30,15 +28,6 @@ import {
 } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
   Empty,
   EmptyDescription,
   EmptyHeader,
@@ -46,7 +35,6 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
 import {
   InputGroup,
   InputGroupAddon,
@@ -54,58 +42,12 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 
-const KIND_OPTS = [
-  { id: "pr", label: "PR" },
-  { id: "merge", label: "Merge" },
-  { id: "normal", label: "Normal" },
-] as const
-
-const BRANCH_OPTS = [
-  { id: "feature", label: "Feature" },
-  { id: "hotfix", label: "Hotfix" },
-  { id: "epic", label: "Epic" },
-  { id: "others", label: "Others" },
-] as const
-
-const ALL_KINDS = KIND_OPTS.map((k) => k.id)
-const ALL_BRANCH_KINDS = BRANCH_OPTS.map((k) => k.id)
+const DEFAULT_BRANCHES = 10
 const CHUNK_MONTHS = 5
-const SORT_ITEMS = [
-  { value: "updated", label: "By updated" },
-  { value: "alpha", label: "A–Z" },
-]
 
 function authorName(c: { author?: string }) {
   return c.author || "(unknown)"
-}
-
-function isPrSubject(subject: string) {
-  return (
-    /^Merge pull request #\d+/i.test(subject || "") ||
-    /^Merged in \S+ \(pull request #\d+\)/i.test(subject || "")
-  )
-}
-
-function commitKind(c: GitCommitNode) {
-  if (!c.isMerge) return "normal"
-  return isPrSubject(c.subject) ? "pr" : "merge"
-}
-
-function branchKind(name: string) {
-  const n = laneName(name).toLowerCase()
-  if (/^(feature|feat)([/-]|$)/.test(n)) return "feature"
-  if (/^hotfix([/-]|$)/.test(n)) return "hotfix"
-  if (/^epic([/-]|$)/.test(n)) return "epic"
-  return "others"
 }
 
 function localDay(ts: string) {
@@ -220,14 +162,10 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
   const inspect = selected || lastSelected.current
   const [catalog, setCatalog] = useState<GitBranchInfo[]>([])
   const [axisRange, setAxisRange] = useState<[number, number] | null>(null)
-  const [branchLimit, setBranchLimit] = useState(5)
-  const [branchSort, setBranchSort] = useState("updated")
   const [visible, setVisible] = useState(() => new Set<string>())
   const [authors, setAuthors] = useState(() => new Set<string>())
-  const [kinds, setKinds] = useState(() => new Set<string>(ALL_KINDS))
-  const [branchKinds, setBranchKinds] = useState(() => new Set<string>(ALL_BRANCH_KINDS))
-  const [showTags, setShowTags] = useState(true)
   const [historyLeft, setHistoryLeft] = useState(0)
+  const [viewGen, setViewGen] = useState(0)
   const visibleRef = useRef(visible)
   visibleRef.current = visible
   const loadSeq = useRef(0)
@@ -259,15 +197,10 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
         if (gen !== loadSeq.current) return
         setCatalog(list)
         const names = lanesByUpdated(list)
-        const n = Math.min(5, names.length)
-        selectedBranches = names.slice(0, n)
-        setBranchLimit(n || 1)
+        selectedBranches = names.slice(0, DEFAULT_BRANCHES)
         setVisible(new Set(selectedBranches))
         setMsgQuery("")
         setAuthorQuery("")
-        setKinds(new Set(ALL_KINDS))
-        setBranchKinds(new Set(ALL_BRANCH_KINDS))
-        setShowTags(true)
       } else if (!selectedBranches) {
         selectedBranches = [...visibleRef.current]
       }
@@ -340,7 +273,7 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
     else void run()
   }
 
-  function addAuthors(commits: GitCommitNode[] | undefined) {
+  function addAuthors(commits: { author?: string }[] | undefined) {
     setAuthors((prev) => {
       const next = new Set(prev)
       for (const c of commits || []) next.add(authorName(c))
@@ -423,6 +356,21 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
     }
   }
 
+  function refreshLogs() {
+    filling.current = false
+    loadedRef.current = {
+      from: 0,
+      to: 0,
+      branches: "",
+      pastDone: false,
+      futureDone: false,
+      emptyPast: 0,
+      emptyFuture: 0,
+    }
+    setViewGen((n) => n + 1)
+    void load({ reset: false })
+  }
+
   async function fetchNow() {
     setFetching(true)
     try {
@@ -436,13 +384,7 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
     }
   }
 
-  const rankedBranches = useMemo(() => {
-    const names = lanesByUpdated(catalog)
-    if (branchSort === "alpha") {
-      return [...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
-    }
-    return names
-  }, [catalog, branchSort])
+  const rankedBranches = useMemo(() => lanesByUpdated(catalog), [catalog])
 
   const branches = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -470,32 +412,38 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
     return q ? authorList.filter((a) => a.toLowerCase().includes(q)) : authorList
   }, [authorList, authorQuery])
 
+  const selectedAuthors = useMemo(() => {
+    if (!authorList.length || authors.size === authorList.length) return undefined
+    return authors
+  }, [authors, authorList])
+
   const visibleGraph = useMemo(() => {
     if (!graph) return null
-    const names = rankedBranches.filter((b) => visible.has(b) && branchKinds.has(branchKind(b)))
+    const names = rankedBranches.filter((b) => visible.has(b))
     const shown = new Set(names)
-    const match = (c: { author?: string; subject?: string }, kind: string) =>
-      authors.has(authorName(c)) && kinds.has(kind)
     const merges = (graph.merges || [])
       .map((m) => ({
         ...m,
         sourceBranch: laneName(m.sourceBranch),
         targetBranch: laneName(m.targetBranch),
       }))
-      .filter(
-        (m) =>
-          (shown.has(m.targetBranch) || shown.has(m.sourceBranch)) &&
-          match(m, isPrSubject(m.subject) ? "pr" : "merge")
-      )
+      .filter((m) => {
+        if (m.kind === "branch") return shown.has(m.sourceBranch) && shown.has(m.targetBranch)
+        return shown.has(m.targetBranch) || shown.has(m.sourceBranch)
+      })
     return {
       ...graph,
       branches: names,
       commits: (graph.commits || [])
-        .map((c) => ({ ...c, branch: laneName(c.branch) }))
-        .filter((c) => shown.has(c.branch) && match(c, commitKind(c))),
+        .map((c) => ({
+          ...c,
+          branch: laneName(c.branch),
+          on: (c.on || [c.branch]).map(laneName),
+        }))
+        .filter((c) => shown.has(c.branch)),
       merges,
     }
-  }, [graph, rankedBranches, visible, authors, kinds, branchKinds])
+  }, [graph, rankedBranches, visible])
 
   const searchHits = useMemo(() => {
     const msg = msgQuery.trim().toLowerCase()
@@ -530,30 +478,26 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
   }
 
   function showTop(n: number) {
-    const count = Math.min(Math.max(n, 0), rankedBranches.length)
-    setBranchLimit(count)
-    applyVisible(new Set(rankedBranches.slice(0, count)), { debounce: true })
+    applyVisible(new Set(rankedBranches.slice(0, Math.min(Math.max(n, 0), rankedBranches.length))), {
+      debounce: true,
+    })
   }
 
   function toggleVisible(name: string) {
     const next = new Set(visible)
     if (next.has(name)) next.delete(name)
     else next.add(name)
-    setBranchLimit(next.size)
     applyVisible(next)
   }
 
-  function toggleIn(setter: (fn: (prev: Set<string>) => Set<string>) => void, value: string) {
-    setter((prev) => {
+  function toggleAuthor(name: string) {
+    setAuthors((prev) => {
       const next = new Set(prev)
-      if (next.has(value)) next.delete(value)
-      else next.add(value)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
       return next
     })
   }
-
-  const filterCount = kinds.size + branchKinds.size + (showTags ? 1 : 0)
-  const filterTotal = ALL_KINDS.length + ALL_BRANCH_KINDS.length + 1
 
   return (
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
@@ -602,54 +546,7 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
             {rankedBranches.length > 0 ? (
               <FieldGroup>
                 <Field>
-                  <div className="flex items-center justify-between gap-2">
-                    <FieldLabel>Visible branches</FieldLabel>
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {visible.size} / {rankedBranches.length}
-                    </span>
-                  </div>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={rankedBranches.length}
-                    value={Math.min(branchLimit, rankedBranches.length)}
-                    onChange={(e) => showTop(Number(e.target.value) || 0)}
-                  />
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" className="flex-1" onClick={() => showTop(rankedBranches.length)}>
-                      All
-                    </Button>
-                    <Button variant="ghost" size="sm" className="flex-1" onClick={() => showTop(0)}>
-                      None
-                    </Button>
-                  </div>
-                </Field>
-              </FieldGroup>
-            ) : null}
-
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="git-branch-sort">Branch highlight</FieldLabel>
-                <Select
-                  items={SORT_ITEMS}
-                  value={branchSort}
-                  onValueChange={(value) => {
-                    if (value) setBranchSort(value)
-                  }}
-                >
-                  <SelectTrigger id="git-branch-sort" size="sm" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {SORT_ITEMS.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
+                  <FieldLabel>Branches</FieldLabel>
                 <InputGroup>
                   <InputGroupAddon>
                     <SearchIcon />
@@ -667,6 +564,19 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
                     </InputGroupAddon>
                   ) : null}
                 </InputGroup>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {visible.size} / {rankedBranches.length}
+                  </span>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => showTop(rankedBranches.length)}>
+                      All
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => showTop(0)}>
+                      None
+                    </Button>
+                  </div>
+                </div>
                 <div className="flex max-h-52 flex-col gap-1 overflow-y-auto rounded-lg border p-1">
                   {branches.length === 0 ? (
                     <p className="px-2 py-3 text-xs text-muted-foreground">No branches loaded</p>
@@ -706,6 +616,7 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
                 ) : null}
               </Field>
             </FieldGroup>
+            ) : null}
 
             {graph ? (
               <FieldGroup>
@@ -751,10 +662,7 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
                           orientation="horizontal"
                           className={`min-w-0 ${!authors.has(name) ? "opacity-40" : ""}`}
                         >
-                          <Checkbox
-                            checked={authors.has(name)}
-                            onCheckedChange={() => toggleIn(setAuthors, name)}
-                          />
+                          <Checkbox checked={authors.has(name)} onCheckedChange={() => toggleAuthor(name)} />
                           <FieldLabel className="min-w-0 truncate font-normal">{name}</FieldLabel>
                         </Field>
                       ))
@@ -786,7 +694,7 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
               <Button
                 variant="outline"
                 size="icon-sm"
-                onClick={() => void load({ reset: false })}
+                onClick={refreshLogs}
                 disabled={loading}
                 title="Refresh graph"
               >
@@ -837,48 +745,6 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
                   </Button>
                 </>
               ) : null}
-              <DropdownMenu>
-                <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
-                  <FilterIcon data-icon="inline-start" />
-                  Filters
-                  <span className="tabular-nums text-muted-foreground">
-                    {filterCount}/{filterTotal}
-                  </span>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-40">
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel>Kind</DropdownMenuLabel>
-                    {KIND_OPTS.map((k) => (
-                      <DropdownMenuCheckboxItem
-                        key={k.id}
-                        checked={kinds.has(k.id)}
-                        onCheckedChange={() => toggleIn(setKinds, k.id)}
-                      >
-                        {k.label}
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                    <DropdownMenuCheckboxItem
-                      checked={showTags}
-                      onCheckedChange={(checked) => setShowTags(!!checked)}
-                    >
-                      Tagged
-                    </DropdownMenuCheckboxItem>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel>Lanes</DropdownMenuLabel>
-                    {BRANCH_OPTS.map((k) => (
-                      <DropdownMenuCheckboxItem
-                        key={k.id}
-                        checked={branchKinds.has(k.id)}
-                        onCheckedChange={() => toggleIn(setBranchKinds, k.id)}
-                      >
-                        {k.label}
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                  </DropdownMenuGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
               <Badge variant="outline">
                 {visibleGraph.branches.length}/{rankedBranches.length} branches
               </Badge>
@@ -909,6 +775,7 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
               focused={highlight}
               selectedHash={selected?.hash}
               matchHashes={matchHashes}
+              selectedAuthors={selectedAuthors}
               jumpTo={msgQuery.trim() ? jumpTo : null}
               onSelect={setSelected}
               rangeStart={axisRange?.[0]}
@@ -917,7 +784,8 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
                 wantRef.current = { from, to }
                 if (!filling.current) void ensureRange(from, to)
               }}
-              showTags={showTags}
+              fitKey={`${visibleGraph!.path}:${visibleGraph!.branches.join("\n")}:${viewGen}`}
+              showTags
             />
           )}
         </div>

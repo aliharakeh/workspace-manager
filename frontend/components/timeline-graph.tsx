@@ -1,11 +1,11 @@
 import * as d3 from "d3"
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { GitCommitNode, GitMergeEvent, GitRepoGraph } from "@/lib/types"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
 
-const LANE_H = 86
-const MARGIN = { top: 18, right: 72, bottom: 44, left: 176 }
+const LANE_H = 88
+const COL_W = 148
+const START_R = 18
+const MARGIN = { top: 48, right: 56, bottom: 36, left: 36 }
 const COLORS = [
   "#3b82f6",
   "#22c55e",
@@ -18,10 +18,6 @@ const COLORS = [
   "#ec4899",
   "#6366f1",
 ]
-const ARROW_TS = [0.32, 0.68]
-const dayMs = 86400000
-const hourMs = 3600000
-const minSpan = 7 * dayMs
 
 type Cluster = GitCommitNode & {
   count: number
@@ -43,42 +39,38 @@ type TimelineGraphProps = {
   onSelect: (item: GitInspect) => void
   selectedHash?: string
   matchHashes?: string[]
+  selectedAuthors?: Set<string>
   jumpTo: { hash: string; n: number } | null
   rangeStart?: number
   rangeEnd?: number
   onViewChange?: (from: number, to: number) => void
   showTags: boolean
+  fitKey?: string
 }
 
-function viewWindow(
-  commits: GitCommitNode[],
-  rangeStart?: number,
-  rangeEnd?: number
-): [number, number] {
-  if (rangeStart != null && rangeEnd != null && rangeEnd > rangeStart) {
-    return [rangeStart, rangeEnd]
-  }
-  const times = commits.map((c) => +new Date(c.timestamp))
-  const to = Math.min(times.length ? Math.max(...times) : Date.now(), Date.now())
-  const d = new Date(to)
-  const from = +new Date(d.getFullYear(), d.getMonth() - 5, d.getDate())
-  return [from, to === from ? to + 1 : to]
+type Edge = {
+  src: Cluster
+  dst: Cluster
+  branches: string[]
+  commits: GitCommitNode[]
 }
 
-function bez(p0: number, p1: number, p2: number, p3: number, t: number) {
-  const mt = 1 - t
-  return mt * mt * mt * p0 + 3 * mt * mt * t * p1 + 3 * mt * t * t * p2 + t * t * t * p3
-}
-
-function dbez(p0: number, p1: number, p2: number, p3: number, t: number) {
-  const mt = 1 - t
-  return 3 * mt * mt * (p1 - p0) + 6 * mt * t * (p2 - p1) + 3 * t * t * (p3 - p2)
+function viewAt(width: number, height: number, x: number, y: number) {
+  const ty = y > height - LANE_H ? height / 2 - y : 0
+  return d3.zoomIdentity.translate(width - MARGIN.right - x, ty)
 }
 
 export function laneName(name: string) {
   return String(name || "")
     .replace(/^refs\/(heads|remotes|tags)\//, "")
     .replace(/^(origin|upstream)\//, "")
+}
+
+export function branchColor(name: string) {
+  const n = laneName(name)
+  let h = 2166136261
+  for (let i = 0; i < n.length; i++) h = Math.imul(h ^ n.charCodeAt(i), 16777619)
+  return COLORS[(h >>> 0) % COLORS.length]!
 }
 
 function localDay(ts: string) {
@@ -118,28 +110,198 @@ function clusterByDay(commits: GitCommitNode[]) {
   return map
 }
 
+function fmtDay(ts: string) {
+  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+}
+
+function addMonths(ms: number, n: number) {
+  const d = new Date(ms)
+  d.setMonth(d.getMonth() + n)
+  return +d
+}
+
+function shorten(x1: number, y1: number, x2: number, y2: number, a: number, b: number) {
+  const dx = x2 - x1
+  const dy = y2 - y1
+  const len = Math.hypot(dx, dy) || 1
+  return {
+    x1: x1 + (dx / len) * a,
+    y1: y1 + (dy / len) * a,
+    x2: x2 - (dx / len) * b,
+    y2: y2 - (dy / len) * b,
+  }
+}
+
+function signedTrack(t: number) {
+  if (!t) return 0
+  return (t % 2 === 1 ? 1 : -1) * Math.ceil(t / 2)
+}
+
+function edgeCurve(x1: number, y1: number, x2: number, y2: number, bend = 0) {
+  const dx = x2 - x1
+  const dy = y2 - y1
+  if (Math.abs(dy) < 6) {
+    const h = (dx >= 0 ? -1 : 1) * 26
+    return `M ${x1} ${y1} C ${x1 + dx / 3} ${y1 + h}, ${x1 + (2 * dx) / 3} ${y2 + h}, ${x2} ${y2}`
+  }
+  const mx = (x1 + x2) / 2 + bend
+  return `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`
+}
+
+function yTracks(pts: { x1: number; y1: number; x2: number; y2: number }[]) {
+  const track = Array(pts.length).fill(0)
+  const idx = pts
+    .map((_, i) => i)
+    .filter((i) => Math.abs(pts[i]!.y2 - pts[i]!.y1) >= 6 && Math.abs(pts[i]!.x2 - pts[i]!.x1) >= 6)
+  idx.sort((i, j) => pts[i]!.x1 + pts[i]!.x2 - (pts[j]!.x1 + pts[j]!.x2))
+  for (let a = 0; a < idx.length; a++) {
+    const i = idx[a]!
+    const used = new Set<number>()
+    for (let b = 0; b < a; b++) {
+      const j = idx[b]!
+      const am = (pts[i]!.x1 + pts[i]!.x2) / 2
+      const bm = (pts[j]!.x1 + pts[j]!.x2) / 2
+      if (Math.abs(am - bm) >= COL_W / 2) continue
+      const ay0 = Math.min(pts[i]!.y1, pts[i]!.y2)
+      const ay1 = Math.max(pts[i]!.y1, pts[i]!.y2)
+      const by0 = Math.min(pts[j]!.y1, pts[j]!.y2)
+      const by1 = Math.max(pts[j]!.y1, pts[j]!.y2)
+      if (ay0 < by1 - 8 && by0 < ay1 - 8) used.add(track[j]!)
+    }
+    let t = 0
+    while (used.has(t)) t++
+    track[i] = t
+  }
+  return track
+}
+
+function clipLabel(s: string, n = 28) {
+  s = String(s || "")
+  return s.length > n ? `${s.slice(0, n - 2)}…` : s
+}
+
+function diamondPath(r: number) {
+  return `M 0 ${-r} L ${r} 0 L 0 ${r} L ${-r} 0 Z`
+}
+
+function branchStartKeys(clusters: Cluster[], branches: string[]) {
+  const keys = new Set<string>()
+  for (const name of branches) {
+    let best: Cluster | null = null
+    let bestT = Infinity
+    for (const g of clusters) {
+      if (g.branch !== name) continue
+      const t = +new Date(g.commits[0]?.timestamp || g.timestamp)
+      if (t < bestT) {
+        bestT = t
+        best = g
+      }
+    }
+    if (best) keys.add(clusterKey(best.branch, best.timestamp))
+  }
+  return keys
+}
+
+function addEdge(
+  edges: Map<string, { src: Cluster; dst: Cluster; branches: Set<string>; commits: GitCommitNode[] }>,
+  src: Cluster | undefined,
+  dst: Cluster | undefined,
+  names: string[],
+  commit?: GitCommitNode | Cluster | GitMergeEvent
+) {
+  if (!src || !dst || src === dst) return
+  const key = `${clusterKey(src.branch, src.timestamp)}->${clusterKey(dst.branch, dst.timestamp)}`
+  let e = edges.get(key)
+  if (!e) {
+    e = { src, dst, branches: new Set(), commits: [] }
+    edges.set(key, e)
+  }
+  for (const n of names) {
+    if (n) e.branches.add(n)
+  }
+  const extra =
+    commit && "commits" in commit && Array.isArray(commit.commits)
+      ? commit.commits
+      : commit
+        ? [commit as GitCommitNode]
+        : []
+  for (const c of extra) {
+    if (c?.hash && !e.commits.some((x) => x.hash === c.hash)) e.commits.push(c as GitCommitNode)
+  }
+}
+
+function buildEdges(
+  clusters: Cluster[],
+  commits: GitCommitNode[],
+  branches: string[],
+  merges: GitMergeEvent[]
+): Edge[] {
+  const byKey = new Map(clusters.map((g) => [clusterKey(g.branch, g.timestamp), g]))
+  const byHash = new Map<string, Cluster>()
+  for (const g of clusters) {
+    for (const c of g.commits) byHash.set(c.hash, g)
+  }
+  const allow = new Set(branches)
+  const edges = new Map<string, { src: Cluster; dst: Cluster; branches: Set<string>; commits: GitCommitNode[] }>()
+  let linked = false
+  for (const c of commits) {
+    const dst = byHash.get(c.hash)
+    const parents = c.parents || []
+    for (const parent of parents) {
+      const src = byHash.get(parent)
+      if (!src || !dst) continue
+      linked = true
+      const names = (c.on || [c.branch]).filter((n) => allow.has(n))
+      if (!names.length) continue
+      addEdge(edges, src, dst, names, c)
+    }
+  }
+  if (!linked) {
+    d3.group(clusters, (c) => c.branch).forEach((nodes) => {
+      nodes.sort((a, b) => +new Date(a.timestamp) - +new Date(b.timestamp))
+      for (let i = 1; i < nodes.length; i++) addEdge(edges, nodes[i - 1], nodes[i], [nodes[i]!.branch], nodes[i])
+    })
+    for (const m of merges) {
+      if (!allow.has(m.sourceBranch) || !allow.has(m.targetBranch)) continue
+      addEdge(
+        edges,
+        byKey.get(clusterKey(m.sourceBranch, m.timestamp)) || byHash.get(m.sourceHash),
+        byKey.get(clusterKey(m.targetBranch, m.timestamp)) || byHash.get(m.hash),
+        [m.sourceBranch, m.targetBranch],
+        m
+      )
+    }
+  }
+  return [...edges.values()].map((e) => ({ ...e, branches: [...e.branches].sort() }))
+}
+
 export function TimelineGraph({
   graph,
   focused,
   onSelect,
   selectedHash,
   matchHashes,
+  selectedAuthors,
   jumpTo,
   rangeStart,
   rangeEnd,
   onViewChange,
   showTags,
+  fitKey,
 }: TimelineGraphProps) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
-  const axisRef = useRef<SVGSVGElement>(null)
   const zoomRef = useRef(d3.zoomIdentity)
   const zoomKeyRef = useRef("")
+  const anchorRef = useRef<{ key: string; k: number; y: number; sx: number } | null>(null)
   const jumpKeyRef = useRef("")
   const viewCb = useRef(onViewChange)
   viewCb.current = onViewChange
-  const [size, setSize] = useState({ w: 900, h: 480 })
-  const [tip, setTip] = useState<{ x: number; y: number; d: Cluster | GitMergeEvent } | null>(null)
+  const rangeRef = useRef({ start: rangeStart, end: rangeEnd })
+  rangeRef.current = { start: rangeStart, end: rangeEnd }
+  const [size, setSize] = useState({ w: 0, h: 0 })
+  const [tip, setTip] = useState<{ x: number; y: number; d: Cluster } | null>(null)
+  const zoomFitKey = fitKey ?? `${graph.path}:${graph.branches.join("\n")}`
 
   useEffect(() => {
     const el = wrapRef.current
@@ -148,9 +310,7 @@ export function TimelineGraph({
       const { width, height } = entry.contentRect
       if (width < 80 || height < 80) return
       setSize((prev) =>
-        Math.abs(prev.w - width) < 1 && Math.abs(prev.h - height) < 1
-          ? prev
-          : { w: width, h: height }
+        Math.abs(prev.w - width) < 1 && Math.abs(prev.h - height) < 1 ? prev : { w: width, h: height }
       )
     })
     ro.observe(el)
@@ -171,264 +331,220 @@ export function TimelineGraph({
 
   useEffect(() => {
     const svgEl = svgRef.current
-    const axisEl = axisRef.current
-    if (!svgEl || !axisEl || !graph?.branches?.length) return
-    const svg = d3.select(svgEl)
-    const axisSvg = d3.select(axisEl)
+    if (!svgEl || !graph?.branches?.length || size.w < 80 || size.h < 80) return
+    const svg = d3.select<SVGSVGElement, unknown>(svgEl)
     svg.selectAll("*").remove()
-    axisSvg.selectAll("*").remove()
 
     const branches = [...new Set(graph.branches.map(laneName))]
     const commits = graph.commits
-      .map((c) => ({ ...c, branch: laneName(c.branch) }))
+      .map((c) => ({ ...c, branch: laneName(c.branch), on: (c.on || [c.branch]).map(laneName) }))
       .filter((c) => branches.includes(c.branch))
     const clusterMap = clusterByDay(commits)
     const clusters = [...clusterMap.values()]
-    const [winStart, winEnd] = viewWindow(commits, rangeStart, rangeEnd)
+    const merges = (graph.merges || []).map((m) => ({
+      ...m,
+      sourceBranch: laneName(m.sourceBranch),
+      targetBranch: laneName(m.targetBranch),
+    }))
+    for (const m of merges) {
+      if (m.kind === "branch") continue
+      ;(
+        clusterMap.get(clusterKey(m.targetBranch, m.timestamp)) ||
+        clusterMap.get(clusterKey(m.sourceBranch, m.timestamp))
+      )?.merges.push(m)
+    }
+    const edges = buildEdges(clusters, commits, branches, merges)
+    const startKeys = branchStartKeys(clusters, branches)
+    const isStart = (d: Cluster) => startKeys.has(clusterKey(d.branch, d.timestamp))
+
+    const dayMin = new Map<string, { t: number; ts: string }>()
+    for (const g of clusters) {
+      const k = localDay(g.timestamp)
+      const t = +new Date(g.timestamp)
+      if (!dayMin.has(k) || t < dayMin.get(k)!.t) dayMin.set(k, { t, ts: g.timestamp })
+    }
+    const days = [...dayMin.entries()].sort((a, b) => a[1].t - b[1].t)
+    const dayIndex = new Map(days.map(([k], i) => [k, i]))
+
+    const width = size.w
+    const height = size.h
     const yOf = (name: string) => {
       const i = branches.indexOf(name)
       return i < 0 ? undefined : MARGIN.top + i * LANE_H + LANE_H / 2
     }
-    const color = d3.scaleOrdinal(COLORS).domain(branches)
-    const width = size.w
-    const plotBottom = MARGIN.top + branches.length * LANE_H
-    const clipH = Math.max(size.h - MARGIN.bottom, 1)
-    const innerW = Math.max(width - MARGIN.left - MARGIN.right, 40)
-    const minY = Math.min(0, clipH - plotBottom)
-    const yOff = (t: d3.ZoomTransform) => Math.max(minY, Math.min(0, t.y))
-    const bg = "var(--background)"
-    const muted = "var(--muted)"
-    const border = "var(--border)"
-    const tickFill = "var(--muted-foreground)"
-
-    const resetKey = `${winStart}:${winEnd}:${graph.path}:${branches.join("\n")}`
-    if (zoomKeyRef.current !== resetKey) {
-      zoomRef.current = d3.zoomIdentity
-      zoomKeyRef.current = resetKey
-    }
-
-    svg.attr("width", width).attr("height", clipH).attr("viewBox", `0 0 ${width} ${clipH}`).style("cursor", "grab")
-    axisSvg.attr("width", width).attr("height", MARGIN.bottom).attr("viewBox", `0 0 ${width} ${MARGIN.bottom}`)
-
-    const x0 = d3.scaleTime().domain([new Date(winStart), new Date(winEnd)]).range([MARGIN.left, MARGIN.left + innerW])
+    const xOf = (ts: string) => MARGIN.left + (dayIndex.get(localDay(ts)) ?? 0) * COL_W
+    const plotBottom = MARGIN.top + Math.max(branches.length, 1) * LANE_H
     const dim = (branch: string) => (related && !related.has(branch) ? 0.12 : 1)
-    const tickFmt = (xz: d3.ScaleTime<number, number>) => {
-      const span = +xz.domain()[1] - +xz.domain()[0]
-      if (span > 40 * dayMs) return d3.timeFormat("%b %Y")
-      if (span > 2 * dayMs) return d3.timeFormat("%a %b %d")
-      if (span > 6 * hourMs) return d3.timeFormat("%b %d %H:%M")
-      return d3.timeFormat("%H:%M")
+    const firstX = MARGIN.left
+    const lastX = MARGIN.left + Math.max(days.length - 1, 0) * COL_W
+    let latest = clusters[0]
+    for (const g of clusters) {
+      if (latest && +new Date(g.timestamp) > +new Date(latest.timestamp)) latest = g
     }
-    const tickInterval = (xz: d3.ScaleTime<number, number>) => {
-      const span = +xz.domain()[1] - +xz.domain()[0]
-      if (span > 40 * dayMs) return d3.timeMonth.every(1)
-      if (span > 2 * dayMs) return d3.timeDay.every(1)
-      if (span > 6 * hourMs) return d3.timeHour.every(1)
-      return d3.timeMinute.every(15)
-    }
-    const mergeCurve = (m: GitMergeEvent, xz: d3.ScaleTime<number, number>) => {
-      const srcC = clusterMap.get(clusterKey(m.sourceBranch, m.timestamp))
-      const dstC = clusterMap.get(clusterKey(m.targetBranch, m.timestamp))
-      const x1pos = xz(new Date(srcC?.timestamp || m.timestamp))
-      const x2pos = xz(new Date(dstC?.timestamp || m.timestamp))
-      const y2 = yOf(m.targetBranch) ?? yOf(m.sourceBranch) ?? 0
-      const y1 = branches.includes(m.sourceBranch) ? (yOf(m.sourceBranch) ?? y2) : y2
-      if (y1 === y2) {
-        const w = 56
-        const h = 44
-        return {
-          x1: x1pos,
-          y1,
-          cx1: x1pos - w,
-          cy1: y1 - h,
-          cx2: x2pos + w,
-          cy2: y2 - h,
-          x2: x2pos,
-          y2,
-          d: `M ${x1pos} ${y1} C ${x1pos - w} ${y1 - h}, ${x2pos + w} ${y2 - h}, ${x2pos} ${y2}`,
-        }
-      }
-      const sign = y2 >= y1 ? -1 : 1
-      const mag = 56 + Math.min(Math.abs(y2 - y1) * 0.14, 44)
-      const x1 = x1pos + sign * 10
-      const x2 = x2pos + sign * 10
-      const cx = (x1 + x2) / 2 + sign * mag
-      return {
-        x1,
-        y1,
-        cx1: cx,
-        cy1: y1,
-        cx2: cx,
-        cy2: y2,
-        x2,
-        y2,
-        d: `M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`,
+    const latestView = latest
+      ? viewAt(width, height, xOf(latest.timestamp), yOf(latest.branch) ?? height / 2)
+      : d3.zoomIdentity
+
+    if (zoomKeyRef.current !== zoomFitKey) {
+      zoomRef.current = latestView
+      zoomKeyRef.current = zoomFitKey
+      anchorRef.current = null
+    } else if (anchorRef.current) {
+      const { key, k, y, sx } = anchorRef.current
+      const i = days.findIndex(([d]) => d === key)
+      if (i >= 0) {
+        const wx = MARGIN.left + i * COL_W
+        zoomRef.current = d3.zoomIdentity.translate(sx - wx * k, y).scale(k)
       }
     }
+
+    const bg = "var(--background)"
+    const grid = "var(--border)"
+    const tick = "var(--muted-foreground)"
+
+    svg.attr("width", width).attr("height", height).attr("viewBox", `0 0 ${width} ${height}`).style("cursor", "grab")
+
     const defs = svg.append("defs")
-    defs.append("clipPath").attr("id", "lane-clip").append("rect").attr("x", 0).attr("y", 0).attr("width", width).attr("height", clipH)
-    defs.append("clipPath").attr("id", "plot-clip").append("rect").attr("x", MARGIN.left).attr("y", 0).attr("width", Math.max(width - MARGIN.left, 1)).attr("height", clipH)
+    defs.append("clipPath").attr("id", "net-clip").append("rect").attr("width", width).attr("height", height)
+    defs.append("style").text(`
+      @keyframes merge-dash { to { stroke-dashoffset: -14; } }
+      @keyframes fork-dash { to { stroke-dashoffset: -24; } }
+      .merge-edge { stroke-dasharray: 8 6; animation: merge-dash 0.55s linear infinite; }
+      .fork-edge { stroke-dasharray: 18 6; animation: fork-dash 0.7s linear infinite; }
+    `)
 
-    svg.append("rect").attr("width", width).attr("height", clipH).attr("fill", bg)
-    axisSvg.append("rect").attr("width", width).attr("height", MARGIN.bottom).attr("fill", bg)
+    svg.append("rect").attr("width", width).attr("height", height).attr("fill", bg)
+    const world = svg.append("g").attr("clip-path", "url(#net-clip)").append("g")
 
-    const lanes = svg.append("g").attr("clip-path", "url(#lane-clip)")
-    const bgG = lanes.append("g")
-    branches.forEach((name, i) => {
-      bgG
-        .append("rect")
-        .attr("x", 0)
-        .attr("y", MARGIN.top + i * LANE_H)
-        .attr("width", width)
-        .attr("height", LANE_H)
-        .attr("fill", i % 2 === 0 ? muted : bg)
-        .attr("opacity", dim(name) * (i % 2 === 0 ? 0.45 : 1))
-    })
-
-    const labels = lanes.append("g")
-    branches.forEach((name) => {
-      labels
+    days.forEach(([, info], i) => {
+      const x = MARGIN.left + i * COL_W
+      world
+        .append("line")
+        .attr("x1", x)
+        .attr("x2", x)
+        .attr("y1", MARGIN.top)
+        .attr("y2", plotBottom)
+        .attr("stroke", grid)
+        .attr("stroke-width", 1)
+        .attr("stroke-dasharray", "4 6")
+      world
         .append("text")
-        .attr("x", 16)
-        .attr("y", yOf(name) ?? 0)
-        .attr("dominant-baseline", "middle")
-        .attr("fill", color(name))
-        .attr("font-size", 12)
-        .attr("font-weight", 600)
-        .attr("opacity", dim(name))
-        .text(name.length > 22 ? `${name.slice(0, 20)}…` : name)
+        .attr("x", x)
+        .attr("y", MARGIN.top - 14)
+        .attr("text-anchor", "middle")
+        .attr("fill", tick)
+        .attr("font-size", 10)
+        .text(fmtDay(info.ts))
     })
 
-    const plot = svg.append("g").attr("clip-path", "url(#plot-clip)").append("g")
-    const laneLines = plot
-      .append("g")
-      .selectAll("line")
-      .data(branches)
-      .join("line")
-      .attr("x1", MARGIN.left)
-      .attr("x2", MARGIN.left + innerW)
-      .attr("y1", (name) => yOf(name) ?? 0)
-      .attr("y2", (name) => yOf(name) ?? 0)
-      .attr("stroke", (name) => color(name))
-      .attr("stroke-width", 1.5)
-      .attr("stroke-opacity", (name) => 0.25 * dim(name))
-
-    const merges = (graph.merges || [])
-      .map((m) => ({
-        ...m,
-        sourceBranch: laneName(m.sourceBranch),
-        targetBranch: laneName(m.targetBranch),
-      }))
-      .filter((m) => branches.includes(m.targetBranch) || branches.includes(m.sourceBranch))
-    for (const m of merges) {
-      ;(clusterMap.get(clusterKey(m.targetBranch, m.timestamp)) || clusterMap.get(clusterKey(m.sourceBranch, m.timestamp)))?.merges.push(m)
-    }
-
-    const branchLines = plot.append("g")
-    d3.group(clusters, (c) => c.branch).forEach((nodes, name) => {
-      nodes.sort((a, b) => +new Date(a.timestamp) - +new Date(b.timestamp))
-      branchLines
-        .append("path")
-        .datum(nodes)
-        .attr("fill", "none")
-        .attr("stroke", color(name))
-        .attr("stroke-width", 2)
-        .attr("opacity", 0.45 * dim(name))
+    const pts = edges
+      .map((e) => {
+        const s = { x: xOf(e.src.timestamp), y: yOf(e.src.branch) }
+        const d = { x: xOf(e.dst.timestamp), y: yOf(e.dst.branch) }
+        if (s.y == null || d.y == null) return null
+        const fork = isStart(e.dst) && e.src.branch !== e.dst.branch
+        const r1 = isStart(e.src) ? START_R : e.src.count > 1 ? 11 : 7
+        const r2 = isStart(e.dst) ? START_R : e.dst.count > 1 ? 11 : 7
+        return { e, fork, x1: s.x, y1: s.y, x2: d.x, y2: d.y, r1, r2 }
+      })
+      .filter((p): p is NonNullable<typeof p> => p != null)
+    const tracks = yTracks(pts)
+    const laid = pts.map((p, i) => {
+      const sameDay = Math.abs(p.x1 - p.x2) < 6
+      const merge = !p.fork && p.e.src.branch !== p.e.dst.branch
+      const q = shorten(p.x1, p.y1, p.x2, p.y2, p.r1, p.r2)
+      return {
+        kind: "edge" as const,
+        ...p.e,
+        fork: p.fork,
+        merge,
+        d:
+          p.fork || (sameDay && !merge)
+            ? `M ${q.x1} ${q.y1} L ${q.x2} ${q.y2}`
+            : edgeCurve(q.x1, q.y1, q.x2, q.y2, 26 + signedTrack(tracks[i]!) * 16),
+        stroke: p.fork
+          ? branchColor(p.e.dst.branch)
+          : branchColor(
+              p.e.src.branch !== p.e.dst.branch && !p.e.dst.isMerge ? p.e.dst.branch : p.e.src.branch
+            ),
+        op:
+          (!related || p.e.branches.some((b) => related.has(b))) &&
+          (!selectedAuthors || p.e.commits?.some((c) => selectedAuthors.has(c.author || "(unknown)")))
+            ? 1
+            : 0.12,
+      }
     })
 
-    merges.forEach((m, i) => {
-      const id = `grad-${m.hash}-${i}`
-      const g = defs
-        .append("linearGradient")
-        .attr("id", id)
-        .attr("gradientUnits", "userSpaceOnUse")
-        .attr("y1", yOf(m.sourceBranch) ?? 0)
-        .attr("y2", yOf(m.targetBranch) ?? 0)
-      g.append("stop").attr("offset", "0%").attr("stop-color", color(m.sourceBranch))
-      g.append("stop").attr("offset", "100%").attr("stop-color", color(m.targetBranch))
-    })
-
-    const mergeLinks = plot
-      .append("g")
-      .selectAll("path")
-      .data(merges)
-      .join("path")
-      .attr("fill", "none")
-      .attr("stroke", (_d, i) => `url(#grad-${merges[i]!.hash}-${i})`)
-      .attr("stroke-width", 2.4)
-      .attr("opacity", (d) =>
-        !related || related.has(d.sourceBranch) || related.has(d.targetBranch) ? 0.95 : 0.1
-      )
-
-    const arrowData = merges.flatMap((m, i) => {
-      const ts = m.sourceBranch === m.targetBranch ? [0.5] : ARROW_TS
-      return ts.map((t, k) => ({ m, i, t, k, last: k === ts.length - 1 }))
-    })
-    const flowArrows = plot
-      .append("g")
-      .selectAll("path")
-      .data(arrowData)
-      .join("path")
-      .attr("d", "M -7 -5 L 10 0 L -7 5 Z")
-      .attr("fill", (d) => (d.last ? color(d.m.targetBranch) : color(d.m.sourceBranch)))
-      .attr("stroke", bg)
-      .attr("stroke-width", 0.6)
-      .attr("opacity", (d) =>
-        !related || related.has(d.m.sourceBranch) || related.has(d.m.targetBranch) ? 1 : 0.12
-      )
-
-    const showTip = (event: PointerEvent, d: Cluster | GitMergeEvent) => {
+    const showTip = (event: PointerEvent, d: Cluster) => {
       const [px, py] = d3.pointer(event, wrapRef.current)
       setTip({ x: px + 12, y: py + 12, d })
     }
-    const isSelected = (d: Cluster) =>
-      d.hash === selectedHash || d.commits?.some((c) => c.hash === selectedHash)
+    const moveTip = (event: PointerEvent) => {
+      const [px, py] = d3.pointer(event, wrapRef.current)
+      setTip((t) => t && { ...t, x: px + 12, y: py + 12 })
+    }
+
+    const edgeG = world.append("g").selectAll("g").data(laid).join("g").attr("opacity", (d) => d.op)
+    edgeG
+      .append("path")
+      .attr("d", (d) => d.d)
+      .attr("class", (d) => (d.fork ? "fork-edge" : d.merge ? "merge-edge" : null))
+      .attr("fill", "none")
+      .attr("stroke", (d) => d.stroke)
+      .attr("stroke-width", (d) => (d.fork ? 3 : 2))
+      .attr("pointer-events", "none")
+    const isSelected = (d: Cluster) => d.hash === selectedHash || d.commits?.some((c) => c.hash === selectedHash)
     const matchSet = new Set(matchHashes || [])
-    const isHit = (d: Cluster) => matchSet.has(d.hash) || d.commits?.some((c) => matchSet.has(c.hash))
+    const isSearchHit = (d: Cluster) => matchSet.has(d.hash) || d.commits?.some((c) => matchSet.has(c.hash))
+    const isAuthorHit = (d: Cluster) =>
+      !selectedAuthors ||
+      selectedAuthors.has(d.author || "(unknown)") ||
+      d.commits?.some((c) => selectedAuthors.has(c.author || "(unknown)"))
+    const isHit = (d: Cluster) => (!matchSet.size || isSearchHit(d)) && isAuthorHit(d)
+    const filterOn = matchSet.size || selectedAuthors
     const innerR = (d: Cluster) => (d.count > 1 ? 9 : 5) + (isSelected(d) ? 2 : 0)
 
-    const commitDots = plot
+    const commitDots = world
       .append("g")
       .selectAll("g")
       .data(clusters)
       .join("g")
-      .attr("opacity", (d) => (matchSet.size && !isHit(d) ? 0.2 : 0.9) * dim(d.branch))
+      .attr("transform", (d) => `translate(${xOf(d.timestamp)},${yOf(d.branch)})`)
+      .attr("opacity", (d) => (filterOn && !isHit(d) ? 0.2 : 0.9) * dim(d.branch))
       .style("cursor", "pointer")
-      .on("pointerenter", (event: PointerEvent, d) => showTip(event, d))
-      .on("pointermove", (event: PointerEvent) => {
-        const [px, py] = d3.pointer(event, wrapRef.current)
-        setTip((t) => t && { ...t, x: px + 12, y: py + 12 })
-      })
+      .on("pointerenter", (event, d) => showTip(event, d))
+      .on("pointermove", moveTip)
       .on("pointerleave", () => setTip(null))
-      .on("click", (event: PointerEvent, d) => {
+      .on("click", (event, d) => {
         event.stopPropagation()
-        if (d.count === 1 && d.merges?.length === 1) {
-          onSelect({ kind: "merge", ...d.merges[0]!, tags: d.tags })
+        if (d.count === 1 && d.merges?.length === 1 && d.merges[0]!.kind !== "branch") {
+          onSelect({ ...d.merges[0]!, tags: d.tags, kind: "merge" })
           return
         }
-        onSelect({ kind: d.count > 1 ? "cluster" : "commit", ...d })
+        onSelect(d.count > 1 ? { kind: "cluster", ...d } : { kind: "commit", ...d })
       })
-      .on("dblclick", (event: PointerEvent) => event.stopPropagation())
-    commitDots.append("circle").attr("r", 14).attr("fill", "transparent")
+      .on("dblclick", (event) => event.stopPropagation())
+    commitDots.append("circle").attr("r", (d) => (isStart(d) ? START_R + 6 : 14)).attr("fill", "transparent")
     commitDots
-      .filter((d) => matchSet.size > 0 && isHit(d))
-      .append("circle")
-      .attr("r", (d) => innerR(d) + 7)
-      .attr("fill", "none")
-      .attr("stroke", "var(--primary)")
-      .attr("stroke-width", 2.5)
-    commitDots
-      .filter((d) => d.isMerge)
+      .filter((d) => d.isMerge && !isStart(d))
       .append("circle")
       .attr("r", (d) => innerR(d) + 6)
       .attr("fill", bg)
-      .attr("stroke", (d) => color(d.branch))
+      .attr("stroke", (d) => branchColor(d.branch))
       .attr("stroke-width", 2.5)
     commitDots
+      .filter((d) => !isStart(d))
       .append("circle")
       .attr("r", innerR)
-      .attr("fill", (d) => (d.merges?.length === 1 ? color(d.merges[0]!.sourceBranch) : color(d.branch)))
+      .attr("fill", (d) => branchColor(d.branch))
       .attr("stroke", (d) => (isSelected(d) ? "var(--foreground)" : "transparent"))
+      .attr("stroke-width", 2)
+    commitDots
+      .filter(isStart)
+      .append("path")
+      .attr("d", diamondPath(START_R))
+      .attr("fill", (d) => branchColor(d.branch))
+      .attr("stroke", (d) => (isSelected(d) ? "var(--foreground)" : bg))
       .attr("stroke-width", 2)
     commitDots
       .filter((d) => d.count > 1)
@@ -439,146 +555,84 @@ export function TimelineGraph({
       .attr("font-size", 9)
       .attr("font-weight", 700)
       .attr("pointer-events", "none")
-      .text((d) => (d.count > 99 ? "99+" : String(d.count)))
+      .text((d) => (d.count > 99 ? "99+" : d.count))
     commitDots
       .filter((d) => showTags && !!d.tags?.length)
       .append("text")
-      .attr("y", (d) => innerR(d) + (d.isMerge ? 16 : 14))
+      .attr("y", (d) => (isStart(d) ? START_R : innerR(d)) + (d.isMerge ? 16 : 14))
       .attr("text-anchor", "middle")
-      .attr("fill", "var(--primary)")
+      .attr("fill", "#fbbf24")
       .attr("stroke", bg)
       .attr("stroke-width", 3)
       .attr("paint-order", "stroke")
       .attr("font-size", 10)
       .attr("font-weight", 700)
       .attr("pointer-events", "none")
-      .text((d) => {
-        const s = (d.tags ?? []).join(" · ")
-        return s.length > 28 ? `${s.slice(0, 26)}…` : s
-      })
+      .text((d) => clipLabel((d.tags || []).join(" · ")))
+    commitDots
+      .filter(isStart)
+      .append("text")
+      .attr("x", START_R + 8)
+      .attr("y", 4)
+      .attr("fill", (d) => branchColor(d.branch))
+      .attr("stroke", bg)
+      .attr("stroke-width", 3)
+      .attr("paint-order", "stroke")
+      .attr("font-size", 10)
+      .attr("font-weight", 700)
+      .attr("pointer-events", "none")
+      .text((d) => clipLabel(d.branch, 32))
 
-    const srcNodes = plot
-      .append("g")
-      .selectAll("circle")
-      .data(
-        merges.filter(
-          (m) =>
-            branches.includes(m.sourceBranch) &&
-            branches.includes(m.targetBranch) &&
-            m.sourceBranch !== m.targetBranch &&
-            !clusterMap.get(clusterKey(m.sourceBranch, m.timestamp))
-        )
-      )
-      .join("circle")
-      .attr("r", 5)
-      .attr("fill", (d) => color(d.sourceBranch))
-      .attr("opacity", (d) => (matchSet.size && !matchSet.has(d.hash) ? 0.2 : 0.9) * dim(d.sourceBranch))
-      .style("cursor", "pointer")
-      .on("pointerenter", (event: PointerEvent, d) => showTip(event, d))
-      .on("pointermove", (event: PointerEvent) => {
-        const [px, py] = d3.pointer(event, wrapRef.current)
-        setTip((t) => t && { ...t, x: px + 12, y: py + 12 })
-      })
-      .on("pointerleave", () => setTip(null))
-      .on("click", (event: PointerEvent, d) => {
-        event.stopPropagation()
-        onSelect({ kind: "merge", ...d })
-      })
-      .on("dblclick", (event: PointerEvent) => event.stopPropagation())
-
-    const axisG = axisSvg.append("g")
-
-    function apply(t: d3.ZoomTransform) {
-      const xz = t.rescaleX(x0)
-      const ty = yOff(t)
-      bgG.attr("transform", `translate(0,${ty})`)
-      labels.attr("transform", `translate(0,${ty})`)
-      plot.attr("transform", `translate(0,${ty})`)
-      laneLines.attr("x1", MARGIN.left).attr("x2", MARGIN.left + innerW)
-      branchLines.selectAll<SVGPathElement, Cluster[]>("path").attr("d", (nodes) =>
-        d3
-          .line<Cluster>()
-          .x((d) => xz(new Date(d.timestamp)))
-          .y((d) => yOf(d.branch) ?? 0)
-          .curve(d3.curveMonotoneX)(nodes)
-      )
-      mergeLinks.attr("d", (d) => mergeCurve(d, xz).d)
-      flowArrows.attr("transform", (d) => {
-        const c = mergeCurve(d.m, xz)
-        const x = bez(c.x1, c.cx1, c.cx2, c.x2, d.t)
-        const y = bez(c.y1, c.cy1, c.cy2, c.y2, d.t)
-        const a =
-          (Math.atan2(dbez(c.y1, c.cy1, c.cy2, c.y2, d.t), dbez(c.x1, c.cx1, c.cx2, c.x2, d.t)) *
-            180) /
-          Math.PI
-        return `translate(${x},${y}) rotate(${a})`
-      })
-      merges.forEach((m, i) => {
-        const c = mergeCurve(m, xz)
-        defs.select(`#grad-${m.hash}-${i}`).attr("x1", c.x1).attr("y1", c.y1).attr("x2", c.x2).attr("y2", c.y2)
-      })
-      commitDots.attr("transform", (d) => `translate(${xz(new Date(d.timestamp))},${yOf(d.branch) ?? 0})`)
-      srcNodes.attr("cx", (d) => mergeCurve(d, xz).x1).attr("cy", (d) => mergeCurve(d, xz).y1)
-      const axis = d3.axisBottom(xz).tickFormat(tickFmt(xz) as (d: d3.NumberValue) => string).tickSize(6).tickPadding(6)
-      const interval = tickInterval(xz)
-      axisG
-        .call(interval ? axis.ticks(interval) : axis.ticks(8))
-        .call((g) => g.select(".domain").attr("stroke", border))
-        .call((g) => g.selectAll(".tick line").attr("stroke", border))
-        .call((g) => g.selectAll(".tick text").attr("fill", tickFill).attr("font-size", 11))
+    const oldest = rangeRef.current.start ?? days[0]?.[1]?.t
+    const newest = rangeRef.current.end ?? days[days.length - 1]?.[1]?.t
+    function reportView(t: d3.ZoomTransform) {
+      if (!viewCb.current || oldest == null || newest == null) return
+      const screenFirst = firstX * t.k + t.x
+      const screenLast = lastX * t.k + t.x
+      let from = oldest
+      let to = newest
+      if (screenFirst > 48) from = addMonths(oldest, -3)
+      if (screenLast < width - 48 && screenLast < lastX * t.k - 24) to = Math.min(Date.now(), addMonths(newest, 3))
+      if (from === oldest && to === newest) return
+      viewCb.current(from, to)
     }
-
-    const viewSpan = Math.max(winEnd - winStart, 1)
-    const minK = 1
-    const maxK = Math.max(1, viewSpan / minSpan)
-    const clamp = (t: d3.ZoomTransform) =>
-      d3.zoomIdentity.translate(t.x, yOff(t)).scale(Math.max(minK, t.k))
 
     const zoom = d3
       .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([minK, maxK])
-      .extent([
-        [MARGIN.left, 0],
-        [width, clipH],
-      ])
+      .scaleExtent([0.25, 6])
       .clickDistance(6)
       .on("start", () => svg.style("cursor", "grabbing"))
       .on("end", () => svg.style("cursor", "grab"))
       .on("zoom", (event) => {
-        const next = clamp(event.transform)
-        if (next.x !== event.transform.x || next.y !== event.transform.y || next.k !== event.transform.k) {
-          ;(svgEl as SVGSVGElement & { __zoom?: d3.ZoomTransform }).__zoom = next
+        zoomRef.current = event.transform
+        world.attr("transform", event.transform)
+        const t = event.transform
+        const wx = (width / 2 - t.x) / t.k
+        let i = Math.round((wx - MARGIN.left) / COL_W)
+        if (days.length) i = Math.max(0, Math.min(days.length - 1, i))
+        if (days[i]) {
+          const colX = MARGIN.left + i * COL_W
+          anchorRef.current = { key: days[i][0], k: t.k, y: t.y, sx: colX * t.k + t.x }
         }
-        zoomRef.current = next
-        apply(next)
-        if (event.sourceEvent) {
-          const [a, b] = next.rescaleX(x0).domain()
-          viewCb.current?.(+a, +b)
-        }
+        if (event.sourceEvent) reportView(event.transform)
       })
 
     svg.call(zoom)
     svg.on("dblclick.zoom", null)
     svg.on("dblclick", () => {
-      zoomRef.current = d3.zoomIdentity
-      svg.transition().duration(200).call(zoom.transform, d3.zoomIdentity)
+      zoomRef.current = latestView
+      svg.transition().duration(200).call(zoom.transform, latestView)
     })
     const jumpKey = jumpTo?.hash ? `${jumpTo.hash}:${jumpTo.n}` : ""
     if (!jumpKey) jumpKeyRef.current = ""
-    const jump = jumpTo
-    if (jump && jumpKey && jumpKey !== jumpKeyRef.current) {
+    if (jumpKey && jumpKey !== jumpKeyRef.current) {
       jumpKeyRef.current = jumpKey
-      const hit =
-        clusters.find((d) => d.hash === jump.hash || d.commits?.some((c) => c.hash === jump.hash)) ||
-        commits.find((c) => c.hash === jump.hash)
+      const hit = clusters.find((d) => d.hash === jumpTo!.hash || d.commits?.some((c) => c.hash === jumpTo!.hash))
       if (hit) {
         const k = zoomRef.current.k
-        const mid = MARGIN.left + innerW / 2
-        zoomRef.current = clamp(
-          d3.zoomIdentity
-            .translate(mid - k * x0(new Date(hit.timestamp)), clipH / 2 - (yOf(hit.branch) ?? 0))
-            .scale(k)
-        )
+        zoomRef.current = d3.zoomIdentity
+          .translate(width / 2 - k * xOf(hit.timestamp), height / 2 - k * (yOf(hit.branch) ?? 0))
+          .scale(k)
       }
     }
     svg.call(zoom.transform, zoomRef.current)
@@ -586,26 +640,49 @@ export function TimelineGraph({
     return () => {
       d3.select(svgEl).on(".zoom", null).on("dblclick", null)
     }
-  }, [graph, related, size, selectedHash, matchHashes, jumpTo, onSelect, rangeStart, rangeEnd, showTags])
+  }, [
+    graph,
+    related,
+    size,
+    selectedHash,
+    matchHashes,
+    selectedAuthors,
+    jumpTo,
+    onSelect,
+    showTags,
+    zoomFitKey,
+  ])
+
+  const branches = graph?.branches || []
 
   return (
-    <div ref={wrapRef} className="relative h-full w-full overflow-hidden bg-background">
-      <svg ref={svgRef} className="absolute inset-x-0 top-0 block w-full touch-none" style={{ bottom: MARGIN.bottom }} />
-      <svg ref={axisRef} className="pointer-events-none absolute bottom-0 left-0 block w-full" style={{ height: MARGIN.bottom }} />
+    <div ref={wrapRef} className="relative h-full w-full overflow-hidden">
+      <svg ref={svgRef} className="absolute inset-0 block h-full w-full touch-none" />
+      {branches.length > 0 && (
+        <div className="pointer-events-none absolute bottom-2 left-3 flex max-w-[80%] flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+          {branches.map((name) => (
+            <span
+              key={name}
+              className="inline-flex items-center gap-1.5 font-medium"
+              style={{ color: branchColor(laneName(name)) }}
+            >
+              <span className="size-2 shrink-0 rounded-full" style={{ background: branchColor(laneName(name)) }} />
+              {name}
+            </span>
+          ))}
+        </div>
+      )}
       {tip && (
-        <Card
-          size="sm"
-          className="pointer-events-none absolute z-20 w-72 py-2 shadow-lg"
+        <div
+          className="pointer-events-none absolute z-20 w-80 rounded-md border border-border bg-card px-3 py-2 text-xs shadow-lg"
           style={{
             left: tip.x,
             top: tip.y,
             transform: `translate(max(${8 - tip.x}px, min(0px, calc(${size.w - 8}px - 100% - ${tip.x}px))), max(${8 - tip.y}px, min(0px, calc(${size.h - 8}px - 100% - ${tip.y}px))))`,
           }}
         >
-          <CardContent className="px-3">
-            <TipBody d={tip.d} />
-          </CardContent>
-        </Card>
+          <TipBody d={tip.d} />
+        </div>
       )}
     </div>
   )
@@ -615,42 +692,41 @@ function fmtTime(ts: string) {
   return new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
 }
 
-function TipBody({ d }: { d: Cluster | GitMergeEvent }) {
-  const items = "commits" in d && d.commits?.length ? d.commits : [d]
+function TimeChip({ ts, withDate }: { ts: string; withDate?: boolean }) {
+  const text = withDate
+    ? new Date(ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+    : fmtTime(ts)
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-md bg-amber-400 px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums text-slate-950">
+      {text}
+    </span>
+  )
+}
+
+function TipBody({ d }: { d: Cluster }) {
+  const items = d.commits?.length ? d.commits : [d]
   const extra = items.length > 8 ? items.length - 8 : 0
   return (
-    <div className="flex flex-col gap-1.5">
-      {items.length > 1 && "timestamp" in d ? (
-        <p className="text-xs text-muted-foreground">
+    <div className="space-y-1.5">
+      {items.length > 1 && (
+        <div className="text-[11px] text-muted-foreground">
           {items.length} commits ·{" "}
-          {new Date(d.timestamp).toLocaleDateString(undefined, {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-          })}
-        </p>
-      ) : null}
+          {new Date(d.timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+        </div>
+      )}
       {items.slice(0, 8).map((c, i) => (
         <div key={c.hash || i} className="flex items-start gap-2">
-          <Badge variant="secondary">
-            {items.length === 1
-              ? new Date(c.timestamp).toLocaleString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              : fmtTime(c.timestamp)}
-          </Badge>
-          <span className="min-w-0 break-words">
+          <TimeChip ts={c.timestamp} withDate={items.length === 1} />
+          <span
+            className={`min-w-0 break-words ${c.isMerge ? "font-medium" : "text-foreground"}`}
+            style={c.isMerge ? { color: branchColor(c.branch) } : undefined}
+          >
             {c.subject || c.hash}
-            {"tags" in c && c.tags?.length ? (
-              <span className="ml-1 font-medium text-primary">{c.tags.join(" · ")}</span>
-            ) : null}
+            {c.tags?.length ? <span className="ml-1 font-semibold text-amber-400">{c.tags.join(" · ")}</span> : null}
           </span>
         </div>
       ))}
-      {extra > 0 ? <p className="text-xs text-muted-foreground">+{extra} more</p> : null}
+      {extra > 0 && <div className="text-[11px] text-muted-foreground">+{extra} more</div>}
     </div>
   )
 }

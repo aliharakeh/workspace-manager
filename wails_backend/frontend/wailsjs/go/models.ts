@@ -17,11 +17,14 @@ export namespace gitgraph {
 	export class CommitNode {
 	    hash: string;
 	    branch: string;
+	    on?: string[];
+	    parents?: string[];
 	    timestamp: string;
 	    author: string;
 	    subject: string;
 	    isMerge: boolean;
 	    tags?: string[];
+	    lanes?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new CommitNode(source);
@@ -31,15 +34,19 @@ export namespace gitgraph {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.hash = source["hash"];
 	        this.branch = source["branch"];
+	        this.on = source["on"];
+	        this.parents = source["parents"];
 	        this.timestamp = source["timestamp"];
 	        this.author = source["author"];
 	        this.subject = source["subject"];
 	        this.isMerge = source["isMerge"];
 	        this.tags = source["tags"];
+	        this.lanes = source["lanes"];
 	    }
 	}
 	export class MergeEvent {
 	    hash: string;
+	    kind?: string;
 	    sourceBranch: string;
 	    targetBranch: string;
 	    sourceHash: string;
@@ -55,6 +62,7 @@ export namespace gitgraph {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.hash = source["hash"];
+	        this.kind = source["kind"];
 	        this.sourceBranch = source["sourceBranch"];
 	        this.targetBranch = source["targetBranch"];
 	        this.sourceHash = source["sourceHash"];
