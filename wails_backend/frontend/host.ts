@@ -97,9 +97,14 @@ export const api = {
 
   envVars: {
     list: (appId: number) => call(() => Go.EnvVarsList(appId)),
-    create: (appId: number, body: { key: string; value?: string }) =>
-      call(() => Go.EnvVarsCreate(appId, body)),
-    update: (id: number, body: { key?: string; value?: string }) =>
+    create: (
+      appId: number,
+      body: { key: string; value?: string; include_in_ai?: boolean }
+    ) => call(() => Go.EnvVarsCreate(appId, body)),
+    update: (
+      id: number,
+      body: { key?: string; value?: string; include_in_ai?: boolean }
+    ) =>
       call(() => Go.EnvVarsUpdate(id, body)),
     delete: (id: number) => call(() => Go.EnvVarsDelete(id)),
     importEnv: (appId: number) => call(() => Go.EnvVarsImport(appId)),

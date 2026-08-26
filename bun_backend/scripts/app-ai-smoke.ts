@@ -41,6 +41,7 @@ const detail: ConfigSetDetail = {
       config_set_id: 7,
       key: "PORT",
       value: "3000",
+      include_in_ai: true,
       created_at: "",
       updated_at: "",
     },
@@ -179,6 +180,38 @@ check("line-ending-only template omitted", crlfOnly.files.length, 0)
 const agent = new AppAIAgentState(detail, ".")
 check("agent starts with no tool calls", agent.toolCalls.length, 0)
 check("list vars", agent.listVars(), [{ key: "PORT", value: "3000" }])
+
+const hiddenAgent = new AppAIAgentState(
+  {
+    ...detail,
+    env_vars: [
+      detail.env_vars[0]!,
+      {
+        id: 9,
+        config_set_id: 7,
+        key: "SECRET",
+        value: "shh",
+        include_in_ai: false,
+        created_at: "",
+        updated_at: "",
+      },
+    ],
+  },
+  "."
+)
+check("hidden omitted from list", hiddenAgent.listVars(), [
+  { key: "PORT", value: "3000" },
+])
+check("hidden get is not found", hiddenAgent.getVar("SECRET"), {
+  error: "env var not found: SECRET",
+})
+check("hidden update is not found", hiddenAgent.updateVar("SECRET", "x"), {
+  error: "env var not found: SECRET",
+})
+check("hidden delete is not found", hiddenAgent.deleteVar("SECRET"), {
+  error: "env var not found: SECRET",
+})
+check("hidden not in patch after update attempt", hiddenAgent.patch().env, undefined)
 agent.updateVar("PORT", "5173")
 agent.updateVar("HOST", "localhost")
 check("get after update", agent.getVar("PORT"), { key: "PORT", value: "5173" })

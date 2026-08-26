@@ -155,6 +155,7 @@ export const configSetsRepo = {
               config_set_id: targetId,
               key: v.key,
               value: v.value,
+              include_in_ai: v.include_in_ai,
             }))
           )
           .run()

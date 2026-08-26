@@ -18,6 +18,7 @@ You must NOT:
 - create, rename, or delete config sets
 - invent template file paths; only update templates list_templates returns
 - reformat template files unless the user asked
+- list, get, update, or delete env vars that list_vars does not return
 
 When updating run commands, send the full command list.
 Edits are staged for the user to review. Reply in short markdown (lists, inline code). No JSON. No headings.`
@@ -59,6 +60,7 @@ export class AppAIAgentState {
   private env = new Map<string, string>()
   private origEnv = new Map<string, string>()
   private deletedEnv = new Set<string>()
+  private hiddenEnv = new Set<string>()
   private templates = new Map<string, string>()
   private origTemplates = new Map<string, string>()
   private runMode: RunMode
@@ -70,7 +72,13 @@ export class AppAIAgentState {
 
   constructor(detail: ConfigSetDetail, projectPath: string) {
     this.projectPath = projectPath
-    for (const v of detail.env_vars) this.env.set(v.key, v.value)
+    for (const v of detail.env_vars) {
+      if (!v.include_in_ai) {
+        this.hiddenEnv.add(v.key)
+        continue
+      }
+      this.env.set(v.key, v.value)
+    }
     for (const t of detail.templates) this.templates.set(t.file_path, t.content)
     this.origEnv = new Map(this.env)
     this.origTemplates = new Map(this.templates)
@@ -116,13 +124,16 @@ export class AppAIAgentState {
   getVar(key: string) {
     const k = key.trim()
     if (!k) return { error: "key is required" }
-    if (!this.env.has(k)) return { error: `env var not found: ${k}` }
+    if (this.hiddenEnv.has(k) || !this.env.has(k)) {
+      return { error: `env var not found: ${k}` }
+    }
     return { key: k, value: this.env.get(k)! }
   }
 
   updateVar(key: string, value: string) {
     const k = key.trim()
     if (!k) return { error: "key is required" }
+    if (this.hiddenEnv.has(k)) return { error: `env var not found: ${k}` }
     this.deletedEnv.delete(k)
     this.env.set(k, value)
     return { key: k, value, ok: true }
@@ -131,6 +142,7 @@ export class AppAIAgentState {
   deleteVar(key: string) {
     const k = key.trim()
     if (!k) return { error: "key is required" }
+    if (this.hiddenEnv.has(k)) return { error: `env var not found: ${k}` }
     if (!this.env.has(k) && !this.origEnv.has(k)) {
       return { error: `env var not found: ${k}` }
     }
@@ -216,7 +228,7 @@ export function bindAppAITools(ai: Genkit, state: AppAIAgentState) {
     ai.dynamicTool(
       {
         name: "list_vars",
-        description: "List env var keys and values on the active config set.",
+        description: "List env var keys and values that are included in AI.",
         inputSchema: z.object({}),
       },
       async (input) => tap(state, "list_vars", input, { vars: state.listVars() })

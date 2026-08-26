@@ -1,4 +1,15 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Empty,
   EmptyDescription,
@@ -34,15 +45,21 @@ type EnvVarsPanelProps = {
 
 type EnvVarRowProps = {
   item: EnvVar
+  deleting: boolean
   onSaved: (item: EnvVar) => void
-  onDeleted: (id: number) => void
+  onRequestDelete: () => void
 }
 
-function EnvVarRow({ item, onSaved, onDeleted }: EnvVarRowProps) {
+function EnvVarRow({
+  item,
+  deleting,
+  onSaved,
+  onRequestDelete,
+}: EnvVarRowProps) {
   const [key, setKey] = useState(item.key)
   const [value, setValue] = useState(item.value)
   const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(false)
+  const [togglingAi, setTogglingAi] = useState(false)
 
   useEffect(() => {
     setKey(item.key)
@@ -74,16 +91,18 @@ function EnvVarRow({ item, onSaved, onDeleted }: EnvVarRowProps) {
     }
   }
 
-  async function handleDelete() {
-    setDeleting(true)
+  async function handleAiToggle(next: boolean) {
+    if (next === item.include_in_ai) return
+    setTogglingAi(true)
     try {
-      await api.envVars.delete(item.id)
-      onDeleted(item.id)
-      toast.success("Env var deleted")
+      const updated = await api.envVars.update(item.id, {
+        include_in_ai: next,
+      })
+      onSaved(updated)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete")
+      toast.error(err instanceof Error ? err.message : "Failed to update")
     } finally {
-      setDeleting(false)
+      setTogglingAi(false)
     }
   }
 
@@ -92,22 +111,34 @@ function EnvVarRow({ item, onSaved, onDeleted }: EnvVarRowProps) {
       <Input
         className="font-mono sm:max-w-48"
         value={key}
-        disabled={saving || deleting}
+        disabled={saving || deleting || togglingAi}
         onChange={(e) => setKey(e.target.value)}
         aria-label="Variable key"
       />
       <Input
         className="flex-1 font-mono"
         value={value}
-        disabled={saving || deleting}
+        disabled={saving || deleting || togglingAi}
         onChange={(e) => setValue(e.target.value)}
         aria-label="Variable value"
       />
-      <div className="flex gap-1">
+      <div className="flex items-center gap-1">
+        <label className="flex items-center gap-1.5 pr-1 text-xs text-muted-foreground">
+          <Checkbox
+            checked={item.include_in_ai}
+            disabled={togglingAi || saving || deleting}
+            onCheckedChange={(checked) =>
+              void handleAiToggle(checked === true)
+            }
+            aria-label="Include in AI"
+            title="Include this variable in AI chat"
+          />
+          AI
+        </label>
         <Button
           variant="ghost"
           size="icon"
-          disabled={!dirty || saving || deleting}
+          disabled={!dirty || saving || deleting || togglingAi}
           onClick={() => void handleSave()}
           aria-label={saving ? "Saving" : "Save"}
           title={saving ? "Saving…" : "Save"}
@@ -117,8 +148,8 @@ function EnvVarRow({ item, onSaved, onDeleted }: EnvVarRowProps) {
         <Button
           variant="ghost"
           size="icon"
-          disabled={deleting || saving}
-          onClick={() => void handleDelete()}
+          disabled={deleting || saving || togglingAi}
+          onClick={onRequestDelete}
           aria-label="Delete"
           title="Delete"
         >
@@ -138,6 +169,9 @@ export function EnvVarsPanel({ appId }: EnvVarsPanelProps) {
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [includeInAi, setIncludeInAi] = useState(true)
+  const [pendingDelete, setPendingDelete] = useState<EnvVar | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const filtered = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase()
@@ -162,6 +196,7 @@ export function EnvVarsPanel({ appId }: EnvVarsPanelProps) {
   }
 
   useEffect(() => {
+    setPendingDelete(null)
     void load()
   }, [appId])
 
@@ -175,17 +210,34 @@ export function EnvVarsPanel({ appId }: EnvVarsPanelProps) {
       const created = await api.envVars.create(appId, {
         key: key.trim(),
         value,
+        include_in_ai: includeInAi,
       })
       setVars((prev) =>
         [...prev, created].sort((a, b) => a.key.localeCompare(b.key))
       )
       setKey("")
       setValue("")
+      setIncludeInAi(true)
       toast.success("Env var added")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add")
     } finally {
       setAdding(false)
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if (!pendingDelete) return
+    setDeleting(true)
+    try {
+      await api.envVars.delete(pendingDelete.id)
+      setVars((prev) => prev.filter((v) => v.id !== pendingDelete.id))
+      setPendingDelete(null)
+      toast.success("Env var deleted")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -244,6 +296,18 @@ export function EnvVarsPanel({ appId }: EnvVarsPanelProps) {
                 if (e.key === "Enter") void handleAdd()
               }}
             />
+          </Field>
+          <Field className="w-auto">
+            <FieldLabel htmlFor="env-include-ai">AI</FieldLabel>
+            <div className="flex h-8 items-center">
+              <Checkbox
+                id="env-include-ai"
+                checked={includeInAi}
+                onCheckedChange={(checked) => setIncludeInAi(checked === true)}
+                aria-label="Include in AI"
+                title="Include this variable in AI chat"
+              />
+            </div>
           </Field>
           <div className="flex gap-2">
             <Button disabled={adding} onClick={() => void handleAdd()}>
@@ -315,6 +379,7 @@ export function EnvVarsPanel({ appId }: EnvVarsPanelProps) {
                 <EnvVarRow
                   key={item.id}
                   item={item}
+                  deleting={deleting && pendingDelete?.id === item.id}
                   onSaved={(updated) =>
                     setVars((prev) =>
                       prev
@@ -322,15 +387,43 @@ export function EnvVarsPanel({ appId }: EnvVarsPanelProps) {
                         .sort((a, b) => a.key.localeCompare(b.key))
                     )
                   }
-                  onDeleted={(id) =>
-                    setVars((prev) => prev.filter((v) => v.id !== id))
-                  }
+                  onRequestDelete={() => setPendingDelete(item)}
                 />
               ))}
             </div>
           )}
         </div>
       )}
+
+      <AlertDialog
+        open={!!pendingDelete}
+        onOpenChange={(next) => {
+          if (!next && !deleting) setPendingDelete(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete env var?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes “{pendingDelete?.key}” from the active
+              config set.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleting}
+              onClick={(e) => {
+                e.preventDefault()
+                void handleConfirmDelete()
+              }}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -32,6 +32,7 @@ type EnvVar struct {
 	ConfigSetID int64  `json:"config_set_id"`
 	Key         string `json:"key"`
 	Value       string `json:"value"`
+	IncludeInAI bool   `json:"include_in_ai"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }
@@ -226,13 +227,15 @@ type ConfigSetActivateResult struct {
 }
 
 type EnvVarCreateInput struct {
-	Key   string  `json:"key"`
-	Value *string `json:"value"`
+	Key         string  `json:"key"`
+	Value       *string `json:"value"`
+	IncludeInAI *bool   `json:"include_in_ai"`
 }
 
 type EnvVarUpdateInput struct {
-	Key   *string `json:"key"`
-	Value *string `json:"value"`
+	Key         *string `json:"key"`
+	Value       *string `json:"value"`
+	IncludeInAI *bool   `json:"include_in_ai"`
 }
 
 type TemplateCreateInput struct {

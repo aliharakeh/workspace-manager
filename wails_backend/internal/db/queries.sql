@@ -87,11 +87,11 @@ SELECT * FROM env_vars WHERE id = ?;
 SELECT * FROM env_vars WHERE config_set_id = ? AND key = ?;
 
 -- name: CreateEnvVar :one
-INSERT INTO env_vars (config_set_id, key, value) VALUES (?, ?, ?) RETURNING *;
+INSERT INTO env_vars (config_set_id, key, value, include_in_ai) VALUES (?, ?, ?, ?) RETURNING *;
 
 -- name: UpdateEnvVar :one
 UPDATE env_vars
-SET key = ?, value = ?, updated_at = datetime('now')
+SET key = ?, value = ?, include_in_ai = ?, updated_at = datetime('now')
 WHERE id = ?
 RETURNING *;
 

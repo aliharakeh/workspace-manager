@@ -56,7 +56,7 @@ export async function handleEnvVars(
 
     const set = configSetsRepo.resolveActive(appId)
     const imported = entries.map((e) =>
-      envVarsRepo.upsertByKey(set.id, e.key, e.value)
+      envVarsRepo.upsertByKey(set.id, e.key, e.value, false)
     )
 
     // Auto-create (or refresh) a template for the picked file so each value
@@ -119,13 +119,18 @@ export async function handleEnvVars(
     }
 
     if (req.method === "POST") {
-      const body = await readJson<{ key?: string; value?: string }>(req)
+      const body = await readJson<{
+        key?: string
+        value?: string
+        include_in_ai?: boolean
+      }>(req)
       if (!body?.key?.trim()) return error("key is required")
       try {
         const envVar = envVarsRepo.create({
           config_set_id: set.id,
           key: body.key.trim(),
           value: body.value ?? "",
+          include_in_ai: body.include_in_ai ?? true,
         })
         return json(envVar, { status: 201 })
       } catch {
@@ -143,7 +148,11 @@ export async function handleEnvVars(
   if (!id) return error("Invalid env var id")
 
   if (req.method === "PATCH") {
-    const body = await readJson<{ key?: string; value?: string }>(req)
+    const body = await readJson<{
+      key?: string
+      value?: string
+      include_in_ai?: boolean
+    }>(req)
     if (!body) return error("Invalid JSON body")
     if (body.key !== undefined && !body.key.trim()) {
       return error("key cannot be empty")
@@ -152,6 +161,7 @@ export async function handleEnvVars(
       const envVar = envVarsRepo.update(id, {
         key: body.key?.trim(),
         value: body.value,
+        include_in_ai: body.include_in_ai,
       })
       if (!envVar) return notFound("Env var not found")
       return json(envVar)

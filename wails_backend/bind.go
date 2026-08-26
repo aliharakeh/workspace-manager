@@ -276,11 +276,17 @@ func (a *App) EnvVarsCreate(appID int64, body types.EnvVarCreateInput) (types.En
 	if body.Value != nil {
 		value = *body.Value
 	}
-	row, err := a.db.CreateEnvVar(a.ctx, db.CreateEnvVarParams{ConfigSetID: set.ID, Key: key, Value: value})
+	include := true
+	if body.IncludeInAI != nil {
+		include = *body.IncludeInAI
+	}
+	row, err := a.db.CreateEnvVar(a.ctx, db.CreateEnvVarParams{
+		ConfigSetID: set.ID, Key: key, Value: value, IncludeInAi: db.BoolInt(include),
+	})
 	if err != nil {
 		return types.EnvVar{}, db.UniqueErr(err, "Env var key already exists for this config set")
 	}
-	return types.EnvVar{ID: row.ID, ConfigSetID: row.ConfigSetID, Key: row.Key, Value: row.Value, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}, nil
+	return db.EnvVarFrom(row), nil
 }
 
 func (a *App) EnvVarsUpdate(id int64, body types.EnvVarUpdateInput) (types.EnvVar, error) {
@@ -288,7 +294,7 @@ func (a *App) EnvVarsUpdate(id int64, body types.EnvVarUpdateInput) (types.EnvVa
 	if err != nil {
 		return types.EnvVar{}, fmt.Errorf("Env var not found")
 	}
-	key, value := existing.Key, existing.Value
+	key, value, include := existing.Key, existing.Value, existing.IncludeInAi != 0
 	if body.Key != nil {
 		key = strings.TrimSpace(*body.Key)
 		if key == "" {
@@ -298,11 +304,16 @@ func (a *App) EnvVarsUpdate(id int64, body types.EnvVarUpdateInput) (types.EnvVa
 	if body.Value != nil {
 		value = *body.Value
 	}
-	row, err := a.db.UpdateEnvVar(a.ctx, db.UpdateEnvVarParams{Key: key, Value: value, ID: id})
+	if body.IncludeInAI != nil {
+		include = *body.IncludeInAI
+	}
+	row, err := a.db.UpdateEnvVar(a.ctx, db.UpdateEnvVarParams{
+		Key: key, Value: value, IncludeInAi: db.BoolInt(include), ID: id,
+	})
 	if err != nil {
 		return types.EnvVar{}, db.UniqueErr(err, "Env var key already exists for this config set")
 	}
-	return types.EnvVar{ID: row.ID, ConfigSetID: row.ConfigSetID, Key: row.Key, Value: row.Value, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}, nil
+	return db.EnvVarFrom(row), nil
 }
 
 func (a *App) EnvVarsDelete(id int64) (types.Ok, error) {
@@ -345,7 +356,7 @@ func (a *App) EnvVarsImport(appID int64) (types.ImportEnvResult, error) {
 		return types.ImportEnvResult{}, err
 	}
 	for _, e := range entries {
-		_, _ = a.db.UpsertEnvVarByKey(a.ctx, set.ID, e.Key, e.Value)
+		_, _ = a.db.UpsertEnvVarByKey(a.ctx, set.ID, e.Key, e.Value, false)
 	}
 	result := types.ImportEnvResult{Path: picked.Path, Format: format.Label, Imported: len(entries)}
 	vars, err := a.db.ListEnvVarsT(a.ctx, set.ID)

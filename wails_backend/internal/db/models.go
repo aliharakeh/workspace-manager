@@ -33,6 +33,7 @@ type EnvVar struct {
 	ConfigSetID int64  `json:"config_set_id"`
 	Key         string `json:"key"`
 	Value       string `json:"value"`
+	IncludeInAi int64  `json:"include_in_ai"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }

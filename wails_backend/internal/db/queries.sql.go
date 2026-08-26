@@ -59,23 +59,30 @@ func (q *Queries) CreateConfigSet(ctx context.Context, arg CreateConfigSetParams
 }
 
 const createEnvVar = `-- name: CreateEnvVar :one
-INSERT INTO env_vars (config_set_id, key, value) VALUES (?, ?, ?) RETURNING id, config_set_id, "key", value, created_at, updated_at
+INSERT INTO env_vars (config_set_id, key, value, include_in_ai) VALUES (?, ?, ?, ?) RETURNING id, config_set_id, "key", value, include_in_ai, created_at, updated_at
 `
 
 type CreateEnvVarParams struct {
 	ConfigSetID int64  `json:"config_set_id"`
 	Key         string `json:"key"`
 	Value       string `json:"value"`
+	IncludeInAi int64  `json:"include_in_ai"`
 }
 
 func (q *Queries) CreateEnvVar(ctx context.Context, arg CreateEnvVarParams) (EnvVar, error) {
-	row := q.db.QueryRowContext(ctx, createEnvVar, arg.ConfigSetID, arg.Key, arg.Value)
+	row := q.db.QueryRowContext(ctx, createEnvVar,
+		arg.ConfigSetID,
+		arg.Key,
+		arg.Value,
+		arg.IncludeInAi,
+	)
 	var i EnvVar
 	err := row.Scan(
 		&i.ID,
 		&i.ConfigSetID,
 		&i.Key,
 		&i.Value,
+		&i.IncludeInAi,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -382,7 +389,7 @@ func (q *Queries) GetConfigSet(ctx context.Context, id int64) (ConfigSet, error)
 }
 
 const getEnvVar = `-- name: GetEnvVar :one
-SELECT id, config_set_id, "key", value, created_at, updated_at FROM env_vars WHERE id = ?
+SELECT id, config_set_id, "key", value, include_in_ai, created_at, updated_at FROM env_vars WHERE id = ?
 `
 
 func (q *Queries) GetEnvVar(ctx context.Context, id int64) (EnvVar, error) {
@@ -393,6 +400,7 @@ func (q *Queries) GetEnvVar(ctx context.Context, id int64) (EnvVar, error) {
 		&i.ConfigSetID,
 		&i.Key,
 		&i.Value,
+		&i.IncludeInAi,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -400,7 +408,7 @@ func (q *Queries) GetEnvVar(ctx context.Context, id int64) (EnvVar, error) {
 }
 
 const getEnvVarByKey = `-- name: GetEnvVarByKey :one
-SELECT id, config_set_id, "key", value, created_at, updated_at FROM env_vars WHERE config_set_id = ? AND key = ?
+SELECT id, config_set_id, "key", value, include_in_ai, created_at, updated_at FROM env_vars WHERE config_set_id = ? AND key = ?
 `
 
 type GetEnvVarByKeyParams struct {
@@ -416,6 +424,7 @@ func (q *Queries) GetEnvVarByKey(ctx context.Context, arg GetEnvVarByKeyParams) 
 		&i.ConfigSetID,
 		&i.Key,
 		&i.Value,
+		&i.IncludeInAi,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -619,7 +628,7 @@ func (q *Queries) ListConfigSetsByApp(ctx context.Context, appID int64) ([]Confi
 }
 
 const listEnvVarsByConfigSet = `-- name: ListEnvVarsByConfigSet :many
-SELECT id, config_set_id, "key", value, created_at, updated_at FROM env_vars WHERE config_set_id = ? ORDER BY key COLLATE NOCASE ASC
+SELECT id, config_set_id, "key", value, include_in_ai, created_at, updated_at FROM env_vars WHERE config_set_id = ? ORDER BY key COLLATE NOCASE ASC
 `
 
 // env_vars (db/env-vars.ts)
@@ -637,6 +646,7 @@ func (q *Queries) ListEnvVarsByConfigSet(ctx context.Context, configSetID int64)
 			&i.ConfigSetID,
 			&i.Key,
 			&i.Value,
+			&i.IncludeInAi,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -937,25 +947,32 @@ func (q *Queries) UpdateConfigSet(ctx context.Context, arg UpdateConfigSetParams
 
 const updateEnvVar = `-- name: UpdateEnvVar :one
 UPDATE env_vars
-SET key = ?, value = ?, updated_at = datetime('now')
+SET key = ?, value = ?, include_in_ai = ?, updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, config_set_id, "key", value, created_at, updated_at
+RETURNING id, config_set_id, "key", value, include_in_ai, created_at, updated_at
 `
 
 type UpdateEnvVarParams struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-	ID    int64  `json:"id"`
+	Key         string `json:"key"`
+	Value       string `json:"value"`
+	IncludeInAi int64  `json:"include_in_ai"`
+	ID          int64  `json:"id"`
 }
 
 func (q *Queries) UpdateEnvVar(ctx context.Context, arg UpdateEnvVarParams) (EnvVar, error) {
-	row := q.db.QueryRowContext(ctx, updateEnvVar, arg.Key, arg.Value, arg.ID)
+	row := q.db.QueryRowContext(ctx, updateEnvVar,
+		arg.Key,
+		arg.Value,
+		arg.IncludeInAi,
+		arg.ID,
+	)
 	var i EnvVar
 	err := row.Scan(
 		&i.ID,
 		&i.ConfigSetID,
 		&i.Key,
 		&i.Value,
+		&i.IncludeInAi,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

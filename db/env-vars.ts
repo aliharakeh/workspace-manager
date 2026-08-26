@@ -21,6 +21,7 @@ export const envVarsRepo = {
     config_set_id: number
     key: string
     value?: string
+    include_in_ai?: boolean
   }): EnvVar {
     return db
       .insert(envVars)
@@ -28,6 +29,7 @@ export const envVarsRepo = {
         config_set_id: input.config_set_id,
         key: input.key,
         value: input.value ?? "",
+        include_in_ai: input.include_in_ai ?? true,
       })
       .returning()
       .get()
@@ -35,7 +37,7 @@ export const envVarsRepo = {
 
   update(
     id: number,
-    input: { key?: string; value?: string }
+    input: { key?: string; value?: string; include_in_ai?: boolean }
   ): EnvVar | null {
     if (!this.get(id)) return null
     return db
@@ -43,6 +45,9 @@ export const envVarsRepo = {
       .set({
         ...(input.key !== undefined ? { key: input.key } : {}),
         ...(input.value !== undefined ? { value: input.value } : {}),
+        ...(input.include_in_ai !== undefined
+          ? { include_in_ai: input.include_in_ai }
+          : {}),
         updated_at: sql`(datetime('now'))`,
       })
       .where(eq(envVars.id, id))
@@ -55,10 +60,27 @@ export const envVarsRepo = {
   },
 
   /** Insert a var, or update the value if the key already exists. */
-  upsertByKey(configSetId: number, key: string, value: string): EnvVar {
+  upsertByKey(
+    configSetId: number,
+    key: string,
+    value: string,
+    include_in_ai?: boolean
+  ): EnvVar {
     const existing = this.listByConfigSet(configSetId).find((v) => v.key === key)
-    if (existing) return this.update(existing.id, { value }) ?? existing
-    return this.create({ config_set_id: configSetId, key, value })
+    if (existing) {
+      return (
+        this.update(existing.id, {
+          value,
+          ...(include_in_ai !== undefined ? { include_in_ai } : {}),
+        }) ?? existing
+      )
+    }
+    return this.create({
+      config_set_id: configSetId,
+      key,
+      value,
+      include_in_ai,
+    })
   },
 
   toRecord(configSetId: number): Record<string, string> {

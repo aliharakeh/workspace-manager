@@ -13,6 +13,16 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 type DraftCommand = {
   key: string
@@ -31,6 +41,7 @@ export function RunConfigPanel({ appId }: RunConfigPanelProps) {
   const deferredQuery = useDeferredValue(query)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [pendingRemove, setPendingRemove] = useState<DraftCommand | null>(null)
 
   const filtered = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase()
@@ -43,6 +54,7 @@ export function RunConfigPanel({ appId }: RunConfigPanelProps) {
 
   useEffect(() => {
     let cancelled = false
+    setPendingRemove(null)
     ;(async () => {
       setLoading(true)
       try {
@@ -102,6 +114,9 @@ export function RunConfigPanel({ appId }: RunConfigPanelProps) {
   if (loading) {
     return <p className="text-sm text-muted-foreground">Loading…</p>
   }
+
+  const pendingName =
+    pendingRemove?.label.trim() || pendingRemove?.command.trim()
 
   return (
     <div className="flex flex-col gap-4">
@@ -195,9 +210,8 @@ export function RunConfigPanel({ appId }: RunConfigPanelProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() =>
-                  setCommands((prev) => prev.filter((c) => c.key !== cmd.key))
-                }
+                onClick={() => setPendingRemove(cmd)}
+                aria-label="Remove command"
               >
                 <Trash2Icon />
               </Button>
@@ -227,6 +241,39 @@ export function RunConfigPanel({ appId }: RunConfigPanelProps) {
           {saving ? "Saving…" : "Save run config"}
         </Button>
       </div>
+
+      <AlertDialog
+        open={!!pendingRemove}
+        onOpenChange={(next) => {
+          if (!next) setPendingRemove(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove command?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingName
+                ? `This removes “${pendingName}” from the run config. Save to keep the change.`
+                : "This removes the command from the run config. Save to keep the change."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (!pendingRemove) return
+                setCommands((prev) =>
+                  prev.filter((c) => c.key !== pendingRemove.key)
+                )
+                setPendingRemove(null)
+              }}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -11,7 +11,7 @@ import (
 func TestAppAIStatePatch(t *testing.T) {
 	label := "web"
 	detail := types.ConfigSetDetail{
-		EnvVars:   []types.EnvVar{{Key: "PORT", Value: "3000"}},
+		EnvVars:   []types.EnvVar{{Key: "PORT", Value: "3000", IncludeInAI: true}},
 		Templates: []types.Template{{FilePath: ".env", Content: "PORT=3000"}},
 		RunConfig: &types.RunConfig{
 			Mode:     "parallel",
@@ -36,6 +36,28 @@ func TestAppAIStatePatch(t *testing.T) {
 	}
 	if err, _ := s.updateTemplate("nope", "x")["error"].(string); err == "" {
 		t.Fatal("expected unknown template error")
+	}
+}
+
+func TestAppAIStateHidesExcludedEnv(t *testing.T) {
+	s := newAppAIState(types.ConfigSetDetail{
+		EnvVars: []types.EnvVar{
+			{Key: "PORT", Value: "3000", IncludeInAI: true},
+			{Key: "SECRET", Value: "shh", IncludeInAI: false},
+		},
+	}, ".")
+	listed := s.listVars()["vars"].([]envPair)
+	if len(listed) != 1 || listed[0].Key != "PORT" {
+		t.Fatalf("list: %+v", listed)
+	}
+	if _, ok := s.getVar("SECRET")["error"]; !ok {
+		t.Fatal("expected get SECRET error")
+	}
+	if _, ok := s.updateVar("SECRET", "x")["error"]; !ok {
+		t.Fatal("expected update SECRET error")
+	}
+	if p := s.patch(); p.Env != nil {
+		t.Fatalf("patch should be empty: %+v", p.Env)
 	}
 }
 

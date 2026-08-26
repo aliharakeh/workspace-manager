@@ -64,6 +64,9 @@ export const envVars = sqliteTable(
       .references(() => configSets.id, { onDelete: "cascade" }),
     key: text("key").notNull(),
     value: text("value").notNull().default(""),
+    include_in_ai: integer("include_in_ai", { mode: "boolean" })
+      .notNull()
+      .default(true),
     ...timestamps,
   },
   (t) => [

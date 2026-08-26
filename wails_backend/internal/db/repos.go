@@ -40,10 +40,11 @@ func configSetFrom(row ConfigSet) types.ConfigSet {
 	}
 }
 
-func envVarFrom(row EnvVar) types.EnvVar {
+func EnvVarFrom(row EnvVar) types.EnvVar {
 	return types.EnvVar{
 		ID: row.ID, ConfigSetID: row.ConfigSetID, Key: row.Key, Value: row.Value,
-		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+		IncludeInAI: row.IncludeInAi != 0,
+		CreatedAt:   row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
 }
 
@@ -370,7 +371,7 @@ func (d *DB) ListEnvVarsT(ctx context.Context, configSetID int64) ([]types.EnvVa
 	}
 	out := make([]types.EnvVar, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, envVarFrom(r))
+		out = append(out, EnvVarFrom(r))
 	}
 	return out, nil
 }
@@ -387,23 +388,34 @@ func (d *DB) EnvToRecord(ctx context.Context, configSetID int64) (map[string]str
 	return out, nil
 }
 
-func (d *DB) UpsertEnvVarByKey(ctx context.Context, configSetID int64, key, value string) (types.EnvVar, error) {
+func BoolInt(v bool) int64 {
+	if v {
+		return 1
+	}
+	return 0
+}
+
+func (d *DB) UpsertEnvVarByKey(ctx context.Context, configSetID int64, key, value string, includeInAI bool) (types.EnvVar, error) {
 	existing, err := d.GetEnvVarByKey(ctx, GetEnvVarByKeyParams{ConfigSetID: configSetID, Key: key})
 	if err == nil {
-		row, err := d.UpdateEnvVar(ctx, UpdateEnvVarParams{Key: existing.Key, Value: value, ID: existing.ID})
+		row, err := d.UpdateEnvVar(ctx, UpdateEnvVarParams{
+			Key: existing.Key, Value: value, IncludeInAi: BoolInt(includeInAI), ID: existing.ID,
+		})
 		if err != nil {
 			return types.EnvVar{}, err
 		}
-		return envVarFrom(row), nil
+		return EnvVarFrom(row), nil
 	}
 	if err != sql.ErrNoRows {
 		return types.EnvVar{}, err
 	}
-	row, err := d.CreateEnvVar(ctx, CreateEnvVarParams{ConfigSetID: configSetID, Key: key, Value: value})
+	row, err := d.CreateEnvVar(ctx, CreateEnvVarParams{
+		ConfigSetID: configSetID, Key: key, Value: value, IncludeInAi: BoolInt(includeInAI),
+	})
 	if err != nil {
 		return types.EnvVar{}, err
 	}
-	return envVarFrom(row), nil
+	return EnvVarFrom(row), nil
 }
 
 func (d *DB) ListTemplatesT(ctx context.Context, configSetID int64) ([]types.Template, error) {
@@ -556,7 +568,9 @@ func (d *DB) CopyFrom(ctx context.Context, sourceID, targetID int64, parts *type
 		}
 		for _, v := range sourceEnv {
 			if envAll || containsStr(envItems, v.Key) {
-				if _, err := d.CreateEnvVar(ctx, CreateEnvVarParams{ConfigSetID: targetID, Key: v.Key, Value: v.Value}); err != nil {
+				if _, err := d.CreateEnvVar(ctx, CreateEnvVarParams{
+					ConfigSetID: targetID, Key: v.Key, Value: v.Value, IncludeInAi: BoolInt(v.IncludeInAI),
+				}); err != nil {
 					return err
 				}
 			}

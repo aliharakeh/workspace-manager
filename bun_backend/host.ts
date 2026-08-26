@@ -244,12 +244,18 @@ export const api = {
 
   envVars: {
     list: (appId: number) => request<EnvVar[]>(`/api/apps/${appId}/env-vars`),
-    create: (appId: number, body: { key: string; value?: string }) =>
+    create: (
+      appId: number,
+      body: { key: string; value?: string; include_in_ai?: boolean }
+    ) =>
       request<EnvVar>(`/api/apps/${appId}/env-vars`, {
         method: "POST",
         body: JSON.stringify(body),
       }),
-    update: (id: number, body: { key?: string; value?: string }) =>
+    update: (
+      id: number,
+      body: { key?: string; value?: string; include_in_ai?: boolean }
+    ) =>
       request<EnvVar>(`/api/env-vars/${id}`, {
         method: "PATCH",
         body: JSON.stringify(body),

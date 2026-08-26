@@ -789,6 +789,7 @@ export namespace types {
 	    config_set_id: number;
 	    key: string;
 	    value: string;
+	    include_in_ai: boolean;
 	    created_at: string;
 	    updated_at: string;
 	
@@ -802,6 +803,7 @@ export namespace types {
 	        this.config_set_id = source["config_set_id"];
 	        this.key = source["key"];
 	        this.value = source["value"];
+	        this.include_in_ai = source["include_in_ai"];
 	        this.created_at = source["created_at"];
 	        this.updated_at = source["updated_at"];
 	    }
@@ -867,6 +869,7 @@ export namespace types {
 	export class EnvVarCreateInput {
 	    key: string;
 	    value?: string;
+	    include_in_ai?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new EnvVarCreateInput(source);
@@ -876,11 +879,13 @@ export namespace types {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.key = source["key"];
 	        this.value = source["value"];
+	        this.include_in_ai = source["include_in_ai"];
 	    }
 	}
 	export class EnvVarUpdateInput {
 	    key?: string;
 	    value?: string;
+	    include_in_ai?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new EnvVarUpdateInput(source);
@@ -890,6 +895,7 @@ export namespace types {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.key = source["key"];
 	        this.value = source["value"];
+	        this.include_in_ai = source["include_in_ai"];
 	    }
 	}
 	export class FsPickFileInput {

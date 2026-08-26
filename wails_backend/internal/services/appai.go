@@ -25,6 +25,7 @@ You must NOT:
 - create, rename, or delete config sets
 - invent template file paths; only update templates list_templates returns
 - reformat template files unless the user asked
+- list, get, update, or delete env vars that list_vars does not return
 
 When updating run commands, send the full command list.
 Edits are staged for the user to review. Reply in short markdown (lists, inline code). No JSON. No headings.`
@@ -82,6 +83,7 @@ type appAIState struct {
 	env         map[string]string
 	origEnv     map[string]string
 	deletedEnv  map[string]bool
+	hiddenEnv   map[string]bool
 	templates   map[string]string
 	origTmpl    map[string]string
 	runMode     string
@@ -107,11 +109,16 @@ func newAppAIState(detail types.ConfigSetDetail, projectPath string) *appAIState
 		env:         map[string]string{},
 		origEnv:     map[string]string{},
 		deletedEnv:  map[string]bool{},
+		hiddenEnv:   map[string]bool{},
 		templates:   map[string]string{},
 		origTmpl:    map[string]string{},
 		runMode:     "parallel",
 	}
 	for _, v := range detail.EnvVars {
+		if !v.IncludeInAI {
+			s.hiddenEnv[v.Key] = true
+			continue
+		}
 		s.env[v.Key] = v.Value
 		s.origEnv[v.Key] = v.Value
 	}
@@ -175,6 +182,9 @@ func (s *appAIState) getVar(key string) map[string]any {
 	if k == "" {
 		return map[string]any{"error": "key is required"}
 	}
+	if s.hiddenEnv[k] {
+		return map[string]any{"error": "env var not found: " + k}
+	}
 	v, ok := s.env[k]
 	if !ok {
 		return map[string]any{"error": "env var not found: " + k}
@@ -187,6 +197,9 @@ func (s *appAIState) updateVar(key, value string) map[string]any {
 	if k == "" {
 		return map[string]any{"error": "key is required"}
 	}
+	if s.hiddenEnv[k] {
+		return map[string]any{"error": "env var not found: " + k}
+	}
 	delete(s.deletedEnv, k)
 	s.env[k] = value
 	return map[string]any{"ok": true, "key": k, "value": value}
@@ -196,6 +209,9 @@ func (s *appAIState) deleteVar(key string) map[string]any {
 	k := strings.TrimSpace(key)
 	if k == "" {
 		return map[string]any{"error": "key is required"}
+	}
+	if s.hiddenEnv[k] {
+		return map[string]any{"error": "env var not found: " + k}
 	}
 	_, live := s.env[k]
 	_, orig := s.origEnv[k]
@@ -297,7 +313,7 @@ func (s *appAIState) readFile(path string) map[string]any {
 
 func (s *appAIState) tools() []ai.ToolRef {
 	return []ai.ToolRef{
-		ai.NewTool("list_vars", "List env var keys and values on the active config set.",
+		ai.NewTool("list_vars", "List env var keys and values that are included in AI.",
 			func(_ *ai.ToolContext, in emptyIn) (any, error) {
 				return s.record("list_vars", in, s.listVars()), nil
 			}),

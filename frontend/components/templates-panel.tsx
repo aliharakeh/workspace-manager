@@ -36,6 +36,16 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 type TemplatesPanelProps = {
   appId: number
@@ -66,6 +76,7 @@ function TemplateItem({
   const [saving, setSaving] = useState(false)
   const [reloading, setReloading] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const dirty = content !== template.content
 
   useEffect(() => {
@@ -103,11 +114,12 @@ function TemplateItem({
     }
   }
 
-  async function handleDelete() {
+  async function handleConfirmDelete() {
     setDeleting(true)
     try {
       await api.templates.delete(template.id)
       onDeleted(template.id)
+      setConfirmOpen(false)
       toast.success("Template deleted")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete")
@@ -197,12 +209,41 @@ function TemplateItem({
           <Button
             variant="destructive"
             disabled={deleting}
-            onClick={() => void handleDelete()}
+            onClick={() => setConfirmOpen(true)}
           >
             <Trash2Icon data-icon="inline-start" />
-            {deleting ? "Deleting…" : "Delete"}
+            Delete
           </Button>
         </div>
+        <AlertDialog
+          open={confirmOpen}
+          onOpenChange={(next) => {
+            if (!next && !deleting) setConfirmOpen(false)
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete template?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This removes the template for “{fileName(template.file_path)}”.
+                The project file on disk is not deleted.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                disabled={deleting}
+                onClick={(e) => {
+                  e.preventDefault()
+                  void handleConfirmDelete()
+                }}
+              >
+                {deleting ? "Deleting…" : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </AccordionContent>
     </AccordionItem>
   )

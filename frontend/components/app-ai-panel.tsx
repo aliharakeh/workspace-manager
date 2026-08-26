@@ -28,6 +28,16 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Toggle } from "@/components/ui/toggle"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Empty,
   EmptyDescription,
   EmptyHeader,
@@ -254,13 +264,14 @@ async function applyAppAIPatch(
 
   for (const key of patch.env?.delete ?? []) {
     const existing = varsByKey.get(key)
-    if (!existing) continue
+    if (!existing || !existing.include_in_ai) continue
     await api.envVars.delete(existing.id)
     varsByKey.delete(key)
   }
 
   for (const item of patch.env?.upsert ?? []) {
     const existing = varsByKey.get(item.key)
+    if (existing && !existing.include_in_ai) continue
     if (existing) {
       if (existing.value === item.value) continue
       await api.envVars.update(existing.id, { value: item.value })
@@ -295,6 +306,7 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
   const [input, setInput] = useState("")
   const [sending, setSending] = useState(false)
   const [applyingId, setApplyingId] = useState<number | null>(null)
+  const [confirmClear, setConfirmClear] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const setId = app.active_config_set_id
   const setName = app.active_config_set_name
@@ -425,6 +437,13 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
     )
   }
 
+  function handleConfirmClear() {
+    setMessages([])
+    setInput("")
+    setApplyingId(null)
+    setConfirmClear(false)
+  }
+
   if (setId == null) {
     return (
       <Empty className="border">
@@ -455,11 +474,7 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
           variant="outline"
           size="sm"
           disabled={messages.length === 0 && !input && !sending}
-          onClick={() => {
-            setMessages([])
-            setInput("")
-            setApplyingId(null)
-          }}
+          onClick={() => setConfirmClear(true)}
         >
           Clear
         </Button>
@@ -554,6 +569,24 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
           {sending ? "Working…" : "Ask AI"}
         </Button>
       </div>
+
+      <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the conversation and any unapplied edits in this
+              panel. Applied changes stay on the config set.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={handleConfirmClear}>
+              Clear
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

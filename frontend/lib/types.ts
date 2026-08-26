@@ -47,6 +47,7 @@ export type EnvVar = {
   config_set_id: number
   key: string
   value: string
+  include_in_ai: boolean
   created_at: string
   updated_at: string
 }
