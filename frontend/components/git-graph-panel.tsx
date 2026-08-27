@@ -577,7 +577,7 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
                     </Button>
                   </div>
                 </div>
-                <div className="flex max-h-52 flex-col gap-1 overflow-y-auto rounded-lg border p-1">
+                <div className="thin-scrollbar flex max-h-52 flex-col gap-1 overflow-y-auto rounded-lg border p-1">
                   {branches.length === 0 ? (
                     <p className="px-2 py-3 text-xs text-muted-foreground">No branches loaded</p>
                   ) : (
@@ -652,7 +652,7 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
                       None
                     </Button>
                   </div>
-                  <div className="flex max-h-40 flex-col gap-1 overflow-y-auto rounded-lg border p-1">
+                  <div className="thin-scrollbar flex max-h-40 flex-col gap-1 overflow-y-auto rounded-lg border p-1">
                     {shownAuthors.length === 0 ? (
                       <p className="px-2 py-3 text-xs text-muted-foreground">No authors</p>
                     ) : (

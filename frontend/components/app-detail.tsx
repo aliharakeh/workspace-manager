@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react"
-import { toast } from "sonner"
-import { CodeIcon, ExternalLinkIcon, PencilIcon, Trash2Icon } from "lucide-react"
-import { api, handleReadyUrlClick } from "@/lib/api"
+import { ExternalLinkIcon, PencilIcon, Trash2Icon } from "lucide-react"
+import { handleReadyUrlClick } from "@/lib/api"
 import type { App, StatusEvent } from "@/lib/types"
 import type { LogLine } from "@/hooks/use-runner-logs"
 import type { AppTab } from "@/lib/routes"
@@ -88,25 +87,6 @@ export function AppDetail({
           ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              void api.apps
-                .openInEditor(app.id)
-                .then(() => toast.success("Opened in editor"))
-                .catch((err) =>
-                  toast.error(
-                    err instanceof Error
-                      ? err.message
-                      : "Failed to open in editor"
-                  )
-                )
-            }}
-          >
-            <CodeIcon data-icon="inline-start" />
-            Editor
-          </Button>
           <Button variant="outline" size="sm" onClick={onEdit}>
             <PencilIcon data-icon="inline-start" />
             Edit
