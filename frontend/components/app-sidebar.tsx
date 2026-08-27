@@ -12,11 +12,11 @@ import type { App, StatusEvent, Workspace } from "@/lib/types"
 import { AppRunControls, AppStatusDot } from "@/components/app-run-controls"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { useTheme } from "@/components/theme-provider"
-import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupAction,
   SidebarGroupContent,
@@ -84,26 +84,6 @@ export function AppSidebar({
               Local workspaces
             </span>
           </div>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="shrink-0"
-            title={dark ? "Switch to light theme" : "Switch to dark theme"}
-            onClick={toggleTheme}
-          >
-            {dark ? <SunIcon /> : <MoonIcon />}
-            <span className="sr-only">Toggle theme</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="shrink-0"
-            title="Settings"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <SettingsIcon />
-            <span className="sr-only">Settings</span>
-          </Button>
         </div>
       </SidebarHeader>
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
@@ -228,6 +208,28 @@ export function AppSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter className="border-t">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip={dark ? "Switch to light theme" : "Switch to dark theme"}
+              onClick={toggleTheme}
+            >
+              {dark ? <SunIcon /> : <MoonIcon />}
+              <span>Theme</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip="Settings"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <SettingsIcon />
+              <span>Settings</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )
