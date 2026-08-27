@@ -23,21 +23,13 @@ You must NOT:
 When updating run commands, send the full command list.
 Edits are staged for the user to review. Reply in short markdown (lists, inline code). No JSON. No headings.`
 
-export function buildAppAIAgentPrompt(input: {
+/** Stable per app/set context appended to the system prompt (not the user turn). */
+export function buildAppAIAgentContext(input: {
   appName: string
   projectPath: string
   configSetId: number
   configSetName: string
-  history: AppAIChatTurn[]
-  instruction: string
 }): string {
-  const historyBlock =
-    input.history.length > 0
-      ? input.history
-          .map((t) => `${t.role === "user" ? "User" : "Assistant"}: ${t.text}`)
-          .join("\n")
-      : "(none)"
-
   return `App: ${input.appName}
 Project path: ${input.projectPath}
 
@@ -45,13 +37,44 @@ Active config set (ONLY edit this one):
 id: ${input.configSetId}
 name: ${input.configSetName}
 
-Use tools to read or edit env vars, templates, and run config. Use search_files and read_file when you need project files.
+Use tools to read or edit env vars, templates, and run config. Use search_files and read_file when you need project files.`
+}
 
-Prior conversation:
-${historyBlock}
+/** Map UI turns to Genkit multiturn messages (assistant → model; tools → request/response). */
+export function appAIHistoryMessages(history: AppAIChatTurn[]) {
+  const out: {
+    role: "user" | "model" | "tool"
+    content: Record<string, unknown>[]
+  }[] = []
 
-User instruction:
-${input.instruction.trim()}`
+  for (const t of history) {
+    if (t.role === "user") {
+      if (t.text.trim()) {
+        out.push({ role: "user", content: [{ text: t.text }] })
+      }
+      continue
+    }
+
+    const tools = t.tools ?? []
+    if (tools.length > 0) {
+      out.push({
+        role: "model",
+        content: tools.map((c, i) => ({
+          toolRequest: { name: c.name, input: c.input, ref: String(i) },
+        })),
+      })
+      out.push({
+        role: "tool",
+        content: tools.map((c, i) => ({
+          toolResponse: { name: c.name, output: c.output, ref: String(i) },
+        })),
+      })
+    }
+    if (t.text.trim()) {
+      out.push({ role: "model", content: [{ text: t.text }] })
+    }
+  }
+  return out
 }
 
 type RunCmd = { label: string | null; command: string }

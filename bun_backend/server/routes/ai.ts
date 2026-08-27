@@ -91,7 +91,11 @@ export async function handleAI(
     const body = await readJson<{
       appId?: number
       configSetId?: number
-      history?: { role?: string; text?: string }[]
+      history?: {
+        role?: string
+        text?: string
+        tools?: { name?: string; input?: unknown; output?: unknown }[]
+      }[]
       instruction?: string
     }>(req)
     if (!body?.appId || !body.configSetId) {
@@ -103,11 +107,24 @@ export async function handleAI(
     const instruction = body.instruction
     const history = (body.history ?? [])
       .filter(
-        (t): t is { role: "user" | "assistant"; text: string } =>
+        (t): t is {
+          role: "user" | "assistant"
+          text: string
+          tools?: { name: string; input: unknown; output: unknown }[]
+        } =>
           (t.role === "user" || t.role === "assistant") &&
           typeof t.text === "string"
       )
-      .map((t) => ({ role: t.role, text: t.text }))
+      .map((t) => ({
+        role: t.role,
+        text: t.text,
+        tools: (t.tools ?? [])
+          .filter(
+            (c): c is { name: string; input: unknown; output: unknown } =>
+              typeof c?.name === "string" && c.name.length > 0
+          )
+          .map((c) => ({ name: c.name, input: c.input, output: c.output })),
+      }))
     try {
       const wantsStream = req.headers
         .get("accept")

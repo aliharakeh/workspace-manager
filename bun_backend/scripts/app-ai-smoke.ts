@@ -14,7 +14,11 @@ import {
 import { mkdirSync, writeFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { spawnSync } from "node:child_process"
-import { AppAIAgentState } from "../server/lib/app-ai-agent"
+import {
+  AppAIAgentState,
+  appAIHistoryMessages,
+  buildAppAIAgentContext,
+} from "../server/lib/app-ai-agent"
 import { globToRegExp, searchProjectFiles } from "../server/lib/gitignore-glob"
 
 let failures = 0
@@ -129,9 +133,48 @@ check("prompt names active set only", prompt.includes("name: local") && prompt.i
 check("prompt omits env dump", prompt.includes("PORT=3000"), false)
 check("prompt omits template dump", prompt.includes("file_path: .env"), false)
 check("prompt omits run dump", prompt.includes("npm run dev"), false)
-check("prompt includes prior chat", prompt.includes("what is PORT?"), true)
+check("prompt omits prior chat text", prompt.includes("what is PORT?"), false)
 check("prompt includes instruction", prompt.includes("set PORT to 5173"), true)
 check("system forbids other sets", APP_AI_SYSTEM_PROMPT.includes("any other config set"), true)
+
+const ctx = buildAppAIAgentContext({
+  appName: "shop",
+  projectPath: "/src/shop",
+  configSetId: 7,
+  configSetName: "local",
+})
+check("agent context names set", ctx.includes("name: local") && ctx.includes("id: 7"), true)
+const histMsgs = appAIHistoryMessages([
+  { role: "user", text: "what is PORT?" },
+  {
+    role: "assistant",
+    text: "PORT is 3000",
+    tools: [
+      {
+        name: "get_var",
+        input: { key: "PORT" },
+        output: { value: "3000" },
+      },
+    ],
+  },
+])
+check("history maps roles with tools", histMsgs.map((m) => m.role), [
+  "user",
+  "model",
+  "tool",
+  "model",
+])
+check(
+  "history tool request name",
+  (histMsgs[1]?.content[0] as { toolRequest?: { name?: string } })?.toolRequest
+    ?.name,
+  "get_var"
+)
+check(
+  "history assistant text preserved",
+  (histMsgs[3]?.content[0] as { text?: string })?.text,
+  "PORT is 3000"
+)
 
 const envDiff = buildAppAIDiff(detail, {
   message: "x",

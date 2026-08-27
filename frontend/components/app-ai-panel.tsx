@@ -50,7 +50,6 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group"
-import { ScrollArea } from "@/components/ui/scroll-area"
 
 type AppAIPanelProps = {
   app: App
@@ -165,7 +164,7 @@ function SplitDiff({
   }, [file.path, file.oldText, file.newText, lang, theme, ignoreWhitespace])
 
   return (
-    <div className="overflow-auto rounded-md border">
+    <div className="thin-scrollbar max-h-80 overflow-auto rounded-md border">
       <DiffView
         diffFile={diffFile}
         diffViewMode={DiffModeEnum.SplitGitHub}
@@ -308,12 +307,18 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
   const [applyingId, setApplyingId] = useState<number | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const setId = app.active_config_set_id
   const setName = app.active_config_set_name
 
   useEffect(() => {
     if (!sending) inputRef.current?.focus()
   }, [sending])
+
+  useEffect(() => {
+    const el = listRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [messages, sending])
 
   async function handleSend() {
     const instruction = input.trim()
@@ -328,7 +333,11 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
       role: "user",
       text: instruction,
     }
-    const history = messages.map(({ role, text }) => ({ role, text }))
+    const history = messages.map(({ role, text, tools }) => ({
+      role,
+      text,
+      ...(tools?.length ? { tools } : {}),
+    }))
     setMessages((prev) => [...prev, userMsg])
     setInput("")
     setSending(true)
@@ -480,7 +489,10 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
         </Button>
       </div>
 
-      <ScrollArea className="min-h-0 flex-1 overflow-hidden rounded-lg border">
+      <div
+        ref={listRef}
+        className="thin-scrollbar min-h-0 flex-1 overflow-y-auto rounded-lg border"
+      >
         <div className="flex flex-col gap-3 p-3">
           {messages.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -528,7 +540,7 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
             <p className="text-xs text-muted-foreground">Working…</p>
           ) : null}
         </div>
-      </ScrollArea>
+      </div>
 
       <div className="flex shrink-0 items-center gap-2">
         <InputGroup className="flex-1">

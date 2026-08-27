@@ -364,23 +364,47 @@ func (s *appAIState) tools() []ai.ToolRef {
 	}
 }
 
-func buildAppAIAgentPrompt(appName, projectPath, setName string, setID int64, history []types.AppAIChatTurn, instruction string) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "App: %s\nProject path: %s\n\nActive config set (ONLY edit this one):\nid: %d\nname: %s\n\n", appName, projectPath, setID, setName)
-	b.WriteString("Use tools to read or edit env vars, templates, and run config. Use search_files and read_file when you need project files.\n\nPrior conversation:\n")
-	if len(history) == 0 {
-		b.WriteString("(none)\n")
-	} else {
-		for _, t := range history {
-			who := "Assistant"
-			if t.Role == "user" {
-				who = "User"
+func buildAppAIAgentContext(appName, projectPath, setName string, setID int64) string {
+	return fmt.Sprintf(
+		"App: %s\nProject path: %s\n\nActive config set (ONLY edit this one):\nid: %d\nname: %s\n\nUse tools to read or edit env vars, templates, and run config. Use search_files and read_file when you need project files.",
+		appName, projectPath, setID, setName,
+	)
+}
+
+func appAIHistoryMessages(history []types.AppAIChatTurn) []*ai.Message {
+	out := make([]*ai.Message, 0, len(history))
+	for _, t := range history {
+		text := strings.TrimSpace(t.Text)
+		if t.Role == "user" {
+			if text != "" {
+				out = append(out, ai.NewUserTextMessage(text))
 			}
-			fmt.Fprintf(&b, "%s: %s\n", who, t.Text)
+			continue
+		}
+		if len(t.Tools) > 0 {
+			reqs := make([]*ai.Part, 0, len(t.Tools))
+			resps := make([]*ai.Part, 0, len(t.Tools))
+			for i, c := range t.Tools {
+				ref := fmt.Sprintf("%d", i)
+				reqs = append(reqs, ai.NewToolRequestPart(&ai.ToolRequest{
+					Name:  c.Name,
+					Input: c.Input,
+					Ref:   ref,
+				}))
+				resps = append(resps, ai.NewToolResponsePart(&ai.ToolResponse{
+					Name:   c.Name,
+					Output: c.Output,
+					Ref:    ref,
+				}))
+			}
+			out = append(out, ai.NewModelMessage(reqs...))
+			out = append(out, ai.NewMessage(ai.RoleTool, nil, resps...))
+		}
+		if text != "" {
+			out = append(out, ai.NewModelTextMessage(text))
 		}
 	}
-	fmt.Fprintf(&b, "\nUser instruction:\n%s", strings.TrimSpace(instruction))
-	return b.String()
+	return out
 }
 
 func patchHasEdits(p types.AppAIPatch) bool {
@@ -427,14 +451,15 @@ func AppChatAI(ctx context.Context, d *db.DB, appID, setID int64, history []type
 		return types.AppAIChatResult{}, err
 	}
 
-	prompt := buildAppAIAgentPrompt(app.Name, app.ProjectPath, set.Name, set.ID, history, instruction)
+	prompt := strings.TrimSpace(instruction)
+	system := appAIAgentSystem + "\n\n" + buildAppAIAgentContext(app.Name, app.ProjectPath, set.Name, set.ID)
 	var onText func(string)
 	if emit != nil {
 		onText = func(t string) {
 			emit(types.AppAIStreamEvent{Type: "text", Text: t})
 		}
 	}
-	text, err := runGeneration(ctx, conn.Provider, conn, appAIAgentSystem, prompt, state.tools(), onText)
+	text, err := runGeneration(ctx, conn.Provider, conn, system, appAIHistoryMessages(history), prompt, state.tools(), onText)
 	if err != nil {
 		return types.AppAIChatResult{}, err
 	}

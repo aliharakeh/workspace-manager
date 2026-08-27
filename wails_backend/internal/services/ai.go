@@ -131,7 +131,9 @@ func buildAI(ctx context.Context, provider string, cfg AIProviderConfig) (g *gen
 
 // runGeneration sends one request through the (cached) runtime for the given
 // connection. Both ChatAI and TestAI go through here.
-func runGeneration(ctx context.Context, provider string, cfg AIProviderConfig, system, prompt string, tools []ai.ToolRef, onText func(string)) (string, error) {
+// history sits between system and the new user prompt (Genkit multiturn), so
+// prior turns are not rewritten into the prompt text.
+func runGeneration(ctx context.Context, provider string, cfg AIProviderConfig, system string, history []*ai.Message, prompt string, tools []ai.ToolRef, onText func(string)) (string, error) {
 	resolved, err := ResolveAIConfig(provider, cfg)
 	if err != nil {
 		return "", err
@@ -147,10 +149,12 @@ func runGeneration(ctx context.Context, provider string, cfg AIProviderConfig, s
 		ai.WithModelName(model),
 	}
 	if strings.TrimSpace(system) != "" {
-		opts = append(opts, ai.WithMessages(ai.NewSystemTextMessage(system), ai.NewUserTextMessage(prompt)))
-	} else {
-		opts = append(opts, ai.WithMessages(ai.NewUserTextMessage(prompt)))
+		opts = append(opts, ai.WithSystem(system))
 	}
+	if len(history) > 0 {
+		opts = append(opts, ai.WithMessages(history...))
+	}
+	opts = append(opts, ai.WithPrompt(prompt))
 	if len(tools) > 0 {
 		opts = append(opts, ai.WithTools(tools...), ai.WithMaxTurns(16))
 	}
@@ -186,7 +190,7 @@ func ChatAI(ctx context.Context, system, prompt string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return runGeneration(ctx, conn.Provider, conn, system, prompt, nil, nil)
+	return runGeneration(ctx, conn.Provider, conn, system, nil, prompt, nil, nil)
 }
 
 // TestAI tries one minimal generation against an unsaved connection payload.
@@ -196,5 +200,5 @@ func TestAI(ctx context.Context, provider string, cfg AIProviderConfig) (string,
 	if provider == "" {
 		return "", fmt.Errorf("provider is required")
 	}
-	return runGeneration(ctx, provider, cfg, "", "Reply with exactly: OK", nil, nil)
+	return runGeneration(ctx, provider, cfg, "", nil, "Reply with exactly: OK", nil, nil)
 }

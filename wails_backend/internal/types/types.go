@@ -334,8 +334,9 @@ type AIChatResult struct {
 }
 
 type AppAIChatTurn struct {
-	Role string `json:"role"`
-	Text string `json:"text"`
+	Role  string          `json:"role"`
+	Text  string          `json:"text"`
+	Tools []AppAIToolCall `json:"tools,omitempty"`
 }
 
 type AppAIEnvUpsert struct {

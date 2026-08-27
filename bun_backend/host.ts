@@ -390,7 +390,11 @@ export const api = {
       body: {
         appId: number
         configSetId: number
-        history?: { role: "user" | "assistant"; text: string }[]
+        history?: {
+          role: "user" | "assistant"
+          text: string
+          tools?: { name: string; input: unknown; output: unknown }[]
+        }[]
         instruction: string
       },
       onEvent?: (ev: AppAIStreamEvent) => void

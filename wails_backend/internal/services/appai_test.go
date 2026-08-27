@@ -86,4 +86,33 @@ func TestAppAIStateReadFile(t *testing.T) {
 	}
 }
 
+func TestAppAIHistoryMessages(t *testing.T) {
+	msgs := appAIHistoryMessages([]types.AppAIChatTurn{
+		{Role: "user", Text: "what is PORT?"},
+		{
+			Role: "assistant",
+			Text: "PORT is 3000",
+			Tools: []types.AppAIToolCall{
+				{Name: "get_var", Input: map[string]any{"key": "PORT"}, Output: map[string]any{"value": "3000"}},
+			},
+		},
+		{Role: "user", Text: "  "},
+	})
+	if len(msgs) != 4 {
+		t.Fatalf("len=%d", len(msgs))
+	}
+	if msgs[0].Role != "user" || msgs[0].Text() != "what is PORT?" {
+		t.Fatalf("user: %+v", msgs[0])
+	}
+	if msgs[1].Role != "model" || !msgs[1].Content[0].IsToolRequest() {
+		t.Fatalf("tool request: %+v", msgs[1])
+	}
+	if msgs[2].Role != "tool" || !msgs[2].Content[0].IsToolResponse() {
+		t.Fatalf("tool response: %+v", msgs[2])
+	}
+	if msgs[3].Role != "model" || msgs[3].Text() != "PORT is 3000" {
+		t.Fatalf("assistant text: %+v", msgs[3])
+	}
+}
+
 func ptr(s string) *string { return &s }

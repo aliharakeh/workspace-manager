@@ -15,6 +15,8 @@ Reply in short markdown (lists, inline code). No JSON. No headings. Edits are ap
 export type AppAIChatTurn = {
   role: "user" | "assistant"
   text: string
+  /** Prior tool calls for this assistant turn (replayed as Genkit tool messages). */
+  tools?: AppAIToolCall[]
 }
 
 export type AppAIToolCall = {
@@ -70,24 +72,17 @@ export function buildAppAIPrompt({
   appName,
   projectPath,
   configSet,
-  history,
   instruction,
 }: {
   appName: string
   projectPath: string
   configSet: ConfigSetDetail
-  history: AppAIChatTurn[]
+  /** @deprecated prior turns are Genkit messages, not prompt text */
+  history?: AppAIChatTurn[]
   instruction: string
   /** @deprecated templates are fetched via tools */
   templatePaths?: string[]
 }): string {
-  const historyBlock =
-    history.length > 0
-      ? history
-          .map((t) => `${t.role === "user" ? "User" : "Assistant"}: ${t.text}`)
-          .join("\n")
-      : "(none)"
-
   return `App: ${appName}
 Project path: ${projectPath}
 
@@ -95,8 +90,7 @@ Active config set (ONLY edit this one):
 id: ${configSet.id}
 name: ${configSet.name}
 
-Prior conversation:
-${historyBlock}
+Use tools to read or edit env vars, templates, and run config. Use search_files and read_file when you need project files.
 
 User instruction:
 ${instruction.trim()}`

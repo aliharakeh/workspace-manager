@@ -16,8 +16,9 @@ import { patchHasEdits } from "@/lib/app-ai"
 import {
   APP_AI_AGENT_SYSTEM,
   AppAIAgentState,
+  appAIHistoryMessages,
   bindAppAITools,
-  buildAppAIAgentPrompt,
+  buildAppAIAgentContext,
 } from "../lib/app-ai-agent"
 import {
   activeAIConnection,
@@ -93,6 +94,8 @@ function ensureAI(cfg: AIProviderConfig): { ai: Genkit; model: string } {
 type GenerateOpts = {
   system?: string
   prompt?: string
+  /** Prior turns as Genkit messages (not embedded in prompt text). */
+  messages?: ReturnType<typeof appAIHistoryMessages>
   tools?: ReturnType<typeof bindAppAITools>
   onText?: (text: string) => void
 }
@@ -109,6 +112,7 @@ async function runGeneration(
     model,
     prompt: opts.prompt ?? "",
     ...(opts.system ? { system: opts.system } : {}),
+    ...(opts.messages?.length ? { messages: opts.messages } : {}),
     ...(opts.tools?.length ? { tools: opts.tools, maxTurns: 16 } : {}),
     ...(resolved.provider !== "google" && resolved.temperature != null
       ? { config: { temperature: resolved.temperature } }
@@ -174,16 +178,18 @@ export async function aiAppChat(
 
   const resolved = resolveAIConfig(conn)
   const { ai } = ensureAI(resolved)
+  const context = buildAppAIAgentContext({
+    appName: app.name,
+    projectPath: app.project_path,
+    configSetId: set.id,
+    configSetName: set.name,
+  })
   const text = await runGeneration(conn, {
-    system: APP_AI_AGENT_SYSTEM,
-    prompt: buildAppAIAgentPrompt({
-      appName: app.name,
-      projectPath: app.project_path,
-      configSetId: set.id,
-      configSetName: set.name,
-      history: input.history ?? [],
-      instruction,
-    }),
+    // System + app/set context stay stable across turns so providers can
+    // cache the prefix; prior turns go in `messages`, not the user prompt.
+    system: `${APP_AI_AGENT_SYSTEM}\n\n${context}`,
+    messages: appAIHistoryMessages(input.history ?? []),
+    prompt: instruction,
     tools: bindAppAITools(ai, state),
     onText: onEvent ? (delta) => onEvent({ type: "text", text: delta }) : undefined,
   })
