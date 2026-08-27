@@ -199,8 +199,9 @@ const hiddenAgent = new AppAIAgentState(
   },
   "."
 )
-check("hidden omitted from list", hiddenAgent.listVars(), [
+check("hidden listed without value", hiddenAgent.listVars(), [
   { key: "PORT", value: "3000" },
+  { key: "SECRET" },
 ])
 check("hidden get is not found", hiddenAgent.getVar("SECRET"), {
   error: "env var not found: SECRET",

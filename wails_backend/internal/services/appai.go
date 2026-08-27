@@ -25,7 +25,7 @@ You must NOT:
 - create, rename, or delete config sets
 - invent template file paths; only update templates list_templates returns
 - reformat template files unless the user asked
-- list, get, update, or delete env vars that list_vars does not return
+- get, update, or delete env vars that list_vars returns without a value (AI-excluded)
 
 When updating run commands, send the full command list.
 Edits are staged for the user to review. Reply in short markdown (lists, inline code). No JSON. No headings.`
@@ -69,8 +69,8 @@ type filePathIn struct {
 }
 
 type envPair struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
+	Key   string  `json:"key"`
+	Value *string `json:"value,omitempty"`
 }
 
 type runCmd struct {
@@ -170,9 +170,13 @@ func (s *appAIState) patch() types.AppAIPatch {
 }
 
 func (s *appAIState) listVars() map[string]any {
-	vars := make([]envPair, 0, len(s.env))
+	vars := make([]envPair, 0, len(s.env)+len(s.hiddenEnv))
 	for k, v := range s.env {
-		vars = append(vars, envPair{Key: k, Value: v})
+		val := v
+		vars = append(vars, envPair{Key: k, Value: &val})
+	}
+	for k := range s.hiddenEnv {
+		vars = append(vars, envPair{Key: k})
 	}
 	return map[string]any{"vars": vars}
 }
@@ -313,7 +317,7 @@ func (s *appAIState) readFile(path string) map[string]any {
 
 func (s *appAIState) tools() []ai.ToolRef {
 	return []ai.ToolRef{
-		ai.NewTool("list_vars", "List env var keys and values that are included in AI.",
+		ai.NewTool("list_vars", "List all env var keys; values are omitted for AI-excluded vars.",
 			func(_ *ai.ToolContext, in emptyIn) (any, error) {
 				return s.record("list_vars", in, s.listVars()), nil
 			}),

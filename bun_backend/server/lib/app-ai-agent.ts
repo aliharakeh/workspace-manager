@@ -18,7 +18,7 @@ You must NOT:
 - create, rename, or delete config sets
 - invent template file paths; only update templates list_templates returns
 - reformat template files unless the user asked
-- list, get, update, or delete env vars that list_vars does not return
+- get, update, or delete env vars that list_vars returns without a value (AI-excluded)
 
 When updating run commands, send the full command list.
 Edits are staged for the user to review. Reply in short markdown (lists, inline code). No JSON. No headings.`
@@ -118,7 +118,11 @@ export class AppAIAgentState {
   }
 
   listVars() {
-    return [...this.env.entries()].map(([key, value]) => ({ key, value }))
+    const vars: { key: string; value?: string }[] = [
+      ...this.env.entries(),
+    ].map(([key, value]) => ({ key, value }))
+    for (const key of this.hiddenEnv) vars.push({ key })
+    return vars
   }
 
   getVar(key: string) {
@@ -228,7 +232,8 @@ export function bindAppAITools(ai: Genkit, state: AppAIAgentState) {
     ai.dynamicTool(
       {
         name: "list_vars",
-        description: "List env var keys and values that are included in AI.",
+        description:
+          "List all env var keys; values are omitted for AI-excluded vars.",
         inputSchema: z.object({}),
       },
       async (input) => tap(state, "list_vars", input, { vars: state.listVars() })

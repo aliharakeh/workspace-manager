@@ -47,8 +47,18 @@ func TestAppAIStateHidesExcludedEnv(t *testing.T) {
 		},
 	}, ".")
 	listed := s.listVars()["vars"].([]envPair)
-	if len(listed) != 1 || listed[0].Key != "PORT" {
+	if len(listed) != 2 {
 		t.Fatalf("list: %+v", listed)
+	}
+	byKey := map[string]envPair{}
+	for _, p := range listed {
+		byKey[p.Key] = p
+	}
+	if byKey["PORT"].Value == nil || *byKey["PORT"].Value != "3000" {
+		t.Fatalf("PORT should include value: %+v", byKey["PORT"])
+	}
+	if byKey["SECRET"].Value != nil {
+		t.Fatalf("SECRET should omit value: %+v", byKey["SECRET"])
 	}
 	if _, ok := s.getVar("SECRET")["error"]; !ok {
 		t.Fatal("expected get SECRET error")
