@@ -950,7 +950,11 @@ func (a *App) GitGraphLoad(appID int64, body types.GitGraphLoadInput) (gitgraph.
 	if err != nil {
 		return gitgraph.RepoGraph{}, fmt.Errorf("invalid until: %w", err)
 	}
-	g, err := gitgraph.LoadGraphAt(path, body.Branches, from, to)
+	only := body.Branches
+	if len(only) == 0 {
+		only = nil
+	}
+	g, err := gitgraph.LoadGraphAt(path, only, from, to)
 	if err != nil {
 		return gitgraph.RepoGraph{}, err
 	}

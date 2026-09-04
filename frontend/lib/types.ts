@@ -200,6 +200,7 @@ export type GitCommitNode = {
   isMerge: boolean
   tags?: string[]
   lanes?: string[]
+  sourceBranch?: string
 }
 
 export type GitMergeEvent = {

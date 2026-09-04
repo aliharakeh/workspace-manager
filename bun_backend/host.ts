@@ -196,7 +196,7 @@ export const api = {
         request<{ ok: true }>(`/api/apps/${id}/git/fetch`, { method: "POST" }),
       load: (
         id: number,
-        body: { branches: string[]; since?: string; until?: string }
+        body: { branches?: string[]; since?: string; until?: string }
       ) =>
         request<GitRepoGraph>(`/api/apps/${id}/git/graph`, {
           method: "POST",

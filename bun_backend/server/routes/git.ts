@@ -75,7 +75,7 @@ export async function handleGit(
     try {
       const since = parseISO(body?.since ?? "")
       const until = parseISO(body?.until ?? "")
-      const only = body?.branches ?? null
+      const only = body?.branches?.length ? body.branches : null
       return json(await loadGraphAt(resolved.path, only, since, until))
     } catch (err) {
       return error(err instanceof Error ? err.message : "Failed to load graph")

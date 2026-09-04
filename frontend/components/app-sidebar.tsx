@@ -12,7 +12,6 @@ import type { App, StatusEvent, Workspace } from "@/lib/types"
 import { AppRunControls, AppStatusDot } from "@/components/app-run-controls"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { useTheme } from "@/components/theme-provider"
-import { cn } from "@/lib/utils"
 import {
   Sidebar,
   SidebarContent,
@@ -158,25 +157,19 @@ export function AppSidebar({
                             const running = !!statusByAppId[app.id]?.running
                             return (
                               <SidebarMenuSubItem key={app.id}>
-                                <SidebarMenuSubButton
-                                  isActive={selectedAppId === app.id}
-                                  className="pr-16"
-                                  onClick={() =>
-                                    onSelectApp(workspace.id, app.id)
-                                  }
-                                >
-                                  <AppStatusDot running={running} />
-                                  <span>{app.name}</span>
-                                </SidebarMenuSubButton>
-                                <div
-                                  className={cn(
-                                    "absolute top-0.5 right-0 transition-opacity",
-                                    running || selectedAppId === app.id
-                                      ? "opacity-100"
-                                      : "opacity-0 group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:opacity-100"
-                                  )}
-                                >
+                                <div className="flex w-full min-w-0 items-center justify-between gap-1">
+                                  <SidebarMenuSubButton
+                                    isActive={selectedAppId === app.id}
+                                    className="min-w-0 flex-1"
+                                    onClick={() =>
+                                      onSelectApp(workspace.id, app.id)
+                                    }
+                                  >
+                                    <AppStatusDot running={running} />
+                                    <span className="truncate">{app.name}</span>
+                                  </SidebarMenuSubButton>
                                   <AppRunControls
+                                    className="shrink-0"
                                     appId={app.id}
                                     running={running}
                                     onStatus={onStatus}

@@ -63,11 +63,11 @@ export const api = {
       fetch: (id: number) => call(() => Go.GitGraphFetch(id)),
       load: (
         id: number,
-        body: { branches: string[]; since?: string; until?: string }
+        body: { branches?: string[]; since?: string; until?: string }
       ) =>
         call(() =>
           Go.GitGraphLoad(id, {
-            branches: body.branches,
+            branches: body.branches ?? [],
             since: body.since ?? "",
             until: body.until ?? "",
           })

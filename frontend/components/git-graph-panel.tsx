@@ -5,6 +5,7 @@ import {
   CloudDownloadIcon,
   ExternalLinkIcon,
   GitMergeIcon,
+  BugIcon,
   Loader2Icon,
   RefreshCwIcon,
   SearchIcon,
@@ -14,10 +15,12 @@ import { toast } from "sonner"
 import { api, handleReadyUrlClick } from "@/lib/api"
 import type {
   GitBranchInfo,
+  GitCommitNode,
   GitRemoteInfo,
   GitRepoGraph,
 } from "@/lib/types"
-import { TimelineGraph, laneName, type GitInspect } from "@/components/timeline-graph"
+import { TimelineGraph, branchColor, laneName, type GitInspect } from "@/components/timeline-graph"
+import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -44,7 +47,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 
 const DEFAULT_BRANCHES = 10
-const CHUNK_MONTHS = 5
+const CHUNK_MONTHS = 3
 
 function authorName(c: { author?: string }) {
   return c.author || "(unknown)"
@@ -95,10 +98,6 @@ function mergeGraphs(prev: GitRepoGraph | null, chunk: GitRepoGraph | null) {
     if (!bseen.has(b)) branches.push(b)
   }
   return { ...prev, branches, commits, merges }
-}
-
-function branchKey(names: string[]) {
-  return [...names].sort().join("\n")
 }
 
 function chunkEmpty(chunk: GitRepoGraph | null) {
@@ -154,6 +153,10 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
   const [msgQuery, setMsgQuery] = useState("")
   const [hitIndex, setHitIndex] = useState(-1)
   const [jumpTo, setJumpTo] = useState<{ hash: string; n: number } | null>(null)
+  const [colW, setColW] = useState(200)
+  const [hideLongSelfEdge, setHideLongSelfEdge] = useState(true)
+  const [collapseDay, setCollapseDay] = useState(true)
+  const [showDebug, setShowDebug] = useState(false)
   const [authorQuery, setAuthorQuery] = useState("")
   const [focused, setFocused] = useState("")
   const [selected, setSelected] = useState<GitInspect | null>(null)
@@ -166,23 +169,17 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
   const [authors, setAuthors] = useState(() => new Set<string>())
   const [historyLeft, setHistoryLeft] = useState(0)
   const [viewGen, setViewGen] = useState(0)
-  const visibleRef = useRef(visible)
-  visibleRef.current = visible
   const loadSeq = useRef(0)
-  const reloadTimer = useRef(0)
   const loadedRef = useRef({
     from: 0,
     to: 0,
-    branches: "",
     pastDone: false,
     futureDone: false,
-    emptyPast: 0,
-    emptyFuture: 0,
   })
   const wantRef = useRef({ from: 0, to: 0 })
   const filling = useRef(false)
 
-  async function load({ reset = true, branches }: { reset?: boolean; branches?: string[] } = {}) {
+  async function load({ reset = true }: { reset?: boolean } = {}) {
     const gen = ++loadSeq.current
     setLoading(true)
     setError("")
@@ -191,18 +188,13 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
       setFocused("")
     }
     try {
-      let selectedBranches = branches
       if (reset) {
         const list = await api.apps.git.branches(appId)
         if (gen !== loadSeq.current) return
         setCatalog(list)
-        const names = lanesByUpdated(list)
-        selectedBranches = names.slice(0, DEFAULT_BRANCHES)
-        setVisible(new Set(selectedBranches))
+        setVisible(new Set(lanesByUpdated(list).slice(0, DEFAULT_BRANCHES)))
         setMsgQuery("")
         setAuthorQuery("")
-      } else if (!selectedBranches) {
-        selectedBranches = [...visibleRef.current]
       }
       const now = Date.now()
       const viewTo = now
@@ -214,20 +206,11 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
         wantRef.current = { from: viewFrom, to: viewTo }
       }
       const data = await api.apps.git.load(appId, {
-        branches: selectedBranches,
         since: iso(from),
         until: iso(to),
       })
       if (gen !== loadSeq.current) return
-      loadedRef.current = {
-        from,
-        to,
-        branches: branchKey(selectedBranches),
-        pastDone: false,
-        futureDone: false,
-        emptyPast: 0,
-        emptyFuture: 0,
-      }
+      loadedRef.current = { from, to, pastDone: false, futureDone: false }
       setGraph(data)
       try {
         setRemote(await api.apps.git.remote(appId))
@@ -260,17 +243,12 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
     void load({ reset: true })
     return () => {
       loadSeq.current++
-      window.clearTimeout(reloadTimer.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when the app folder changes
   }, [appId, projectPath])
 
-  function applyVisible(next: Set<string>, { debounce = false } = {}) {
+  function applyVisible(next: Set<string>) {
     setVisible(next)
-    window.clearTimeout(reloadTimer.current)
-    const run = () => load({ reset: false, branches: [...next] })
-    if (debounce) reloadTimer.current = window.setTimeout(run, 150)
-    else void run()
   }
 
   function addAuthors(commits: { author?: string }[] | undefined) {
@@ -283,10 +261,7 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
 
   async function ensureRange(viewFrom: number, viewTo: number) {
     if (filling.current) return
-    const selectedBranches = [...visibleRef.current]
-    const key = branchKey(selectedBranches)
     const loaded = loadedRef.current
-    if (loaded.branches && loaded.branches !== key) return
     wantRef.current = { from: viewFrom, to: viewTo }
     const left = monthQueue(loaded, wantRef.current)
     if (viewCovered(loaded, viewFrom, viewTo)) {
@@ -302,24 +277,22 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
         const want = wantRef.current
         const queued = monthQueue(cur, want)
         setHistoryLeft(queued)
-        if (cur.branches !== key || viewCovered(cur, want.from, want.to) || !queued) break
-        if (!selectedBranches.length) break
+        if (viewCovered(cur, want.from, want.to) || !queued) break
         if (cur.from > want.from && !cur.pastDone) {
           const until = cur.from
           const since = addMonths(until, -CHUNK_MONTHS)
           const chunk = await api.apps.git.load(appId, {
-            branches: selectedBranches,
             since: iso(since),
             until: iso(until),
           })
           if (gen !== loadSeq.current) return
           const empty = chunkEmpty(chunk)
-          const emptyPast = empty ? cur.emptyPast + 1 : 0
           if (!empty) {
             setGraph((prev) => mergeGraphs(prev, chunk))
             addAuthors(chunk?.commits)
           }
-          loadedRef.current = { ...loadedRef.current, from: since, emptyPast, pastDone: emptyPast >= 3 }
+          loadedRef.current = { ...loadedRef.current, from: since, pastDone: empty }
+          setAxisRange([since, loadedRef.current.to])
           continue
         }
         if (cur.to < want.to && !cur.futureDone) {
@@ -330,18 +303,17 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
             break
           }
           const chunk = await api.apps.git.load(appId, {
-            branches: selectedBranches,
             since: iso(since),
             until: iso(until),
           })
           if (gen !== loadSeq.current) return
           const empty = chunkEmpty(chunk)
-          const emptyFuture = empty ? cur.emptyFuture + 1 : 0
           if (!empty) {
             setGraph((prev) => mergeGraphs(prev, chunk))
             addAuthors(chunk?.commits)
           }
-          loadedRef.current = { ...loadedRef.current, to: until, emptyFuture, futureDone: emptyFuture >= 3 }
+          loadedRef.current = { ...loadedRef.current, to: until, futureDone: empty }
+          setAxisRange([loadedRef.current.from, until])
           continue
         }
         break
@@ -358,15 +330,7 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
 
   function refreshLogs() {
     filling.current = false
-    loadedRef.current = {
-      from: 0,
-      to: 0,
-      branches: "",
-      pastDone: false,
-      futureDone: false,
-      emptyPast: 0,
-      emptyFuture: 0,
-    }
+    loadedRef.current = { from: 0, to: 0, pastDone: false, futureDone: false }
     setViewGen((n) => n + 1)
     void load({ reset: false })
   }
@@ -428,9 +392,19 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
         targetBranch: laneName(m.targetBranch),
       }))
       .filter((m) => {
-        if (m.kind === "branch") return shown.has(m.sourceBranch) && shown.has(m.targetBranch)
-        return shown.has(m.targetBranch) || shown.has(m.sourceBranch)
+        const hidden = (n: string) => rankedBranches.includes(n) && !shown.has(n)
+        if (hidden(m.targetBranch) || hidden(m.sourceBranch)) return false
+        if (!(shown.has(m.targetBranch) || shown.has(m.sourceBranch))) return false
+        return true
       })
+    const srcByHash = new Map<string, string>()
+    for (const m of graph.merges || []) {
+      const src = laneName(m.sourceBranch)
+      if (src && !srcByHash.has(m.hash)) srcByHash.set(m.hash, src)
+    }
+    for (const m of merges) {
+      if (m.sourceBranch && !srcByHash.has(m.hash)) srcByHash.set(m.hash, m.sourceBranch)
+    }
     return {
       ...graph,
       branches: names,
@@ -439,6 +413,7 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
           ...c,
           branch: laneName(c.branch),
           on: (c.on || [c.branch]).map(laneName),
+          sourceBranch: c.isMerge ? srcByHash.get(c.hash) : undefined,
         }))
         .filter((c) => shown.has(c.branch)),
       merges,
@@ -458,17 +433,51 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
   }, [visibleGraph, msgQuery])
   const matchHashes = useMemo(() => searchHits.map((c) => c.hash), [searchHits])
   const curHit = hitIndex >= 0 && hitIndex < searchHits.length ? hitIndex : -1
+  const graphByHash = useMemo(() => new Map((graph?.commits || []).map((c) => [c.hash, c])), [graph])
 
   function goHit(dir: number) {
     const n = searchHits.length
     if (!n || !visibleGraph) return
     const i = curHit < 0 ? (dir > 0 ? 0 : n - 1) : (curHit + dir + n) % n
     const c = searchHits[i]!
-    const day = localDay(c.timestamp)
-    const commits = visibleGraph.commits
-      .filter((x) => x.branch === c.branch && localDay(x.timestamp) === day)
-      .sort((a, b) => +new Date(a.timestamp) - +new Date(b.timestamp))
     setHitIndex(i)
+    if (collapseDay) {
+      const day = localDay(c.timestamp)
+      const commits = visibleGraph.commits
+        .filter((x) => x.branch === c.branch && localDay(x.timestamp) === day)
+        .sort((a, b) => +new Date(a.timestamp) - +new Date(b.timestamp))
+      setSelected(
+        commits.length > 1
+          ? { kind: "cluster", ...c, count: commits.length, commits }
+          : { kind: "commit", ...c }
+      )
+      setJumpTo({ hash: c.hash, n: (jumpTo?.n || 0) + 1 })
+      return
+    }
+    if (c.isMerge) {
+      setSelected({ kind: "commit", ...c })
+      setJumpTo({ hash: c.hash, n: (jumpTo?.n || 0) + 1 })
+      return
+    }
+    const day = localDay(c.timestamp)
+    const dayMerges = visibleGraph.commits
+      .filter((x) => x.isMerge && x.branch === c.branch && localDay(x.timestamp) === day)
+      .sort((a, b) => +new Date(a.timestamp) - +new Date(b.timestamp))
+    const segOf = (t: number) => {
+      let seg = 0
+      while (seg < dayMerges.length && +new Date(dayMerges[seg]!.timestamp) <= t) seg++
+      return seg
+    }
+    const hitSeg = segOf(+new Date(c.timestamp))
+    const commits = visibleGraph.commits
+      .filter(
+        (x) =>
+          !x.isMerge &&
+          x.branch === c.branch &&
+          localDay(x.timestamp) === day &&
+          segOf(+new Date(x.timestamp)) === hitSeg
+      )
+      .sort((a, b) => +new Date(a.timestamp) - +new Date(b.timestamp))
     setSelected(
       commits.length > 1
         ? { kind: "cluster", ...c, count: commits.length, commits }
@@ -478,9 +487,7 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
   }
 
   function showTop(n: number) {
-    applyVisible(new Set(rankedBranches.slice(0, Math.min(Math.max(n, 0), rankedBranches.length))), {
-      debounce: true,
-    })
+    applyVisible(new Set(rankedBranches.slice(0, Math.min(Math.max(n, 0), rankedBranches.length))))
   }
 
   function toggleVisible(name: string) {
@@ -683,14 +690,46 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
               Scroll to zoom · drag to pan · double-click to reset
             </p>
           </div>
-          {historyLeft > 0 ? (
-            <Badge variant="secondary">
-              <Loader2Icon data-icon="inline-start" className="animate-spin" />
-              Loading history…
-            </Badge>
-          ) : null}
           {graph && visibleGraph ? (
             <div className="ml-auto flex flex-wrap items-center gap-2">
+              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+                <Checkbox
+                  checked={hideLongSelfEdge}
+                  onCheckedChange={(v) => setHideLongSelfEdge(v === true)}
+                />
+                Trim self-merges
+              </label>
+              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+                <Checkbox
+                  checked={collapseDay}
+                  onCheckedChange={(v) => setCollapseDay(v === true)}
+                />
+                One cluster/day
+              </label>
+              <div className="flex items-center gap-2" title="Day column spacing">
+                <span className="text-xs text-muted-foreground">X-gap</span>
+                <input
+                  type="range"
+                  min={100}
+                  max={320}
+                  step={4}
+                  value={colW}
+                  onChange={(e) => setColW(Number(e.target.value))}
+                  className="w-24 accent-primary"
+                />
+                <Input
+                  className="h-8 w-16 px-2 text-xs tabular-nums"
+                  type="number"
+                  min={60}
+                  max={400}
+                  step={4}
+                  value={colW}
+                  onChange={(e) => {
+                    const v = Number(e.target.value)
+                    if (!Number.isNaN(v)) setColW(Math.min(400, Math.max(60, Math.round(v))))
+                  }}
+                />
+              </div>
               <Button
                 variant="outline"
                 size="icon-sm"
@@ -754,7 +793,13 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
           ) : null}
         </div>
 
-        <div className="min-h-0 flex-1">
+        <div className="relative min-h-0 flex-1">
+          {historyLeft > 0 ? (
+            <Badge variant="secondary" className="pointer-events-none absolute left-3 top-3 z-10">
+              <Loader2Icon data-icon="inline-start" className="animate-spin" />
+              Loading history…
+            </Badge>
+          ) : null}
           {!graph ? (
             <Empty className="h-full border-0">
               <EmptyHeader>
@@ -784,7 +829,10 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
                 wantRef.current = { from, to }
                 if (!filling.current) void ensureRange(from, to)
               }}
-              fitKey={`${visibleGraph!.path}:${visibleGraph!.branches.join("\n")}:${viewGen}`}
+              fitKey={`${visibleGraph!.path}:${viewGen}`}
+              colW={colW}
+              hideLongSelfEdge={hideLongSelfEdge}
+              collapseDay={collapseDay}
               showTags
             />
           )}
@@ -801,7 +849,13 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
             </Button>
           </CardHeader>
           <CardContent>
-            <InspectBody inspect={inspect} commitUrl={graph?.commitUrl} />
+            <InspectBody
+              inspect={inspect}
+              commitUrl={graph?.commitUrl}
+              showDebug={showDebug}
+              onDebugChange={setShowDebug}
+              byHash={graphByHash}
+            />
           </CardContent>
         </Card>
       ) : null}
@@ -812,86 +866,166 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
 function InspectBody({
   inspect,
   commitUrl,
+  showDebug,
+  onDebugChange,
+  byHash,
 }: {
   inspect: GitInspect
   commitUrl?: string
+  showDebug: boolean
+  onDebugChange: (v: boolean) => void
+  byHash: Map<string, GitCommitNode>
 }) {
-  if (inspect.kind === "merge") {
-    return (
-      <dl className="flex flex-col gap-2 text-xs">
-        <Row
-          label="Merge commit"
-          value={inspect.hash}
-          mono
-          action={<CommitLink prefix={commitUrl} hash={inspect.hash} />}
-        />
-        <Row label="Message" value={inspect.subject || "—"} />
-        {inspect.tags?.length ? <Row label="Tags" value={inspect.tags.join(" · ")} /> : null}
-        <Row label="Source branch" value={inspect.sourceBranch} />
-        <Row label="Target branch" value={inspect.targetBranch} />
-        <Row label="Timestamp" value={<TimeChip ts={inspect.timestamp} withDate />} />
-        <Row label="Author" value={inspect.author} />
-        <Row label="Commit count" value={String(inspect.commitCount)} />
-      </dl>
-    )
-  }
-  if (inspect.kind === "cluster") {
-    return (
-      <dl className="flex flex-col gap-2 text-xs">
-        <Row label="Branch" value={inspect.branch} />
-        <Row
-          label="Date"
-          value={new Date(inspect.timestamp).toLocaleDateString(undefined, {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-          })}
-        />
-        <Row label="Commits" value={String(inspect.count)} />
-        <div className="flex flex-col gap-2">
-          {(inspect.commits || []).map((c) => (
-            <div
-              key={c.hash}
-              className={`flex flex-col gap-1 ${c.hash === inspect.hash ? "rounded-md bg-primary/15 p-1.5" : ""}`}
-            >
-              <div className="flex items-center gap-2">
-                <TimeChip ts={c.timestamp} />
-                <Badge variant="secondary" className="max-w-[8rem] truncate" title={authorName(c)}>
-                  {authorName(c)}
-                </Badge>
-                <CommitLink prefix={commitUrl} hash={c.hash} />
-              </div>
-              <dd className="min-w-0 break-words font-medium">
-                {c.subject || c.hash}
-                {c.isMerge ? (
-                  <Badge variant="outline" className="ml-1">
-                    merge
-                  </Badge>
-                ) : null}
-                {c.tags?.length ? (
-                  <span className="ml-1 text-primary">{c.tags.join(" · ")}</span>
-                ) : null}
-              </dd>
-            </div>
-          ))}
-        </div>
-      </dl>
-    )
-  }
   return (
-    <dl className="flex flex-col gap-2 text-xs">
-      <Row
-        label="Commit"
-        value={inspect.hash}
-        mono
-        action={<CommitLink prefix={commitUrl} hash={inspect.hash} />}
-      />
-      <Row label="Message" value={inspect.subject || "—"} />
-      <Row label="Branch" value={inspect.branch} />
-      {inspect.tags?.length ? <Row label="Tags" value={inspect.tags.join(" · ")} /> : null}
-      <Row label="Timestamp" value={<TimeChip ts={inspect.timestamp} withDate />} />
-      <Row label="Author" value={inspect.author} />
-    </dl>
+    <div className="flex flex-col gap-3">
+      <label className="flex cursor-pointer items-center justify-between rounded-md border px-2 py-1.5 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <BugIcon className="size-3.5" />
+          Debug parents
+        </span>
+        <Checkbox checked={showDebug} onCheckedChange={(v) => onDebugChange(v === true)} />
+      </label>
+      {inspect.kind === "merge" ? (
+        <dl className="flex flex-col gap-2 text-xs">
+          <Row
+            label="Merge commit"
+            value={inspect.hash}
+            mono
+            action={<CommitLink prefix={commitUrl} hash={inspect.hash} />}
+          />
+          <Row
+            label="Message"
+            value={
+              <span className="font-medium" style={{ color: branchColor(inspect.sourceBranch) }}>
+                {inspect.subject || "—"}
+              </span>
+            }
+          />
+          {showDebug ? (
+            <DebugParents
+              commitHash={inspect.hash}
+              fallbackParents={undefined}
+              extraHash={inspect.sourceHash}
+              byHash={byHash}
+            />
+          ) : null}
+          {inspect.tags?.length ? <Row label="Tags" value={inspect.tags.join(" · ")} /> : null}
+          <Row label="Source branch" value={inspect.sourceBranch} />
+          <Row label="Target branch" value={inspect.targetBranch} />
+          <Row label="Timestamp" value={<TimeChip ts={inspect.timestamp} withDate />} />
+          <Row label="Author" value={inspect.author} />
+          <Row label="Commit count" value={String(inspect.commitCount)} />
+        </dl>
+      ) : inspect.kind === "cluster" ? (
+        <dl className="flex flex-col gap-2 text-xs">
+          <Row label="Branch" value={inspect.branch} />
+          <Row
+            label="Date"
+            value={new Date(inspect.timestamp).toLocaleDateString(undefined, {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })}
+          />
+          <Row label="Commits" value={String(inspect.count)} />
+          <div className="flex flex-col gap-2">
+            {(inspect.commits || []).map((c) => (
+              <div
+                key={c.hash}
+                className={`flex flex-col gap-1 ${c.hash === inspect.hash ? "rounded-md bg-primary/15 p-1.5" : ""}`}
+              >
+                <div className="flex items-center gap-2">
+                  <TimeChip ts={c.timestamp} />
+                  <Badge variant="secondary" className="max-w-[8rem] truncate" title={authorName(c)}>
+                    {authorName(c)}
+                  </Badge>
+                  <CommitLink prefix={commitUrl} hash={c.hash} />
+                </div>
+                <dd
+                  className="min-w-0 break-words font-medium"
+                  style={c.isMerge ? { color: branchColor(c.sourceBranch || c.branch) } : undefined}
+                >
+                  {c.subject || c.hash}
+                  {c.isMerge ? (
+                    <Badge variant="outline" className="ml-1">
+                      merge
+                    </Badge>
+                  ) : null}
+                  {c.tags?.length ? <span className="ml-1 text-primary">{c.tags.join(" · ")}</span> : null}
+                </dd>
+                {showDebug ? (
+                  <DebugParents commitHash={c.hash} fallbackParents={c.parents} byHash={byHash} />
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </dl>
+      ) : (
+        <dl className="flex flex-col gap-2 text-xs">
+          <Row
+            label="Commit"
+            value={inspect.hash}
+            mono
+            action={<CommitLink prefix={commitUrl} hash={inspect.hash} />}
+          />
+          <Row
+            label="Message"
+            value={
+              inspect.isMerge ? (
+                <span className="font-medium" style={{ color: branchColor(inspect.sourceBranch || inspect.branch) }}>
+                  {inspect.subject || "—"}
+                </span>
+              ) : (
+                inspect.subject || "—"
+              )
+            }
+          />
+          {showDebug ? (
+            <DebugParents commitHash={inspect.hash} fallbackParents={inspect.parents} byHash={byHash} />
+          ) : null}
+          <Row label="Branch" value={inspect.branch} />
+          {inspect.tags?.length ? <Row label="Tags" value={inspect.tags.join(" · ")} /> : null}
+          <Row label="Timestamp" value={<TimeChip ts={inspect.timestamp} withDate />} />
+          <Row label="Author" value={inspect.author} />
+        </dl>
+      )}
+    </div>
+  )
+}
+
+function DebugParents({
+  commitHash,
+  fallbackParents,
+  extraHash,
+  byHash,
+}: {
+  commitHash: string
+  fallbackParents?: string[]
+  extraHash?: string
+  byHash: Map<string, GitCommitNode>
+}) {
+  const full = byHash.get(commitHash)
+  const parents = full?.parents?.length ? full.parents : fallbackParents || []
+  const allParents = extraHash && !parents.includes(extraHash) ? [...parents, extraHash] : parents
+  return (
+    <div className="space-y-0.5 font-mono text-[11px] text-muted-foreground">
+      <div className="break-all" title={commitHash}>
+        commit {commitHash}
+      </div>
+      {!allParents.length ? <div>no parents (root or unloaded)</div> : null}
+      {allParents.map((p, i) => {
+        const n = byHash.get(p)
+        const branches = n
+          ? [...new Set((n.on?.length ? n.on : n.branch ? [n.branch] : []).map(laneName))]
+          : null
+        return (
+          <div key={`${commitHash}:${p}`} className="break-all" title={p}>
+            P{i + 1} {String(p).slice(0, 7)} ·{" "}
+            {branches ? (branches.length ? branches.join(", ") : "(no branch)") : "outside loaded range"}
+          </div>
+        )
+      })}
+    </div>
   )
 }
 

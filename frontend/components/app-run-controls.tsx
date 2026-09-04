@@ -47,9 +47,10 @@ export function AppRunControls({
   }
 
   if (compact) {
+    const label = running ? "Stop" : "Start"
     return (
       <div
-        className={cn("flex items-center gap-0.5", className)}
+        className={cn("flex items-center", className)}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
       >
@@ -60,53 +61,19 @@ export function AppRunControls({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                disabled={busy || running}
-                onClick={() => void runAction("run", "Started", "Failed to run")}
-              />
-            }
-          >
-            <PlayIcon />
-            <span className="sr-only">Run</span>
-          </TooltipTrigger>
-          <TooltipContent>Run</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                disabled={busy || !running}
-                onClick={() =>
-                  void runAction("stop", "Stopped", "Failed to stop")
-                }
-              />
-            }
-          >
-            <SquareIcon />
-            <span className="sr-only">Stop</span>
-          </TooltipTrigger>
-          <TooltipContent>Stop</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
                 disabled={busy}
                 onClick={() =>
-                  void runAction("reload", "Reloaded", "Failed to reload")
+                  running
+                    ? void runAction("stop", "Stopped", "Failed to stop")
+                    : void runAction("run", "Started", "Failed to run")
                 }
               />
             }
           >
-            <RefreshCwIcon />
-            <span className="sr-only">Reload</span>
+            {running ? <SquareIcon /> : <PlayIcon />}
+            <span className="sr-only">{label}</span>
           </TooltipTrigger>
-          <TooltipContent>Reload</TooltipContent>
+          <TooltipContent>{label}</TooltipContent>
         </Tooltip>
       </div>
     )
