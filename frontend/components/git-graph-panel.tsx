@@ -22,6 +22,11 @@ import {
 } from '@/components/ui/input-group'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { api, handleReadyUrlClick } from '@/lib/api'
+import {
+    getGitGraphSnapshot,
+    setGitGraphSnapshot,
+    type GitGraphSnapshot,
+} from '@/lib/git-graph-cache'
 import type { GitBranchInfo, GitCommitNode, GitRemoteInfo, GitRepoGraph } from '@/lib/types'
 import {
     BugIcon,
@@ -166,10 +171,16 @@ type GitGraphPanelProps = {
 }
 
 export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
-    const [graph, setGraph] = useState<GitRepoGraph | null>(null)
+    // Snapshot from a previous visit to this app, restored instantly on
+    // re-entry. Kept fresh by the mirror effect below; dropped when the
+    // workspace is left.
+    const cachedRef = useRef<GitGraphSnapshot | null>(null)
+    if (!cachedRef.current) cachedRef.current = getGitGraphSnapshot(appId, projectPath)
+    const cached = cachedRef.current
+    const [graph, setGraph] = useState<GitRepoGraph | null>(cached?.graph ?? null)
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
-    const [remote, setRemote] = useState<GitRemoteInfo | null>(null)
+    const [remote, setRemote] = useState<GitRemoteInfo | null>(cached?.remote ?? null)
     const [fetching, setFetching] = useState(false)
     const [query, setQuery] = useState('')
     const [msgQuery, setMsgQuery] = useState('')
@@ -188,21 +199,24 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
     const lastSelected = useRef<GitInspect | null>(null)
     if (selected) lastSelected.current = selected
     const inspect = selected || lastSelected.current
-    const [catalog, setCatalog] = useState<GitBranchInfo[]>([])
-    const [axisRange, setAxisRange] = useState<[number, number] | null>(null)
-    const [visible, setVisible] = useState(() => new Set<string>())
-    const [authors, setAuthors] = useState(() => new Set<string>())
+    const [catalog, setCatalog] = useState<GitBranchInfo[]>(cached?.catalog ?? [])
+    const [axisRange, setAxisRange] = useState<[number, number] | null>(cached?.axisRange ?? null)
+    const [visible, setVisible] = useState(() => new Set(cached?.visible ?? []))
+    const [authors, setAuthors] = useState(() => new Set(cached?.authors ?? []))
     const [historyLeft, setHistoryLeft] = useState(0)
     const [viewGen, setViewGen] = useState(0)
     const loadSeq = useRef(0)
-    const loadedRef = useRef({
-        from: 0,
-        to: 0,
-        pastDone: false,
-        futureDone: false,
-    })
+    const loadedRef = useRef(
+        cached?.loaded ?? {
+            from: 0,
+            to: 0,
+            pastDone: false,
+            futureDone: false,
+        },
+    )
     const wantRef = useRef({ from: 0, to: 0 })
     const filling = useRef(false)
+    const viewTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     async function load({ reset = true }: { reset?: boolean } = {}) {
         const gen = ++loadSeq.current
@@ -268,12 +282,34 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
     }
 
     useEffect(() => {
+        if (cached) {
+            // Restored from cache: no fetch, just resume the wanted range.
+            const range = cached.axisRange
+            if (range) wantRef.current = { from: range[0], to: range[1] }
+            return
+        }
         void load({ reset: true })
         return () => {
             loadSeq.current++
+            if (viewTimer.current) clearTimeout(viewTimer.current)
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when the app folder changes
     }, [appId, projectPath])
+
+    // Keep the cache fresh so re-entering the app restores this state as-is.
+    useEffect(() => {
+        if (!graph) return
+        setGitGraphSnapshot(appId, {
+            projectPath,
+            graph,
+            catalog,
+            remote,
+            authors,
+            visible,
+            axisRange,
+            loaded: loadedRef.current,
+        })
+    }, [appId, projectPath, graph, catalog, remote, authors, visible, axisRange])
 
     function applyVisible(next: Set<string>) {
         setVisible(next)
@@ -958,7 +994,13 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
                             rangeEnd={axisRange?.[1]}
                             onViewChange={(from, to) => {
                                 wantRef.current = { from, to }
-                                if (!filling.current) void ensureRange(from, to)
+                                // Debounce: pan/zoom fires this continuously, and each
+                                // un-debounced call re-runs monthQueue + setState.
+                                if (viewTimer.current) clearTimeout(viewTimer.current)
+                                viewTimer.current = setTimeout(() => {
+                                    viewTimer.current = null
+                                    if (!filling.current) void ensureRange(from, to)
+                                }, 250)
                             }}
                             fitKey={`${visibleGraph!.path}:${viewGen}`}
                             colW={colW}

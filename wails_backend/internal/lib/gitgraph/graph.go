@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -104,25 +105,38 @@ func LoadGraphAt(path string, only []string, since, until time.Time) (*RepoGraph
 	}
 	windowed := !since.IsZero() || !until.IsZero()
 	var commits map[string]*rawCommit
-	if windowed {
-		commits, err = listCommitsRange(root, since, until)
-	} else {
-		commits, err = listCommits(root)
+	var parents map[string][]string
+	var tagByHash map[string][]string
+	var commitErr, tagErr error
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		if windowed {
+			commits, commitErr = listCommitsRange(root, since, until)
+		} else {
+			commits, commitErr = listCommits(root)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		tagByHash, tagErr = listTags(root)
+	}()
+	parents = loadParentMap(root)
+	wg.Wait()
+	if commitErr != nil {
+		return nil, commitErr
 	}
-	if err != nil {
-		return nil, err
-	}
-	tagByHash, err := listTags(root)
-	if err != nil {
-		return nil, err
+	if tagErr != nil {
+		return nil, tagErr
 	}
 
 	order := sortBranchNames(keys(branchTips))
 	ranked := claimOrder(order)
-	assignLanes(root, ranked, branchTips, commits)
-	assignReachable(root, ranked, branchTips, commits, since, until)
+	assignLanes(ranked, branchTips, parents, commits)
+	assignReachable(ranked, branchTips, parents, commits)
 	assignOffSpineMerges(commits, order)
-	absorbDeletedMergeSources(root, branchTips, commits, since, until)
+	absorbDeletedMergeSources(root, branchTips, parents, commits, since, until)
 
 	nodes := make([]CommitNode, 0, len(commits))
 	merges := make([]MergeEvent, 0)
@@ -457,53 +471,79 @@ func parseLog(out string, err error) (map[string]*rawCommit, error) {
 	return commits, nil
 }
 
-func assignLanes(root string, order []string, tips map[string]string, commits map[string]*rawCommit) {
+// loadParentMap returns the full parent graph (hash -> parents) for every
+// commit reachable from any ref, including commits outside a date window.
+// One process spawn replaces the per-branch `rev-list`/`log` calls: lane
+// assignment, reachability and the live-branch set are all derived from this
+// map in memory.
+func loadParentMap(root string) map[string][]string {
+	out, err := gitOutput(root, "rev-list", "--parents", "--all")
+	if err != nil || out == "" {
+		return map[string][]string{}
+	}
+	m := make(map[string][]string, 1024)
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 || fields[0] == "" {
+			continue
+		}
+		m[fields[0]] = fields[1:]
+	}
+	return m
+}
+
+func assignLanes(order []string, tips map[string]string, parents map[string][]string, commits map[string]*rawCommit) {
 	for _, name := range order {
 		lane := laneName(name)
 		tip := tips[name]
 		if tip == "" {
 			continue
 		}
-		out, err := gitOutput(root, "rev-list", "--first-parent", tip)
-		if err != nil {
-			continue
-		}
-		for _, line := range strings.Split(out, "\n") {
-			c := commits[strings.TrimSpace(line)]
-			if c == nil {
-				continue
+		seen := map[string]bool{}
+		h := tip
+		for h != "" && !seen[h] {
+			seen[h] = true
+			if c := commits[h]; c != nil {
+				markFP(c, lane)
+				markOn(c, lane)
+				if !c.assigned {
+					c.assigned = true
+					c.branch = lane
+				}
 			}
-			markFP(c, lane)
-			markOn(c, lane)
-			if !c.assigned {
-				c.assigned = true
-				c.branch = lane
+			if p := parents[h]; len(p) > 0 {
+				h = p[0]
+			} else {
+				h = ""
 			}
 		}
 	}
 }
 
-func assignReachable(root string, order []string, tips map[string]string, commits map[string]*rawCommit, since, until time.Time) {
+func assignReachable(order []string, tips map[string]string, parents map[string][]string, commits map[string]*rawCommit) {
 	for _, name := range order {
 		lane := laneName(name)
 		tip := tips[name]
 		if tip == "" {
 			continue
 		}
-		chunk, err := parseLog(gitOutput(root, rangeLogArgs(tip, since, until)...))
-		if err != nil {
-			continue
-		}
-		for hash := range chunk {
-			c := commits[hash]
-			if c == nil {
+		seen := map[string]bool{}
+		stack := []string{tip}
+		for len(stack) > 0 {
+			h := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			if seen[h] {
 				continue
 			}
-			if !c.assigned {
-				c.assigned = true
-				c.branch = lane
+			seen[h] = true
+			if c := commits[h]; c != nil {
+				if !c.assigned {
+					c.assigned = true
+					c.branch = lane
+				}
+				markOn(c, lane)
 			}
-			markOn(c, lane)
+			stack = append(stack, parents[h]...)
 		}
 	}
 }
@@ -582,25 +622,26 @@ func branchStarts(commits map[string]*rawCommit, known map[string]bool) []MergeE
 	return out
 }
 
-func firstParentSet(root string, tips map[string]string) map[string]bool {
-	if len(tips) == 0 {
-		return map[string]bool{}
-	}
-	out, err := gitOutput(root, append([]string{"rev-list", "--first-parent"}, values(tips)...)...)
-	if err != nil || out == "" {
-		return map[string]bool{}
-	}
+func firstParentSet(tips map[string]string, parents map[string][]string) map[string]bool {
 	live := map[string]bool{}
-	for _, line := range strings.Split(out, "\n") {
-		if h := strings.TrimSpace(line); h != "" {
+	for _, tip := range tips {
+		seen := map[string]bool{}
+		h := tip
+		for h != "" && !seen[h] {
+			seen[h] = true
 			live[h] = true
+			if p := parents[h]; len(p) > 0 {
+				h = p[0]
+			} else {
+				h = ""
+			}
 		}
 	}
 	return live
 }
 
-func absorbDeletedMergeSources(root string, tips map[string]string, commits map[string]*rawCommit, since, until time.Time) {
-	live := firstParentSet(root, tips)
+func absorbDeletedMergeSources(root string, tips map[string]string, parents map[string][]string, commits map[string]*rawCommit, since, until time.Time) {
+	live := firstParentSet(tips, parents)
 	for _, c := range commits {
 		if len(c.parents) < 2 || !c.assigned || c.branch == "" {
 			continue
@@ -632,7 +673,7 @@ func absorbDeletedMergeSources(root string, tips map[string]string, commits map[
 			if commits[srcHash] == nil {
 				continue
 			}
-			assignLanes(root, []string{lane}, map[string]string{lane: srcHash}, commits)
+			assignLanes([]string{lane}, map[string]string{lane: srcHash}, parents, commits)
 		}
 	}
 }
@@ -894,14 +935,6 @@ func keys(m map[string]string) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)
-	}
-	return out
-}
-
-func values(m map[string]string) []string {
-	out := make([]string, 0, len(m))
-	for _, v := range m {
-		out = append(out, v)
 	}
 	return out
 }

@@ -7,6 +7,7 @@ import { useRunnerLogs } from "@/hooks/use-runner-logs"
 import { useAppStatuses } from "@/hooks/use-app-statuses"
 import { useRoute } from "@/hooks/use-route"
 import { formatRoute, type AppTab } from "@/lib/routes"
+import { clearGitGraphCache } from "@/lib/git-graph-cache"
 import {
   DEFAULT_SHORTCUTS,
   SEARCH_SHORTCUT_KEY,
@@ -129,6 +130,11 @@ function AppContent() {
   useEffect(() => {
     if (status) setAppStatus(status)
   }, [status, setAppStatus])
+
+  // Leaving a workspace (or closing the app view) drops cached git graphs.
+  useEffect(() => {
+    clearGitGraphCache()
+  }, [selectedWorkspaceId])
 
   const loadApps = useCallback(async (workspaceId: number) => {
     const apps = await api.apps.list(workspaceId)

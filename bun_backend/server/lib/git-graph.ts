@@ -1,6 +1,6 @@
+import { spawn } from "node:child_process"
 import { existsSync, statSync } from "node:fs"
 import { resolve } from "node:path"
-import { spawnSync } from "node:child_process"
 
 export type GitCommitNode = {
   hash: string
@@ -69,42 +69,56 @@ const mergePR = /^(?:Merge pull request #\d+ from [^/\s]+\/(\S+?)(?: into \S+)?)
 const mergeBB = /^(?:Merged in (\S+) \(pull request #\d+\))/i
 const nameRevJunk = /([~^][\d]+)+$/
 
-function gitOutput(dir: string, args: string[], stdin = "", timeoutMs = 0): string {
-  const r = spawnSync("git", ["-C", dir, ...args], {
-    encoding: "utf8",
-    windowsHide: true,
-    maxBuffer: 50 * 1024 * 1024,
-    input: stdin || undefined,
-    timeout: timeoutMs || undefined,
-  })
-  if (r.error) {
-    if ((r.error as NodeJS.ErrnoException).code === "ETIMEDOUT") {
-      throw new Error("fetch timed out")
+function gitOutput(dir: string, args: string[], stdin = "", timeoutMs = 0): Promise<string> {
+  return new Promise((res, rej) => {
+    const child = spawn("git", ["-C", dir, ...args], { windowsHide: true })
+    let stdout = ""
+    let stderr = ""
+    let timer: ReturnType<typeof setTimeout> | undefined
+    if (timeoutMs) {
+      timer = setTimeout(() => {
+        child.kill()
+        rej(new Error("fetch timed out"))
+      }, timeoutMs)
     }
-    throw r.error
-  }
-  if (r.status !== 0) {
-    const msg = (r.stderr || r.stdout || r.error?.message || "").trim()
-    throw new Error(msg || "git failed")
-  }
-  return (r.stdout || "").trim()
+    child.stdout.on("data", (d: Buffer) => {
+      stdout += d
+    })
+    child.stderr.on("data", (d: Buffer) => {
+      stderr += d
+    })
+    child.on("error", (err) => {
+      if (timer) clearTimeout(timer)
+      rej(err)
+    })
+    child.on("close", (code) => {
+      if (timer) clearTimeout(timer)
+      if (code !== 0) {
+        rej(new Error((stderr || stdout || `git exited with code ${code}`).trim() || "git failed"))
+        return
+      }
+      res(stdout.trim())
+    })
+    if (stdin) child.stdin.write(stdin)
+    child.stdin.end()
+  })
 }
 
-export function gitRoot(path: string): string {
+export async function gitRoot(path: string): Promise<string> {
   const abs = resolve(path)
   if (!existsSync(abs) || !statSync(abs).isDirectory()) {
     throw new Error(existsSync(abs) ? `not a directory: ${abs}` : `path not found: ${abs}`)
   }
   try {
-    return resolve(gitOutput(abs, ["rev-parse", "--show-toplevel"]))
+    return resolve(await gitOutput(abs, ["rev-parse", "--show-toplevel"]))
   } catch {
     throw new Error(`not a git repository: ${abs}`)
   }
 }
 
 export async function listBranches(path: string): Promise<GitBranchInfo[]> {
-  const root = gitRoot(path)
-  const metas = listBranchMeta(root)
+  const root = await gitRoot(path)
+  const metas = await listBranchMeta(root)
   metas.sort((a, b) => (a.at !== b.at ? b.at - a.at : a.name.localeCompare(b.name)))
   return metas.map((m) => {
     const info: GitBranchInfo = { name: m.name }
@@ -114,19 +128,19 @@ export async function listBranches(path: string): Promise<GitBranchInfo[]> {
 }
 
 export async function listRemote(path: string): Promise<GitRemoteInfo> {
-  const root = gitRoot(path)
+  const root = await gitRoot(path)
   let name = "origin"
   let u = ""
   try {
-    u = gitOutput(root, ["remote", "get-url", "origin"])
+    u = await gitOutput(root, ["remote", "get-url", "origin"])
   } catch {
     u = ""
   }
   if (!u) {
-    const names = gitOutput(root, ["remote"])
+    const names = await gitOutput(root, ["remote"])
     if (!names) throw new Error("no git remotes")
     name = names.split(/\s+/)[0]!
-    u = gitOutput(root, ["remote", "get-url", name])
+    u = await gitOutput(root, ["remote", "get-url", name])
     if (!u) throw new Error("no git remotes")
   }
   const web = toWebBase(u)
@@ -134,9 +148,9 @@ export async function listRemote(path: string): Promise<GitRemoteInfo> {
 }
 
 export async function fetchRemote(path: string): Promise<void> {
-  const root = gitRoot(path)
+  const root = await gitRoot(path)
   const info = await listRemote(root)
-  gitOutput(root, ["fetch", "--prune", info.name], "", 60_000)
+  await gitOutput(root, ["fetch", "--prune", info.name], "", 60_000)
 }
 
 export async function loadGraphAt(
@@ -145,15 +159,15 @@ export async function loadGraphAt(
   since: Date | null,
   until: Date | null
 ): Promise<GitRepoGraph> {
-  const root = gitRoot(path)
-  const allTips = listBranchTips(root)
+  const root = await gitRoot(path)
+  const allTips = await listBranchTips(root)
   let branchTips = allTips
   if (only != null) {
     branchTips = filterTips(allTips, only)
     if (Object.keys(branchTips).length === 0) {
       return {
         path: root,
-        commitUrl: commitURLPrefix(toWebBase(remoteURL(root))) || undefined,
+        commitUrl: commitURLPrefix(toWebBase(await remoteURL(root))) || undefined,
         branches: [],
         commits: [],
         merges: [],
@@ -161,14 +175,17 @@ export async function loadGraphAt(
     }
   }
   const windowed = !!(since || until)
-  const commits = windowed ? listCommitsRange(root, since, until) : listCommits(root)
-  const tagByHash = listTags(root)
+  const [commits, parents, tagByHash] = await Promise.all([
+    windowed ? listCommitsRange(root, since, until) : listCommits(root),
+    loadParentMap(root),
+    listTags(root),
+  ])
   const order = sortBranchNames(Object.keys(branchTips))
   const ranked = claimOrder(order)
-  assignLanes(root, ranked, branchTips, commits)
-  assignReachable(root, ranked, branchTips, commits, since, until)
+  assignLanes(ranked, branchTips, parents, commits)
+  assignReachable(ranked, branchTips, parents, commits)
   assignOffSpineMerges(commits, order)
-  absorbDeletedMergeSources(root, branchTips, commits, since, until)
+  await absorbDeletedMergeSources(root, branchTips, parents, commits, since, until)
 
   const nodes: GitCommitNode[] = []
   const merges: GitMergeEvent[] = []
@@ -247,23 +264,23 @@ export async function loadGraphAt(
   merges.sort((a, b) => a.timestamp.localeCompare(b.timestamp))
   return {
     path: root,
-    commitUrl: commitURLPrefix(toWebBase(remoteURL(root))) || undefined,
+    commitUrl: commitURLPrefix(toWebBase(await remoteURL(root))) || undefined,
     branches,
     commits: nodes,
     merges,
   }
 }
 
-function listBranchTips(root: string): Record<string, string> {
+async function listBranchTips(root: string): Promise<Record<string, string>> {
   const tips: Record<string, string> = {}
-  for (const m of listBranchMeta(root)) tips[m.name] = m.hash
+  for (const m of await listBranchMeta(root)) tips[m.name] = m.hash
   return tips
 }
 
-function listBranchMeta(root: string): BranchMeta[] {
+async function listBranchMeta(root: string): Promise<BranchMeta[]> {
   const format = "--format=%(refname:short)%00%(objectname)%00%(authordate:unix)%00%(committerdate:unix)"
-  const tips = parseRefMeta(gitOutput(root, ["for-each-ref", format, "refs/heads"]))
-  for (const [name, meta] of Object.entries(parseRefMeta(gitOutput(root, ["for-each-ref", format, "refs/remotes"])))) {
+  const tips = parseRefMeta(await gitOutput(root, ["for-each-ref", format, "refs/heads"]))
+  for (const [name, meta] of Object.entries(parseRefMeta(await gitOutput(root, ["for-each-ref", format, "refs/remotes"])))) {
     if (name.endsWith("/HEAD")) continue
     const short = stripRemotePrefix(name)
     const existing = tips[short]
@@ -278,8 +295,8 @@ function listBranchMeta(root: string): BranchMeta[] {
   return Object.values(tips)
 }
 
-function listTags(root: string): Record<string, string[]> {
-  const out = gitOutput(root, ["for-each-ref", "--format=%(refname:short)%00%(*objectname)%00%(objectname)", "refs/tags"])
+async function listTags(root: string): Promise<Record<string, string[]>> {
+  const out = await gitOutput(root, ["for-each-ref", "--format=%(refname:short)%00%(*objectname)%00%(objectname)", "refs/tags"])
   const byHash: Record<string, string[]> = {}
   if (!out) return byHash
   for (const line of out.split("\n")) {
@@ -325,11 +342,11 @@ function filterTips(tips: Record<string, string>, want: string[]): Record<string
   return out
 }
 
-function listCommits(root: string): Record<string, RawCommit> {
+function listCommits(root: string): Promise<Record<string, RawCommit>> {
   return parseLog(root, ["log", "--pretty=format:%H%x1f%P%x1f%an%x1f%aI%x1f%s", "--all"])
 }
 
-function listCommitsRange(root: string, since: Date | null, until: Date | null): Record<string, RawCommit> {
+function listCommitsRange(root: string, since: Date | null, until: Date | null): Promise<Record<string, RawCommit>> {
   return parseLog(root, rangeLogArgs("--all", since, until))
 }
 
@@ -340,10 +357,10 @@ function rangeLogArgs(tip: string, since: Date | null, until: Date | null, ...ex
   return args
 }
 
-function parseLog(root: string, args: string[]): Record<string, RawCommit> {
+async function parseLog(root: string, args: string[]): Promise<Record<string, RawCommit>> {
   let out = ""
   try {
-    out = gitOutput(root, args)
+    out = await gitOutput(root, args)
   } catch (err) {
     if (String(err).toLowerCase().includes("does not have any commits")) return {}
     throw err
@@ -371,61 +388,82 @@ function parseLog(root: string, args: string[]): Record<string, RawCommit> {
   return commits
 }
 
+// Full parent graph (hash -> parents) for every commit reachable from any
+// ref, including commits outside a date window. One process spawn replaces
+// the per-branch `rev-list`/`log` calls: lane assignment, reachability and
+// the live-branch set are all derived from this map in memory.
+type ParentMap = Record<string, string[]>
+
+async function loadParentMap(root: string): Promise<ParentMap> {
+  let out = ""
+  try {
+    out = await gitOutput(root, ["rev-list", "--parents", "--all"])
+  } catch {
+    return {}
+  }
+  const map: ParentMap = {}
+  if (!out) return map
+  for (const line of out.split("\n")) {
+    const parts = line.trim().split(/\s+/)
+    if (!parts[0]) continue
+    map[parts[0]] = parts.slice(1)
+  }
+  return map
+}
+
 function assignLanes(
-  root: string,
   order: string[],
   tips: Record<string, string>,
+  parents: ParentMap,
   commits: Record<string, RawCommit>
 ) {
   for (const name of order) {
     const lane = laneName(name)
     const tip = tips[name]
     if (!tip) continue
-    let out = ""
-    try {
-      out = gitOutput(root, ["rev-list", "--first-parent", tip])
-    } catch {
-      continue
-    }
-    for (const line of out.split("\n")) {
-      const c = commits[line.trim()]
-      if (!c) continue
-      markFP(c, lane)
-      markOn(c, lane)
-      if (!c.assigned) {
-        c.assigned = true
-        c.branch = lane
+    const seen = new Set<string>()
+    let h: string | undefined = tip
+    while (h && !seen.has(h)) {
+      seen.add(h)
+      const c = commits[h]
+      if (c) {
+        markFP(c, lane)
+        markOn(c, lane)
+        if (!c.assigned) {
+          c.assigned = true
+          c.branch = lane
+        }
       }
+      h = parents[h]?.[0]
     }
   }
 }
 
 function assignReachable(
-  root: string,
   order: string[],
   tips: Record<string, string>,
-  commits: Record<string, RawCommit>,
-  since: Date | null,
-  until: Date | null
+  parents: ParentMap,
+  commits: Record<string, RawCommit>
 ) {
   for (const name of order) {
     const lane = laneName(name)
     const tip = tips[name]
     if (!tip) continue
-    let chunk: Record<string, RawCommit>
-    try {
-      chunk = parseLog(root, rangeLogArgs(tip, since, until))
-    } catch {
-      continue
-    }
-    for (const hash of Object.keys(chunk)) {
-      const c = commits[hash]
-      if (!c) continue
-      if (!c.assigned) {
-        c.assigned = true
-        c.branch = lane
+    const seen = new Set<string>()
+    const stack = [tip]
+    while (stack.length) {
+      const h = stack.pop()!
+      if (seen.has(h)) continue
+      seen.add(h)
+      const c = commits[h]
+      if (c) {
+        if (!c.assigned) {
+          c.assigned = true
+          c.branch = lane
+        }
+        markOn(c, lane)
       }
-      markOn(c, lane)
+      stack.push(...(parents[h] ?? []))
     }
   }
 }
@@ -488,32 +526,29 @@ function branchStarts(commits: Record<string, RawCommit>, known: Record<string, 
   return out
 }
 
-function firstParentSet(root: string, tips: Record<string, string>): Record<string, boolean> {
-  const hashes = Object.values(tips)
-  if (!hashes.length) return {}
-  let out = ""
-  try {
-    out = gitOutput(root, ["rev-list", "--first-parent", ...hashes])
-  } catch {
-    return {}
-  }
-  if (!out) return {}
+function firstParentSet(tips: Record<string, string>, parents: ParentMap): Record<string, boolean> {
   const live: Record<string, boolean> = {}
-  for (const line of out.split("\n")) {
-    const h = line.trim()
-    if (h) live[h] = true
+  for (const tip of Object.values(tips)) {
+    const seen = new Set<string>()
+    let h: string | undefined = tip
+    while (h && !seen.has(h)) {
+      seen.add(h)
+      live[h] = true
+      h = parents[h]?.[0]
+    }
   }
   return live
 }
 
-function absorbDeletedMergeSources(
+async function absorbDeletedMergeSources(
   root: string,
   tips: Record<string, string>,
+  parents: ParentMap,
   commits: Record<string, RawCommit>,
   since: Date | null,
   until: Date | null
 ) {
-  const live = firstParentSet(root, tips)
+  const live = firstParentSet(tips, parents)
   for (const c of Object.values(commits)) {
     if (c.parents.length < 2 || !c.assigned || !c.branch) continue
     let lane = c.branch
@@ -530,7 +565,7 @@ function absorbDeletedMergeSources(
       if (live[srcHash]) continue
       if (!commits[srcHash]) {
         try {
-          const chunk = parseLog(root, rangeLogArgs(srcHash, since, until, "--first-parent"))
+          const chunk = await parseLog(root, rangeLogArgs(srcHash, since, until, "--first-parent"))
           for (const [h, nc] of Object.entries(chunk)) {
             if (!commits[h]) commits[h] = nc
           }
@@ -539,7 +574,7 @@ function absorbDeletedMergeSources(
         }
       }
       if (!commits[srcHash]) continue
-      assignLanes(root, [lane], { [lane]: srcHash }, commits)
+      assignLanes([lane], { [lane]: srcHash }, parents, commits)
     }
   }
 }
@@ -713,17 +748,17 @@ function markOn(c: RawCommit, lane: string) {
   if (!c.on.includes(lane)) c.on.push(lane)
 }
 
-function remoteURL(root: string): string {
+async function remoteURL(root: string): Promise<string> {
   try {
-    const u = gitOutput(root, ["remote", "get-url", "origin"])
+    const u = await gitOutput(root, ["remote", "get-url", "origin"])
     if (u) return u
   } catch {
     /* fall through */
   }
   try {
-    const names = gitOutput(root, ["remote"])
+    const names = await gitOutput(root, ["remote"])
     if (!names) return ""
-    return gitOutput(root, ["remote", "get-url", names.split(/\s+/)[0]!])
+    return await gitOutput(root, ["remote", "get-url", names.split(/\s+/)[0]!])
   } catch {
     return ""
   }
