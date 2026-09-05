@@ -1,4 +1,4 @@
-import type { GitBranchInfo, GitRemoteInfo, GitRepoGraph } from "@/lib/types"
+import type { GitBranchInfo, GitRemoteInfo, GitRepoGraph } from '@/lib/types'
 
 export type GitGraphSnapshot = {
     projectPath: string
@@ -18,10 +18,7 @@ const cache = new Map<number, GitGraphSnapshot>()
 
 const MAX_ENTRIES = 8
 
-export function getGitGraphSnapshot(
-    appId: number,
-    projectPath: string,
-): GitGraphSnapshot | null {
+export function getGitGraphSnapshot(appId: number, projectPath: string): GitGraphSnapshot | null {
     const hit = cache.get(appId)
     return hit && hit.projectPath === projectPath ? hit : null
 }
