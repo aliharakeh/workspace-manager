@@ -54,6 +54,7 @@ type TimelineGraphProps = {
   colW?: number
   hideLongSelfEdge?: boolean
   collapseDay?: boolean
+  hideOrphans?: boolean
 }
 
 type Edge = {
@@ -560,6 +561,7 @@ export function TimelineGraph({
   colW = DEFAULT_COL_W,
   hideLongSelfEdge = false,
   collapseDay = false,
+  hideOrphans = true,
 }: TimelineGraphProps) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -619,7 +621,7 @@ export function TimelineGraph({
       .map((c) => ({ ...c, branch: laneName(c.branch), on: (c.on || [c.branch]).map(laneName) }))
       .filter((c) => branches.includes(c.branch))
     const clusterMap = clusterByDay(commits, collapseDay)
-    const clusters = [...clusterMap.values()]
+    let clusters = [...clusterMap.values()]
     const merges = (graph.merges || []).map((m) => ({
       ...m,
       sourceBranch: laneName(m.sourceBranch),
@@ -642,7 +644,16 @@ export function TimelineGraph({
         dayClusterByKey.get(clusterKey(m.sourceBranch, m.timestamp))
       target?.merges.push(m)
     }
-    const edges = buildEdges(clusters, commits, branches, merges)
+    let edges = buildEdges(clusters, commits, branches, merges)
+    if (hideOrphans) {
+      const connected = new Set<string>()
+      for (const e of edges) {
+        connected.add(nodeId(e.src))
+        connected.add(nodeId(e.dst))
+      }
+      clusters = clusters.filter((c) => connected.has(nodeId(c)))
+      edges = edges.filter((e) => connected.has(nodeId(e.src)) && connected.has(nodeId(e.dst)))
+    }
     const startKeys = branchStartKeys(clusters, branches)
     const isStart = (d: Cluster) => startKeys.has(nodeId(d))
 
@@ -970,6 +981,7 @@ export function TimelineGraph({
     colW,
     hideLongSelfEdge,
     collapseDay,
+    hideOrphans,
   ])
 
   const branches = graph?.branches || []
