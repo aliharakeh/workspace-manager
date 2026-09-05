@@ -1,1063 +1,1140 @@
-import * as d3 from "d3"
-import { useEffect, useMemo, useRef, useState } from "react"
-import type { GitCommitNode, GitMergeEvent, GitRepoGraph } from "@/lib/types"
+import type { GitCommitNode, GitMergeEvent, GitRepoGraph } from '@/lib/types'
+import * as d3 from 'd3'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
-const LANE_H = 88
+const DEFAULT_LANE_H = 88
 const DEFAULT_COL_W = 200
 const START_R = 18
 const MARGIN = { top: 48, right: 56, bottom: 36, left: 36 }
 const COLORS = [
-  "#3b82f6",
-  "#22c55e",
-  "#f59e0b",
-  "#a855f7",
-  "#ef4444",
-  "#06b6d4",
-  "#f97316",
-  "#84cc16",
-  "#ec4899",
-  "#6366f1",
+    '#3b82f6',
+    '#22c55e',
+    '#f59e0b',
+    '#a855f7',
+    '#ef4444',
+    '#06b6d4',
+    '#f97316',
+    '#84cc16',
+    '#ec4899',
+    '#6366f1',
 ]
 
 type Cluster = GitCommitNode & {
-  count: number
-  commits: GitCommitNode[]
-  merges: GitMergeEvent[]
-  isSingleMerge?: boolean
-  _seg?: number
-  _slot?: number
-  _slots?: number
-  _center?: number
+    count: number
+    commits: GitCommitNode[]
+    merges: GitMergeEvent[]
+    isSingleMerge?: boolean
+    _seg?: number
+    _slot?: number
+    _slots?: number
+    _center?: number
 }
 
 export type GitInspect =
-  | ({ kind: "commit" } & GitCommitNode)
-  | ({ kind: "merge" } & GitMergeEvent & { tags?: string[] })
-  | ({ kind: "cluster" } & GitCommitNode & {
-      count: number
-      commits: GitCommitNode[]
-    })
+    | ({ kind: 'commit' } & GitCommitNode)
+    | ({ kind: 'merge' } & GitMergeEvent & { tags?: string[] })
+    | ({ kind: 'cluster' } & GitCommitNode & {
+              count: number
+              commits: GitCommitNode[]
+          })
 
 type TimelineGraphProps = {
-  graph: GitRepoGraph
-  focused: string
-  onSelect: (item: GitInspect) => void
-  selectedHash?: string
-  matchHashes?: string[]
-  selectedAuthors?: Set<string>
-  jumpTo: { hash: string; n: number } | null
-  rangeStart?: number
-  rangeEnd?: number
-  onViewChange?: (from: number, to: number) => void
-  showTags: boolean
-  fitKey?: string
-  colW?: number
-  hideLongSelfEdge?: boolean
-  collapseDay?: boolean
-  hideOrphans?: boolean
+    graph: GitRepoGraph
+    focused: string
+    onSelect: (item: GitInspect) => void
+    selectedHash?: string
+    matchHashes?: string[]
+    selectedAuthors?: Set<string>
+    jumpTo: { hash: string; n: number } | null
+    rangeStart?: number
+    rangeEnd?: number
+    onViewChange?: (from: number, to: number) => void
+    showTags: boolean
+    fitKey?: string
+    colW?: number
+    laneH?: number
+    edgeBend?: number
+    hideLongSelfEdge?: boolean
+    collapseDay?: boolean
+    hideOrphans?: boolean
 }
 
 type Edge = {
-  src: Cluster
-  dst: Cluster
-  branches: string[]
-  commits: GitCommitNode[]
+    src: Cluster
+    dst: Cluster
+    branches: string[]
+    commits: GitCommitNode[]
 }
 
 type EdgeDraft = {
-  src: Cluster
-  dst: Cluster
-  branches: Set<string>
-  commits: GitCommitNode[]
+    src: Cluster
+    dst: Cluster
+    branches: Set<string>
+    commits: GitCommitNode[]
 }
 
 type EdgePt = {
-  e: Edge
-  fork: boolean
-  x1: number
-  y1: number
-  x2: number
-  y2: number
-  r1: number
-  r2: number
+    e: Edge
+    fork: boolean
+    x1: number
+    y1: number
+    x2: number
+    y2: number
+    r1: number
+    r2: number
 }
 
-function viewAt(width: number, height: number, x: number, y: number) {
-  const ty = y > height - LANE_H ? height / 2 - y : 0
-  return d3.zoomIdentity.translate(width - MARGIN.right - x, ty)
+function viewAt(width: number, height: number, x: number, y: number, laneH = DEFAULT_LANE_H) {
+    const ty = y > height - laneH ? height / 2 - y : 0
+    return d3.zoomIdentity.translate(width - MARGIN.right - x, ty)
 }
 
 export function laneName(name: string) {
-  return String(name || "")
-    .replace(/^refs\/(heads|remotes|tags)\//, "")
-    .replace(/^(origin|upstream)\//, "")
+    return String(name || '')
+        .replace(/^refs\/(heads|remotes|tags)\//, '')
+        .replace(/^(origin|upstream)\//, '')
 }
 
 export function branchColor(name: string) {
-  const n = laneName(name)
-  let h = 2166136261
-  for (let i = 0; i < n.length; i++) h = Math.imul(h ^ n.charCodeAt(i), 16777619)
-  return COLORS[(h >>> 0) % COLORS.length]!
+    const n = laneName(name)
+    let h = 2166136261
+    for (let i = 0; i < n.length; i++) h = Math.imul(h ^ n.charCodeAt(i), 16777619)
+    return COLORS[(h >>> 0) % COLORS.length]!
 }
 
 function localDay(ts: string) {
-  const d = new Date(ts)
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+    const d = new Date(ts)
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
 }
 
 function clusterKey(branch: string, ts: string) {
-  return `${branch}\0${localDay(ts)}`
+    return `${branch}\0${localDay(ts)}`
 }
 
 function nodeId(g: Cluster | undefined) {
-  if (!g) return ""
-  if (g.isSingleMerge) return `m\0${g.hash}`
-  const base = clusterKey(g.branch, g.timestamp)
-  return g._seg != null ? `c\0${base}\0${g._seg}` : `c\0${base}`
+    if (!g) return ''
+    if (g.isSingleMerge) return `m\0${g.hash}`
+    const base = clusterKey(g.branch, g.timestamp)
+    return g._seg != null ? `c\0${base}\0${g._seg}` : `c\0${base}`
 }
 
 function clusterByDay(commits: GitCommitNode[], collapseDay = false) {
-  const map = new Map<string, Cluster>()
-  if (collapseDay) {
-    const byDay = new Map<string, GitCommitNode[]>()
-    for (const c of commits) {
-      const key = clusterKey(c.branch, c.timestamp)
-      let arr = byDay.get(key)
-      if (!arr) {
-        arr = []
-        byDay.set(key, arr)
-      }
-      arr.push(c)
+    const map = new Map<string, Cluster>()
+    if (collapseDay) {
+        const byDay = new Map<string, GitCommitNode[]>()
+        for (const c of commits) {
+            const key = clusterKey(c.branch, c.timestamp)
+            let arr = byDay.get(key)
+            if (!arr) {
+                arr = []
+                byDay.set(key, arr)
+            }
+            arr.push(c)
+        }
+        for (const [key, arr] of byDay.entries()) {
+            const sorted = arr
+                .slice()
+                .sort(
+                    (a, b) =>
+                        +new Date(a.timestamp) - +new Date(b.timestamp) ||
+                        String(a.hash).localeCompare(String(b.hash)),
+                )
+            const first = sorted[0]!
+            const last = sorted[sorted.length - 1]!
+            const g: Cluster = {
+                ...first,
+                hash: last.hash,
+                timestamp: last.timestamp,
+                subject: last.subject,
+                author: last.author,
+                count: sorted.length,
+                commits: sorted,
+                merges: [],
+                tags: [...new Set(sorted.flatMap(c => c.tags || []))],
+                isMerge: sorted.some(c => c.isMerge),
+                isSingleMerge: false,
+            }
+            if (sorted.length > 1) delete g.sourceBranch
+            map.set(`c\0${key}`, g)
+        }
+        for (const g of map.values()) {
+            g._slot = 0
+            g._slots = 1
+            g._center = 0
+        }
+        return map
     }
-    for (const [key, arr] of byDay.entries()) {
-      const sorted = arr
-        .slice()
-        .sort(
-          (a, b) =>
-            +new Date(a.timestamp) - +new Date(b.timestamp) ||
-            String(a.hash).localeCompare(String(b.hash))
-        )
-      const first = sorted[0]!
-      const last = sorted[sorted.length - 1]!
-      const g: Cluster = {
-        ...first,
-        hash: last.hash,
-        timestamp: last.timestamp,
-        subject: last.subject,
-        author: last.author,
-        count: sorted.length,
-        commits: sorted,
-        merges: [],
-        tags: [...new Set(sorted.flatMap((c) => c.tags || []))],
-        isMerge: sorted.some((c) => c.isMerge),
-        isSingleMerge: false,
-      }
-      if (sorted.length > 1) delete g.sourceBranch
-      map.set(`c\0${key}`, g)
+    const mergesByDay = new Map<string, GitCommitNode[]>()
+    const normalsByDay = new Map<string, GitCommitNode[]>()
+    for (const c of commits) {
+        const key = clusterKey(c.branch, c.timestamp)
+        const bucket = c.isMerge ? mergesByDay : normalsByDay
+        let arr = bucket.get(key)
+        if (!arr) {
+            arr = []
+            bucket.set(key, arr)
+        }
+        arr.push(c)
+    }
+    for (const arr of mergesByDay.values()) {
+        for (const c of arr) {
+            const key = `m\0${c.hash}`
+            if (!map.has(key)) {
+                map.set(key, {
+                    ...c,
+                    count: 1,
+                    commits: [c],
+                    merges: [],
+                    tags: [...(c.tags || [])],
+                    isSingleMerge: true,
+                    isMerge: true,
+                })
+            }
+        }
+    }
+    for (const [dayKey, arr] of normalsByDay.entries()) {
+        const dayMerges = (mergesByDay.get(dayKey) || [])
+            .slice()
+            .sort(
+                (a, b) =>
+                    +new Date(a.timestamp) - +new Date(b.timestamp) ||
+                    String(a.hash).localeCompare(String(b.hash)),
+            )
+        const sorted = arr
+            .slice()
+            .sort(
+                (a, b) =>
+                    +new Date(a.timestamp) - +new Date(b.timestamp) ||
+                    String(a.hash).localeCompare(String(b.hash)),
+            )
+        const segments = dayMerges.length
+            ? Array.from({ length: dayMerges.length + 1 }, () => [] as GitCommitNode[])
+            : [[] as GitCommitNode[]]
+        if (!dayMerges.length) {
+            segments[0] = sorted
+        } else {
+            const mergeTimes = dayMerges.map(m => +new Date(m.timestamp))
+            for (const c of sorted) {
+                const t = +new Date(c.timestamp)
+                let seg = 0
+                while (seg < mergeTimes.length && mergeTimes[seg]! <= t) seg++
+                segments[seg]!.push(c)
+            }
+        }
+        segments.forEach((bucket, segIdx) => {
+            if (!bucket.length) return
+            const key = dayMerges.length ? `c\0${dayKey}\0${segIdx}` : `c\0${dayKey}`
+            let g = map.get(key)
+            if (!g) {
+                const first = bucket[0]!
+                g = { ...first, count: 0, commits: [], merges: [], tags: [] }
+                if (dayMerges.length) g._seg = segIdx
+                map.set(key, g)
+            }
+            for (const c of bucket) {
+                g.commits.push(c)
+                g.count++
+                for (const t of c.tags || []) {
+                    if (!g.tags?.includes(t)) g.tags = [...(g.tags ?? []), t]
+                }
+                if (+new Date(c.timestamp) >= +new Date(g.timestamp)) {
+                    g.hash = c.hash
+                    g.timestamp = c.timestamp
+                    g.subject = c.subject
+                    g.author = c.author
+                }
+            }
+        })
     }
     for (const g of map.values()) {
-      g._slot = 0
-      g._slots = 1
-      g._center = 0
+        g.commits.sort((a, b) => +new Date(a.timestamp) - +new Date(b.timestamp))
+    }
+    const groups = new Map<string, Cluster[]>()
+    for (const g of map.values()) {
+        const key = clusterKey(g.branch, g.timestamp)
+        let arr = groups.get(key)
+        if (!arr) {
+            arr = []
+            groups.set(key, arr)
+        }
+        arr.push(g)
+    }
+    for (const arr of groups.values()) {
+        arr.sort(
+            (a, b) =>
+                +new Date(a.timestamp) - +new Date(b.timestamp) ||
+                String(a.hash).localeCompare(String(b.hash)),
+        )
+        const n = arr.length
+        const mergeIdx = arr.map((g, i) => (g.isSingleMerge ? i : -1)).filter(i => i >= 0)
+        const center = mergeIdx.length
+            ? mergeIdx.reduce((s, i) => s + i, 0) / mergeIdx.length
+            : (n - 1) / 2
+        arr.forEach((g, i) => {
+            g._slot = i
+            g._slots = n
+            g._center = center
+        })
     }
     return map
-  }
-  const mergesByDay = new Map<string, GitCommitNode[]>()
-  const normalsByDay = new Map<string, GitCommitNode[]>()
-  for (const c of commits) {
-    const key = clusterKey(c.branch, c.timestamp)
-    const bucket = c.isMerge ? mergesByDay : normalsByDay
-    let arr = bucket.get(key)
-    if (!arr) {
-      arr = []
-      bucket.set(key, arr)
-    }
-    arr.push(c)
-  }
-  for (const arr of mergesByDay.values()) {
-    for (const c of arr) {
-      const key = `m\0${c.hash}`
-      if (!map.has(key)) {
-        map.set(key, {
-          ...c,
-          count: 1,
-          commits: [c],
-          merges: [],
-          tags: [...(c.tags || [])],
-          isSingleMerge: true,
-          isMerge: true,
-        })
-      }
-    }
-  }
-  for (const [dayKey, arr] of normalsByDay.entries()) {
-    const dayMerges = (mergesByDay.get(dayKey) || [])
-      .slice()
-      .sort(
-        (a, b) =>
-          +new Date(a.timestamp) - +new Date(b.timestamp) ||
-          String(a.hash).localeCompare(String(b.hash))
-      )
-    const sorted = arr
-      .slice()
-      .sort(
-        (a, b) =>
-          +new Date(a.timestamp) - +new Date(b.timestamp) ||
-          String(a.hash).localeCompare(String(b.hash))
-      )
-    const segments = dayMerges.length
-      ? Array.from({ length: dayMerges.length + 1 }, () => [] as GitCommitNode[])
-      : [[] as GitCommitNode[]]
-    if (!dayMerges.length) {
-      segments[0] = sorted
-    } else {
-      const mergeTimes = dayMerges.map((m) => +new Date(m.timestamp))
-      for (const c of sorted) {
-        const t = +new Date(c.timestamp)
-        let seg = 0
-        while (seg < mergeTimes.length && mergeTimes[seg]! <= t) seg++
-        segments[seg]!.push(c)
-      }
-    }
-    segments.forEach((bucket, segIdx) => {
-      if (!bucket.length) return
-      const key = dayMerges.length ? `c\0${dayKey}\0${segIdx}` : `c\0${dayKey}`
-      let g = map.get(key)
-      if (!g) {
-        const first = bucket[0]!
-        g = { ...first, count: 0, commits: [], merges: [], tags: [] }
-        if (dayMerges.length) g._seg = segIdx
-        map.set(key, g)
-      }
-      for (const c of bucket) {
-        g.commits.push(c)
-        g.count++
-        for (const t of c.tags || []) {
-          if (!g.tags?.includes(t)) g.tags = [...(g.tags ?? []), t]
-        }
-        if (+new Date(c.timestamp) >= +new Date(g.timestamp)) {
-          g.hash = c.hash
-          g.timestamp = c.timestamp
-          g.subject = c.subject
-          g.author = c.author
-        }
-      }
-    })
-  }
-  for (const g of map.values()) {
-    g.commits.sort((a, b) => +new Date(a.timestamp) - +new Date(b.timestamp))
-  }
-  const groups = new Map<string, Cluster[]>()
-  for (const g of map.values()) {
-    const key = clusterKey(g.branch, g.timestamp)
-    let arr = groups.get(key)
-    if (!arr) {
-      arr = []
-      groups.set(key, arr)
-    }
-    arr.push(g)
-  }
-  for (const arr of groups.values()) {
-    arr.sort(
-      (a, b) =>
-        +new Date(a.timestamp) - +new Date(b.timestamp) ||
-        String(a.hash).localeCompare(String(b.hash))
-    )
-    const n = arr.length
-    const mergeIdx = arr.map((g, i) => (g.isSingleMerge ? i : -1)).filter((i) => i >= 0)
-    const center = mergeIdx.length
-      ? mergeIdx.reduce((s, i) => s + i, 0) / mergeIdx.length
-      : (n - 1) / 2
-    arr.forEach((g, i) => {
-      g._slot = i
-      g._slots = n
-      g._center = center
-    })
-  }
-  return map
 }
 
 function fmtDay(ts: string) {
-  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    return new Date(ts).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    })
 }
 
 function addMonths(ms: number, n: number) {
-  const d = new Date(ms)
-  d.setMonth(d.getMonth() + n)
-  return +d
+    const d = new Date(ms)
+    d.setMonth(d.getMonth() + n)
+    return +d
 }
 
 function shorten(x1: number, y1: number, x2: number, y2: number, a: number, b: number) {
-  const dx = x2 - x1
-  const dy = y2 - y1
-  const len = Math.hypot(dx, dy) || 1
-  return {
-    x1: x1 + (dx / len) * a,
-    y1: y1 + (dy / len) * a,
-    x2: x2 - (dx / len) * b,
-    y2: y2 - (dy / len) * b,
-  }
+    const dx = x2 - x1
+    const dy = y2 - y1
+    const len = Math.hypot(dx, dy) || 1
+    return {
+        x1: x1 + (dx / len) * a,
+        y1: y1 + (dy / len) * a,
+        x2: x2 - (dx / len) * b,
+        y2: y2 - (dy / len) * b,
+    }
 }
 
 function signedTrack(t: number) {
-  if (!t) return 0
-  return (t % 2 === 1 ? 1 : -1) * Math.ceil(t / 2)
+    if (!t) return 0
+    return (t % 2 === 1 ? 1 : -1) * Math.ceil(t / 2)
 }
 
 function nodeColor(d: Cluster) {
-  if (d?.isMerge) return branchColor(d.sourceBranch || d.branch)
-  return branchColor(d.branch)
+    if (d?.isMerge) return branchColor(d.sourceBranch || d.branch)
+    return branchColor(d.branch)
 }
 
 function edgeCurve(x1: number, y1: number, x2: number, y2: number, bend = 0) {
-  const dx = x2 - x1
-  const dy = y2 - y1
-  if (Math.abs(dy) < 6) {
-    const dir = dx >= 0 ? -1 : 1
-    const h = dir * (bend ? Math.min(Math.abs(bend), 52) : 26)
-    return `M ${x1} ${y1} C ${x1 + dx / 3} ${y1 + h}, ${x1 + (2 * dx) / 3} ${y2 + h}, ${x2} ${y2}`
-  }
-  const mx = (x1 + x2) / 2 + bend
-  return `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`
+    const dx = x2 - x1
+    const dy = y2 - y1
+    if (Math.abs(dy) < 6) {
+        const dir = dx >= 0 ? -1 : 1
+        const h = dir * (bend || 26)
+        return `M ${x1} ${y1} C ${x1 + dx / 3} ${y1 + h}, ${x1 + (2 * dx) / 3} ${y2 + h}, ${x2} ${y2}`
+    }
+    const mx = (x1 + x2) / 2 + bend
+    return `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`
 }
 
 function xOverlap(a: EdgePt, b: EdgePt, pad = 4) {
-  const a0 = Math.min(a.x1, a.x2) - pad
-  const a1 = Math.max(a.x1, a.x2) + pad
-  const b0 = Math.min(b.x1, b.x2) - pad
-  const b1 = Math.max(b.x1, b.x2) + pad
-  return a0 < b1 && b0 < a1
+    const a0 = Math.min(a.x1, a.x2) - pad
+    const a1 = Math.max(a.x1, a.x2) + pad
+    const b0 = Math.min(b.x1, b.x2) - pad
+    const b1 = Math.max(b.x1, b.x2) + pad
+    return a0 < b1 && b0 < a1
 }
 
 function yOverlap(a: EdgePt, b: EdgePt, pad = 8) {
-  const a0 = Math.min(a.y1, a.y2) - pad
-  const a1 = Math.max(a.y1, a.y2) + pad
-  const b0 = Math.min(b.y1, b.y2) - pad
-  const b1 = Math.max(b.y1, b.y2) + pad
-  return a0 < b1 && b0 < a1
+    const a0 = Math.min(a.y1, a.y2) - pad
+    const a1 = Math.max(a.y1, a.y2) + pad
+    const b0 = Math.min(b.y1, b.y2) - pad
+    const b1 = Math.max(b.y1, b.y2) + pad
+    return a0 < b1 && b0 < a1
 }
 
 function yTracks(pts: EdgePt[], colW: number) {
-  const track = Array(pts.length).fill(0)
-  const cross = pts
-    .map((_, i) => i)
-    .filter((i) => Math.abs(pts[i]!.y2 - pts[i]!.y1) >= 6 && Math.abs(pts[i]!.x2 - pts[i]!.x1) >= 6)
-  cross.sort((i, j) => pts[i]!.x1 + pts[i]!.x2 - (pts[j]!.x1 + pts[j]!.x2))
-  for (let a = 0; a < cross.length; a++) {
-    const i = cross[a]!
-    const used = new Set<number>()
-    for (let b = 0; b < a; b++) {
-      const j = cross[b]!
-      const am = (pts[i]!.x1 + pts[i]!.x2) / 2
-      const bm = (pts[j]!.x1 + pts[j]!.x2) / 2
-      if (Math.abs(am - bm) >= colW / 2) continue
-      if (yOverlap(pts[i]!, pts[j]!)) used.add(track[j]!)
+    const track = Array(pts.length).fill(0)
+    const cross = pts
+        .map((_, i) => i)
+        .filter(
+            i => Math.abs(pts[i]!.y2 - pts[i]!.y1) >= 6 && Math.abs(pts[i]!.x2 - pts[i]!.x1) >= 6,
+        )
+    cross.sort((i, j) => pts[i]!.x1 + pts[i]!.x2 - (pts[j]!.x1 + pts[j]!.x2))
+    for (let a = 0; a < cross.length; a++) {
+        const i = cross[a]!
+        const used = new Set<number>()
+        for (let b = 0; b < a; b++) {
+            const j = cross[b]!
+            const am = (pts[i]!.x1 + pts[i]!.x2) / 2
+            const bm = (pts[j]!.x1 + pts[j]!.x2) / 2
+            if (Math.abs(am - bm) >= colW / 2) continue
+            if (yOverlap(pts[i]!, pts[j]!)) used.add(track[j]!)
+        }
+        let t = 0
+        while (used.has(t)) t++
+        track[i] = t
     }
-    let t = 0
-    while (used.has(t)) t++
-    track[i] = t
-  }
-  const same = pts
-    .map((_, i) => i)
-    .filter((i) => Math.abs(pts[i]!.y2 - pts[i]!.y1) < 6 && Math.abs(pts[i]!.x2 - pts[i]!.x1) >= 6)
-  same.sort((i, j) => Math.min(pts[i]!.x1, pts[i]!.x2) - Math.min(pts[j]!.x1, pts[j]!.x2))
-  for (let a = 0; a < same.length; a++) {
-    const i = same[a]!
-    const used = new Set<number>()
-    for (let b = 0; b < a; b++) {
-      const j = same[b]!
-      if (Math.abs(pts[i]!.y1 - pts[j]!.y1) >= 6) continue
-      if (xOverlap(pts[i]!, pts[j]!)) used.add(track[j]!)
+    const same = pts
+        .map((_, i) => i)
+        .filter(
+            i => Math.abs(pts[i]!.y2 - pts[i]!.y1) < 6 && Math.abs(pts[i]!.x2 - pts[i]!.x1) >= 6,
+        )
+    same.sort((i, j) => Math.min(pts[i]!.x1, pts[i]!.x2) - Math.min(pts[j]!.x1, pts[j]!.x2))
+    for (let a = 0; a < same.length; a++) {
+        const i = same[a]!
+        const used = new Set<number>()
+        for (let b = 0; b < a; b++) {
+            const j = same[b]!
+            if (Math.abs(pts[i]!.y1 - pts[j]!.y1) >= 6) continue
+            if (xOverlap(pts[i]!, pts[j]!)) used.add(track[j]!)
+        }
+        let t = 0
+        while (used.has(t)) t++
+        track[i] = t
     }
-    let t = 0
-    while (used.has(t)) t++
-    track[i] = t
-  }
-  return track
+    return track
 }
 
 function clipLabel(s: string, n = 28) {
-  s = String(s || "")
-  return s.length > n ? `${s.slice(0, n - 2)}…` : s
+    s = String(s || '')
+    return s.length > n ? `${s.slice(0, n - 2)}…` : s
 }
 
 function diamondPath(r: number) {
-  return `M 0 ${-r} L ${r} 0 L 0 ${r} L ${-r} 0 Z`
+    return `M 0 ${-r} L ${r} 0 L 0 ${r} L ${-r} 0 Z`
 }
 
 function branchStartKeys(clusters: Cluster[], branches: string[]) {
-  const keys = new Set<string>()
-  for (const name of branches) {
-    let best: Cluster | null = null
-    let bestT = Infinity
-    for (const g of clusters) {
-      if (g.branch !== name || g.isSingleMerge) continue
-      const t = +new Date(g.commits[0]?.timestamp || g.timestamp)
-      if (t < bestT) {
-        bestT = t
-        best = g
-      }
-    }
-    if (!best) {
-      for (const g of clusters) {
-        if (g.branch !== name) continue
-        const t = +new Date(g.commits[0]?.timestamp || g.timestamp)
-        if (t < bestT) {
-          bestT = t
-          best = g
+    const keys = new Set<string>()
+    for (const name of branches) {
+        let best: Cluster | null = null
+        let bestT = Infinity
+        for (const g of clusters) {
+            if (g.branch !== name || g.isSingleMerge) continue
+            const t = +new Date(g.commits[0]?.timestamp || g.timestamp)
+            if (t < bestT) {
+                bestT = t
+                best = g
+            }
         }
-      }
+        if (!best) {
+            for (const g of clusters) {
+                if (g.branch !== name) continue
+                const t = +new Date(g.commits[0]?.timestamp || g.timestamp)
+                if (t < bestT) {
+                    bestT = t
+                    best = g
+                }
+            }
+        }
+        if (best) keys.add(nodeId(best))
     }
-    if (best) keys.add(nodeId(best))
-  }
-  return keys
+    return keys
 }
 
 function addEdge(
-  edges: Map<string, EdgeDraft>,
-  src: Cluster | undefined,
-  dst: Cluster | undefined,
-  names: string[],
-  commit?: GitCommitNode | Cluster | GitMergeEvent
+    edges: Map<string, EdgeDraft>,
+    src: Cluster | undefined,
+    dst: Cluster | undefined,
+    names: string[],
+    commit?: GitCommitNode | Cluster | GitMergeEvent,
 ) {
-  if (!src || !dst || src === dst) return
-  const key = `${nodeId(src)}->${nodeId(dst)}`
-  let e = edges.get(key)
-  if (!e) {
-    e = { src, dst, branches: new Set(), commits: [] }
-    edges.set(key, e)
-  }
-  for (const n of names) {
-    if (n) e.branches.add(n)
-  }
-  const extra =
-    commit && "commits" in commit && Array.isArray(commit.commits)
-      ? commit.commits
-      : commit
-        ? [commit as GitCommitNode]
-        : []
-  for (const c of extra) {
-    if (c?.hash && !e.commits.some((x) => x.hash === c.hash)) e.commits.push(c as GitCommitNode)
-  }
+    if (!src || !dst || src === dst) return
+    const key = `${nodeId(src)}->${nodeId(dst)}`
+    let e = edges.get(key)
+    if (!e) {
+        e = { src, dst, branches: new Set(), commits: [] }
+        edges.set(key, e)
+    }
+    for (const n of names) {
+        if (n) e.branches.add(n)
+    }
+    const extra =
+        commit && 'commits' in commit && Array.isArray(commit.commits)
+            ? commit.commits
+            : commit
+              ? [commit as GitCommitNode]
+              : []
+    for (const c of extra) {
+        if (c?.hash && !e.commits.some(x => x.hash === c.hash)) e.commits.push(c as GitCommitNode)
+    }
 }
 
 function buildEdges(
-  clusters: Cluster[],
-  commits: GitCommitNode[],
-  branches: string[],
-  merges: GitMergeEvent[]
+    clusters: Cluster[],
+    commits: GitCommitNode[],
+    branches: string[],
+    merges: GitMergeEvent[],
 ): Edge[] {
-  const byKey = new Map<string, Cluster>()
-  for (const g of clusters) {
-    const k = clusterKey(g.branch, g.timestamp)
-    if (!byKey.has(k)) byKey.set(k, g)
-  }
-  const byHash = new Map<string, Cluster>()
-  for (const g of clusters) {
-    for (const c of g.commits) {
-      if (!byHash.has(c.hash)) byHash.set(c.hash, g)
+    const byKey = new Map<string, Cluster>()
+    for (const g of clusters) {
+        const k = clusterKey(g.branch, g.timestamp)
+        if (!byKey.has(k)) byKey.set(k, g)
     }
-  }
-  const allow = new Set(branches)
-  const edges = new Map<string, EdgeDraft>()
-  let linked = false
-  for (const c of commits) {
-    const dst = byHash.get(c.hash)
-    const parents = c.parents || []
-    for (const parent of parents) {
-      const src = byHash.get(parent)
-      if (!src || !dst) continue
-      linked = true
-      const names = (c.on || [c.branch]).filter((n) => allow.has(n))
-      if (!names.length) continue
-      addEdge(edges, src, dst, names, c)
+    const byHash = new Map<string, Cluster>()
+    for (const g of clusters) {
+        for (const c of g.commits) {
+            if (!byHash.has(c.hash)) byHash.set(c.hash, g)
+        }
     }
-  }
-  if (!linked) {
-    d3.group(clusters, (c) => c.branch).forEach((nodes) => {
-      nodes.sort((a, b) => +new Date(a.timestamp) - +new Date(b.timestamp))
-      for (let i = 1; i < nodes.length; i++) addEdge(edges, nodes[i - 1], nodes[i], [nodes[i]!.branch], nodes[i])
-    })
-    for (const m of merges) {
-      if (!allow.has(m.sourceBranch) || !allow.has(m.targetBranch)) continue
-      addEdge(
-        edges,
-        byKey.get(clusterKey(m.sourceBranch, m.timestamp)) || byHash.get(m.sourceHash),
-        byKey.get(clusterKey(m.targetBranch, m.timestamp)) || byHash.get(m.hash),
-        [m.sourceBranch, m.targetBranch],
-        m
-      )
+    const allow = new Set(branches)
+    const edges = new Map<string, EdgeDraft>()
+    let linked = false
+    for (const c of commits) {
+        const dst = byHash.get(c.hash)
+        const parents = c.parents || []
+        for (const parent of parents) {
+            const src = byHash.get(parent)
+            if (!src || !dst) continue
+            linked = true
+            const names = (c.on || [c.branch]).filter(n => allow.has(n))
+            if (!names.length) continue
+            addEdge(edges, src, dst, names, c)
+        }
     }
-  }
-  return [...edges.values()].map((e) => ({ ...e, branches: [...e.branches].sort() }))
+    if (!linked) {
+        d3.group(clusters, c => c.branch).forEach(nodes => {
+            nodes.sort((a, b) => +new Date(a.timestamp) - +new Date(b.timestamp))
+            for (let i = 1; i < nodes.length; i++)
+                addEdge(edges, nodes[i - 1], nodes[i], [nodes[i]!.branch], nodes[i])
+        })
+        for (const m of merges) {
+            if (!allow.has(m.sourceBranch) || !allow.has(m.targetBranch)) continue
+            addEdge(
+                edges,
+                byKey.get(clusterKey(m.sourceBranch, m.timestamp)) || byHash.get(m.sourceHash),
+                byKey.get(clusterKey(m.targetBranch, m.timestamp)) || byHash.get(m.hash),
+                [m.sourceBranch, m.targetBranch],
+                m,
+            )
+        }
+    }
+    return [...edges.values()].map(e => ({ ...e, branches: [...e.branches].sort() }))
 }
 
 function pruneLongSelfMergeEdges(pts: EdgePt[]) {
-  const byDst = new Map<string, number[]>()
-  pts.forEach((p, i) => {
-    const key = nodeId(p?.e?.dst)
-    if (!key) return
-    let arr = byDst.get(key)
-    if (!arr) {
-      arr = []
-      byDst.set(key, arr)
+    const byDst = new Map<string, number[]>()
+    pts.forEach((p, i) => {
+        const key = nodeId(p?.e?.dst)
+        if (!key) return
+        let arr = byDst.get(key)
+        if (!arr) {
+            arr = []
+            byDst.set(key, arr)
+        }
+        arr.push(i)
+    })
+    const drop = new Set<number>()
+    const survivorByDst = new Map<string, number[]>()
+    for (const idxs of byDst.values()) {
+        if (idxs.length < 2) continue
+        const dst = pts[idxs[0]!]!.e.dst
+        if (!dst?.isMerge) continue
+        if (!idxs.every(i => pts[i]!.e.src.branch === dst.branch)) continue
+        let longest = idxs[0]!
+        let longestLen = -1
+        for (const i of idxs) {
+            const p = pts[i]!
+            const len = Math.hypot(p.x2 - p.x1, p.y2 - p.y1)
+            if (len > longestLen) {
+                longestLen = len
+                longest = i
+            }
+        }
+        drop.add(longest)
+        survivorByDst.set(
+            nodeId(dst),
+            idxs.filter(i => i !== longest),
+        )
     }
-    arr.push(i)
-  })
-  const drop = new Set<number>()
-  const survivorByDst = new Map<string, number[]>()
-  for (const idxs of byDst.values()) {
-    if (idxs.length < 2) continue
-    const dst = pts[idxs[0]!]!.e.dst
-    if (!dst?.isMerge) continue
-    if (!idxs.every((i) => pts[i]!.e.src.branch === dst.branch)) continue
-    let longest = idxs[0]!
-    let longestLen = -1
-    for (const i of idxs) {
-      const p = pts[i]!
-      const len = Math.hypot(p.x2 - p.x1, p.y2 - p.y1)
-      if (len > longestLen) {
-        longestLen = len
-        longest = i
-      }
+    if (!drop.size) return pts
+    for (const survivors of survivorByDst.values()) {
+        if (!survivors.length) continue
+        const keep = pts[survivors[0]!]!.e
+        for (const i of drop) {
+            const e = pts[i]?.e
+            if (!e || nodeId(e.dst) !== nodeId(keep.dst)) continue
+            for (const b of e.branches || []) {
+                if (b && !keep.branches.includes(b)) keep.branches.push(b)
+            }
+            for (const c of e.commits || []) {
+                if (c?.hash && !keep.commits.some(x => x.hash === c.hash)) keep.commits.push(c)
+            }
+        }
     }
-    drop.add(longest)
-    survivorByDst.set(
-      nodeId(dst),
-      idxs.filter((i) => i !== longest)
-    )
-  }
-  if (!drop.size) return pts
-  for (const survivors of survivorByDst.values()) {
-    if (!survivors.length) continue
-    const keep = pts[survivors[0]!]!.e
-    for (const i of drop) {
-      const e = pts[i]?.e
-      if (!e || nodeId(e.dst) !== nodeId(keep.dst)) continue
-      for (const b of e.branches || []) {
-        if (b && !keep.branches.includes(b)) keep.branches.push(b)
-      }
-      for (const c of e.commits || []) {
-        if (c?.hash && !keep.commits.some((x) => x.hash === c.hash)) keep.commits.push(c)
-      }
-    }
-  }
-  return pts.filter((_, i) => !drop.has(i))
+    return pts.filter((_, i) => !drop.has(i))
 }
 
 export function TimelineGraph({
-  graph,
-  focused,
-  onSelect,
-  selectedHash,
-  matchHashes,
-  selectedAuthors,
-  jumpTo,
-  rangeStart,
-  rangeEnd,
-  onViewChange,
-  showTags,
-  fitKey,
-  colW = DEFAULT_COL_W,
-  hideLongSelfEdge = false,
-  collapseDay = false,
-  hideOrphans = true,
+    graph,
+    focused,
+    onSelect,
+    selectedHash,
+    matchHashes,
+    selectedAuthors,
+    jumpTo,
+    rangeStart,
+    rangeEnd,
+    onViewChange,
+    showTags,
+    fitKey,
+    colW = DEFAULT_COL_W,
+    laneH = DEFAULT_LANE_H,
+    edgeBend = 1,
+    hideLongSelfEdge = false,
+    collapseDay = false,
+    hideOrphans = true,
 }: TimelineGraphProps) {
-  const wrapRef = useRef<HTMLDivElement>(null)
-  const svgRef = useRef<SVGSVGElement>(null)
-  const zoomRef = useRef(d3.zoomIdentity)
-  const zoomKeyRef = useRef("")
-  const firstDayRef = useRef("")
-  const anchorRef = useRef<{ key: string; k: number; y: number; sx: number } | null>(null)
-  const jumpKeyRef = useRef("")
-  const viewCb = useRef(onViewChange)
-  viewCb.current = onViewChange
-  const rangeRef = useRef({ start: rangeStart, end: rangeEnd })
-  rangeRef.current = { start: rangeStart, end: rangeEnd }
-  const [size, setSize] = useState({ w: 0, h: 0 })
-  const [tip, setTip] = useState<{ x: number; y: number; d: Cluster } | null>(null)
-  const zoomFitKey = fitKey ?? `${graph.path}:${graph.branches.join("\n")}`
+    const wrapRef = useRef<HTMLDivElement>(null)
+    const svgRef = useRef<SVGSVGElement>(null)
+    const zoomRef = useRef(d3.zoomIdentity)
+    const zoomKeyRef = useRef('')
+    const firstDayRef = useRef('')
+    const anchorRef = useRef<{ key: string; k: number; y: number; sx: number } | null>(null)
+    const jumpKeyRef = useRef('')
+    const viewCb = useRef(onViewChange)
+    viewCb.current = onViewChange
+    const rangeRef = useRef({ start: rangeStart, end: rangeEnd })
+    rangeRef.current = { start: rangeStart, end: rangeEnd }
+    const [size, setSize] = useState({ w: 0, h: 0 })
+    const [tip, setTip] = useState<{ x: number; y: number; d: Cluster } | null>(null)
+    const zoomFitKey = fitKey ?? `${graph.path}:${graph.branches.join('\n')}`
 
-  useEffect(() => {
-    const el = wrapRef.current
-    if (!el) return
-    const ro = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect
-      if (width < 80 || height < 80) return
-      const svg = svgRef.current
-      if (svg) {
-        svg.setAttribute("width", String(width))
-        svg.setAttribute("height", String(height))
-        svg.setAttribute("viewBox", `0 0 ${width} ${height}`)
-      }
-      setSize((prev) =>
-        Math.abs(prev.w - width) < 1 && Math.abs(prev.h - height) < 1 ? prev : { w: width, h: height }
-      )
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
+    useEffect(() => {
+        const el = wrapRef.current
+        if (!el) return
+        const ro = new ResizeObserver(([entry]) => {
+            const { width, height } = entry.contentRect
+            if (width < 80 || height < 80) return
+            const svg = svgRef.current
+            if (svg) {
+                svg.setAttribute('width', String(width))
+                svg.setAttribute('height', String(height))
+                svg.setAttribute('viewBox', `0 0 ${width} ${height}`)
+            }
+            setSize(prev =>
+                Math.abs(prev.w - width) < 1 && Math.abs(prev.h - height) < 1
+                    ? prev
+                    : { w: width, h: height },
+            )
+        })
+        ro.observe(el)
+        return () => ro.disconnect()
+    }, [])
 
-  const related = useMemo(() => {
-    if (!focused || !graph) return null
-    const set = new Set([focused])
-    for (const m of graph.merges || []) {
-      const src = laneName(m.sourceBranch)
-      const dst = laneName(m.targetBranch)
-      if (src === focused) set.add(dst)
-      if (dst === focused) set.add(src)
-    }
-    return set
-  }, [focused, graph])
+    const related = useMemo(() => {
+        if (!focused || !graph) return null
+        const set = new Set([focused])
+        for (const m of graph.merges || []) {
+            const src = laneName(m.sourceBranch)
+            const dst = laneName(m.targetBranch)
+            if (src === focused) set.add(dst)
+            if (dst === focused) set.add(src)
+        }
+        return set
+    }, [focused, graph])
 
-  useEffect(() => {
-    const svgEl = svgRef.current
-    if (!svgEl || !graph?.branches?.length || size.w < 80 || size.h < 80) return
-    const svg = d3.select<SVGSVGElement, unknown>(svgEl)
-    svg.selectAll("*").remove()
+    useEffect(() => {
+        const svgEl = svgRef.current
+        if (!svgEl || !graph?.branches?.length || size.w < 80 || size.h < 80) return
+        const svg = d3.select<SVGSVGElement, unknown>(svgEl)
+        svg.selectAll('*').remove()
 
-    const branches = [...new Set(graph.branches.map(laneName))]
-    const commits = graph.commits
-      .map((c) => ({ ...c, branch: laneName(c.branch), on: (c.on || [c.branch]).map(laneName) }))
-      .filter((c) => branches.includes(c.branch))
-    const clusterMap = clusterByDay(commits, collapseDay)
-    let clusters = [...clusterMap.values()]
-    const merges = (graph.merges || []).map((m) => ({
-      ...m,
-      sourceBranch: laneName(m.sourceBranch),
-      targetBranch: laneName(m.targetBranch),
-    }))
-    const mergeNodeByHash = new Map<string, Cluster>()
-    const dayClusterByKey = new Map<string, Cluster>()
-    for (const g of clusters) {
-      if (g.isSingleMerge) {
-        if (!mergeNodeByHash.has(g.hash)) mergeNodeByHash.set(g.hash, g)
-      } else if (!dayClusterByKey.has(clusterKey(g.branch, g.timestamp))) {
-        dayClusterByKey.set(clusterKey(g.branch, g.timestamp), g)
-      }
-    }
-    for (const m of merges) {
-      if (m.kind === "branch") continue
-      const target =
-        mergeNodeByHash.get(m.hash) ||
-        dayClusterByKey.get(clusterKey(m.targetBranch, m.timestamp)) ||
-        dayClusterByKey.get(clusterKey(m.sourceBranch, m.timestamp))
-      target?.merges.push(m)
-    }
-    let edges = buildEdges(clusters, commits, branches, merges)
-    if (hideOrphans) {
-      const connected = new Set<string>()
-      for (const e of edges) {
-        connected.add(nodeId(e.src))
-        connected.add(nodeId(e.dst))
-      }
-      clusters = clusters.filter((c) => connected.has(nodeId(c)))
-      edges = edges.filter((e) => connected.has(nodeId(e.src)) && connected.has(nodeId(e.dst)))
-    }
-    const startKeys = branchStartKeys(clusters, branches)
-    const isStart = (d: Cluster) => startKeys.has(nodeId(d))
+        const branches = [...new Set(graph.branches.map(laneName))]
+        const commits = graph.commits
+            .map(c => ({
+                ...c,
+                branch: laneName(c.branch),
+                on: (c.on || [c.branch]).map(laneName),
+            }))
+            .filter(c => branches.includes(c.branch))
+        const clusterMap = clusterByDay(commits, collapseDay)
+        let clusters = [...clusterMap.values()]
+        const merges = (graph.merges || []).map(m => ({
+            ...m,
+            sourceBranch: laneName(m.sourceBranch),
+            targetBranch: laneName(m.targetBranch),
+        }))
+        const mergeNodeByHash = new Map<string, Cluster>()
+        const dayClusterByKey = new Map<string, Cluster>()
+        for (const g of clusters) {
+            if (g.isSingleMerge) {
+                if (!mergeNodeByHash.has(g.hash)) mergeNodeByHash.set(g.hash, g)
+            } else if (!dayClusterByKey.has(clusterKey(g.branch, g.timestamp))) {
+                dayClusterByKey.set(clusterKey(g.branch, g.timestamp), g)
+            }
+        }
+        for (const m of merges) {
+            if (m.kind === 'branch') continue
+            const target =
+                mergeNodeByHash.get(m.hash) ||
+                dayClusterByKey.get(clusterKey(m.targetBranch, m.timestamp)) ||
+                dayClusterByKey.get(clusterKey(m.sourceBranch, m.timestamp))
+            target?.merges.push(m)
+        }
+        let edges = buildEdges(clusters, commits, branches, merges)
+        if (hideOrphans) {
+            const connected = new Set<string>()
+            for (const e of edges) {
+                connected.add(nodeId(e.src))
+                connected.add(nodeId(e.dst))
+            }
+            clusters = clusters.filter(c => connected.has(nodeId(c)))
+            edges = edges.filter(e => connected.has(nodeId(e.src)) && connected.has(nodeId(e.dst)))
+        }
+        const startKeys = branchStartKeys(clusters, branches)
+        const isStart = (d: Cluster) => startKeys.has(nodeId(d))
 
-    const dayMin = new Map<string, { t: number; ts: string }>()
-    for (const g of clusters) {
-      const k = localDay(g.timestamp)
-      const t = +new Date(g.timestamp)
-      if (!dayMin.has(k) || t < dayMin.get(k)!.t) dayMin.set(k, { t, ts: g.timestamp })
-    }
-    const days = [...dayMin.entries()].sort((a, b) => a[1].t - b[1].t)
-    const dayIndex = new Map(days.map(([k], i) => [k, i]))
+        const dayMin = new Map<string, { t: number; ts: string }>()
+        for (const g of clusters) {
+            const k = localDay(g.timestamp)
+            const t = +new Date(g.timestamp)
+            if (!dayMin.has(k) || t < dayMin.get(k)!.t) dayMin.set(k, { t, ts: g.timestamp })
+        }
+        const days = [...dayMin.entries()].sort((a, b) => a[1].t - b[1].t)
+        const dayIndex = new Map(days.map(([k], i) => [k, i]))
 
-    const width = size.w
-    const height = size.h
-    const cw = Number(colW) || DEFAULT_COL_W
-    const yOf = (name: string) => {
-      const i = branches.indexOf(name)
-      return i < 0 ? undefined : MARGIN.top + i * LANE_H + LANE_H / 2
-    }
-    const xBase = (ts: string) => MARGIN.left + (dayIndex.get(localDay(ts)) ?? 0) * cw
-    const slotOffset = (d: Cluster) => {
-      const n = d?._slots || 1
-      if (n < 2) return 0
-      const step = Math.min(44, Math.max(32, (cw - 80) / (n - 1)))
-      const center = d?._center ?? (n - 1) / 2
-      return ((d._slot || 0) - center) * step
-    }
-    const xOfNode = (d: Cluster) => xBase(d.timestamp) + slotOffset(d)
-    const plotBottom = MARGIN.top + Math.max(branches.length, 1) * LANE_H
-    const dim = (branch: string) => (related && !related.has(branch) ? 0.12 : 1)
-    const firstX = MARGIN.left
-    const lastX = MARGIN.left + Math.max(days.length - 1, 0) * cw
-    let latest = clusters[0]
-    for (const g of clusters) {
-      if (latest && +new Date(g.timestamp) > +new Date(latest.timestamp)) latest = g
-    }
-    const latestView = latest
-      ? viewAt(width, height, xOfNode(latest), yOf(latest.branch) ?? height / 2)
-      : d3.zoomIdentity
+        const width = size.w
+        const height = size.h
+        const cw = Number(colW) || DEFAULT_COL_W
+        const lh = Number(laneH) || DEFAULT_LANE_H
+        const yOf = (name: string) => {
+            const i = branches.indexOf(name)
+            return i < 0 ? undefined : MARGIN.top + i * lh + lh / 2
+        }
+        const xBase = (ts: string) => MARGIN.left + (dayIndex.get(localDay(ts)) ?? 0) * cw
+        const slotOffset = (d: Cluster) => {
+            const n = d?._slots || 1
+            if (n < 2) return 0
+            const step = Math.min(44, Math.max(32, (cw - 80) / (n - 1)))
+            const center = d?._center ?? (n - 1) / 2
+            return ((d._slot || 0) - center) * step
+        }
+        const xOfNode = (d: Cluster) => xBase(d.timestamp) + slotOffset(d)
+        const plotBottom = MARGIN.top + Math.max(branches.length, 1) * lh
+        const dim = (branch: string) => (related && !related.has(branch) ? 0.12 : 1)
+        const firstX = MARGIN.left
+        const lastX = MARGIN.left + Math.max(days.length - 1, 0) * cw
+        let latest = clusters[0]
+        for (const g of clusters) {
+            if (latest && +new Date(g.timestamp) > +new Date(latest.timestamp)) latest = g
+        }
+        const latestView = latest
+            ? viewAt(width, height, xOfNode(latest), yOf(latest.branch) ?? height / 2, lh)
+            : d3.zoomIdentity
 
-    if (zoomKeyRef.current !== zoomFitKey) {
-      zoomRef.current = latestView
-      zoomKeyRef.current = zoomFitKey
-      firstDayRef.current = days[0]?.[0] ?? ""
-      anchorRef.current = null
-    } else {
-      const prev = firstDayRef.current
-      const shift = prev ? days.findIndex(([d]) => d === prev) : 0
-      if (shift > 0) zoomRef.current = zoomRef.current.translate(-shift * cw, 0)
-      firstDayRef.current = days[0]?.[0] ?? prev
-    }
+        if (zoomKeyRef.current !== zoomFitKey) {
+            zoomRef.current = latestView
+            zoomKeyRef.current = zoomFitKey
+            firstDayRef.current = days[0]?.[0] ?? ''
+            anchorRef.current = null
+        } else {
+            const prev = firstDayRef.current
+            const shift = prev ? days.findIndex(([d]) => d === prev) : 0
+            if (shift > 0) zoomRef.current = zoomRef.current.translate(-shift * cw, 0)
+            firstDayRef.current = days[0]?.[0] ?? prev
+        }
 
-    const bg = "var(--background)"
-    const grid = "var(--border)"
-    const tick = "var(--muted-foreground)"
+        const bg = 'var(--background)'
+        const grid = 'var(--border)'
+        const tick = 'var(--muted-foreground)'
 
-    svg.attr("width", width).attr("height", height).attr("viewBox", `0 0 ${width} ${height}`).style("cursor", "grab")
+        svg.attr('width', width)
+            .attr('height', height)
+            .attr('viewBox', `0 0 ${width} ${height}`)
+            .style('cursor', 'grab')
 
-    const defs = svg.append("defs")
-    defs.append("clipPath").attr("id", "net-clip").append("rect").attr("width", width).attr("height", height)
-    defs.append("style").text(`
+        const defs = svg.append('defs')
+        defs.append('clipPath')
+            .attr('id', 'net-clip')
+            .append('rect')
+            .attr('width', width)
+            .attr('height', height)
+        defs.append('style').text(`
       @keyframes merge-dash { to { stroke-dashoffset: -14; } }
       @keyframes fork-dash { to { stroke-dashoffset: -24; } }
       .merge-edge { stroke-dasharray: 8 6; animation: merge-dash 0.55s linear infinite; }
       .fork-edge { stroke-dasharray: 18 6; animation: fork-dash 0.7s linear infinite; }
     `)
 
-    svg.append("rect").attr("width", width).attr("height", height).attr("fill", bg)
-    const world = svg
-      .append("g")
-      .attr("clip-path", "url(#net-clip)")
-      .append("g")
-      .attr("transform", zoomRef.current.toString())
+        svg.append('rect').attr('width', width).attr('height', height).attr('fill', bg)
+        const world = svg
+            .append('g')
+            .attr('clip-path', 'url(#net-clip)')
+            .append('g')
+            .attr('transform', zoomRef.current.toString())
 
-    days.forEach(([, info], i) => {
-      const x = MARGIN.left + i * cw
-      world
-        .append("line")
-        .attr("x1", x)
-        .attr("x2", x)
-        .attr("y1", MARGIN.top)
-        .attr("y2", plotBottom)
-        .attr("stroke", grid)
-        .attr("stroke-width", 1)
-        .attr("stroke-dasharray", "4 6")
-      world
-        .append("text")
-        .attr("x", x)
-        .attr("y", MARGIN.top - 14)
-        .attr("text-anchor", "middle")
-        .attr("fill", tick)
-        .attr("font-size", 10)
-        .text(fmtDay(info.ts))
-    })
+        days.forEach(([, info], i) => {
+            const x = MARGIN.left + i * cw
+            world
+                .append('line')
+                .attr('x1', x)
+                .attr('x2', x)
+                .attr('y1', MARGIN.top)
+                .attr('y2', plotBottom)
+                .attr('stroke', grid)
+                .attr('stroke-width', 1)
+                .attr('stroke-dasharray', '4 6')
+            world
+                .append('text')
+                .attr('x', x)
+                .attr('y', MARGIN.top - 14)
+                .attr('text-anchor', 'middle')
+                .attr('fill', tick)
+                .attr('font-size', 10)
+                .text(fmtDay(info.ts))
+        })
 
-    const pts = edges
-      .map((e) => {
-        const s = { x: xOfNode(e.src), y: yOf(e.src.branch) }
-        const d = { x: xOfNode(e.dst), y: yOf(e.dst.branch) }
-        if (s.y == null || d.y == null) return null
-        const fork = isStart(e.dst) && e.src.branch !== e.dst.branch
-        const r1 = isStart(e.src) ? START_R : e.src.count > 1 ? 11 : 7
-        const r2 = isStart(e.dst) ? START_R : e.dst.count > 1 ? 11 : 7
-        return { e, fork, x1: s.x, y1: s.y, x2: d.x, y2: d.y, r1, r2 }
-      })
-      .filter((p): p is EdgePt => p != null)
-    const visiblePts = hideLongSelfEdge ? pruneLongSelfMergeEdges(pts) : pts
-    const tracks = yTracks(visiblePts, cw)
-    const laid = visiblePts.map((p, i) => {
-      const sameDay = localDay(p.e.src.timestamp) === localDay(p.e.dst.timestamp)
-      const merge = !p.fork && p.e.src.branch !== p.e.dst.branch
-      const sameLane = Math.abs(p.y2 - p.y1) < 6
-      const bend = 26 + signedTrack(tracks[i]!) * 16
-      const q = shorten(p.x1, p.y1, p.x2, p.y2, p.r1, p.r2)
-      let d: string
-      if (p.fork) {
-        d = `M ${q.x1} ${q.y1} L ${q.x2} ${q.y2}`
-      } else if (sameDay && !merge) {
-        d = tracks[i]! > 0 && sameLane ? edgeCurve(q.x1, q.y1, q.x2, q.y2, bend) : `M ${q.x1} ${q.y1} L ${q.x2} ${q.y2}`
-      } else {
-        d = edgeCurve(q.x1, q.y1, q.x2, q.y2, bend)
-      }
-      return {
-        kind: "edge" as const,
-        ...p.e,
-        fork: p.fork,
-        merge,
-        len: Math.hypot(p.x2 - p.x1, p.y2 - p.y1),
-        d,
-        stroke: p.fork
-          ? branchColor(p.e.dst.branch)
-          : branchColor(
-              p.e.src.branch !== p.e.dst.branch && !p.e.dst.isMerge ? p.e.dst.branch : p.e.src.branch
-            ),
-        op:
-          (!related || p.e.branches.some((b) => related.has(b))) &&
-          (!selectedAuthors || p.e.commits?.some((c) => selectedAuthors.has(c.author || "(unknown)")))
-            ? 1
-            : 0.12,
-      }
-    })
-    laid.sort((a, b) => b.len - a.len)
+        const pts = edges
+            .map(e => {
+                const s = { x: xOfNode(e.src), y: yOf(e.src.branch) }
+                const d = { x: xOfNode(e.dst), y: yOf(e.dst.branch) }
+                if (s.y == null || d.y == null) return null
+                const fork = isStart(e.dst) && e.src.branch !== e.dst.branch
+                const r1 = isStart(e.src) ? START_R : e.src.count > 1 ? 11 : 7
+                const r2 = isStart(e.dst) ? START_R : e.dst.count > 1 ? 11 : 7
+                return { e, fork, x1: s.x, y1: s.y, x2: d.x, y2: d.y, r1, r2 }
+            })
+            .filter((p): p is EdgePt => p != null)
+        const visiblePts = hideLongSelfEdge ? pruneLongSelfMergeEdges(pts) : pts
+        const tracks = yTracks(visiblePts, cw)
+        const laid = visiblePts.map((p, i) => {
+            const sameDay = localDay(p.e.src.timestamp) === localDay(p.e.dst.timestamp)
+            const merge = !p.fork && p.e.src.branch !== p.e.dst.branch
+            const sameLane = Math.abs(p.y2 - p.y1) < 6
+            const span = Math.abs(
+                (dayIndex.get(localDay(p.e.dst.timestamp)) ?? 0) -
+                    (dayIndex.get(localDay(p.e.src.timestamp)) ?? 0),
+            )
+            const bend = (26 + signedTrack(tracks[i]!) * 16) * (span > 1 ? edgeBend : 0.1)
+            const q = shorten(p.x1, p.y1, p.x2, p.y2, p.r1, p.r2)
+            let d: string
+            if (p.fork) {
+                d = `M ${q.x1} ${q.y1} L ${q.x2} ${q.y2}`
+            } else if (sameDay && !merge) {
+                d =
+                    tracks[i]! > 0 && sameLane
+                        ? edgeCurve(q.x1, q.y1, q.x2, q.y2, bend)
+                        : `M ${q.x1} ${q.y1} L ${q.x2} ${q.y2}`
+            } else {
+                d = edgeCurve(q.x1, q.y1, q.x2, q.y2, bend)
+            }
+            return {
+                kind: 'edge' as const,
+                ...p.e,
+                fork: p.fork,
+                merge,
+                len: Math.hypot(p.x2 - p.x1, p.y2 - p.y1),
+                d,
+                stroke: p.fork
+                    ? branchColor(p.e.dst.branch)
+                    : branchColor(
+                          p.e.src.branch !== p.e.dst.branch && !p.e.dst.isMerge
+                              ? p.e.dst.branch
+                              : p.e.src.branch,
+                      ),
+                op:
+                    (!related || p.e.branches.some(b => related.has(b))) &&
+                    (!selectedAuthors ||
+                        p.e.commits?.some(c => selectedAuthors.has(c.author || '(unknown)')))
+                        ? 1
+                        : 0.12,
+            }
+        })
+        laid.sort((a, b) => b.len - a.len)
 
-    const showTip = (event: PointerEvent, d: Cluster) => {
-      const [px, py] = d3.pointer(event, wrapRef.current)
-      setTip({ x: px + 12, y: py + 12, d })
-    }
-    const moveTip = (event: PointerEvent) => {
-      const [px, py] = d3.pointer(event, wrapRef.current)
-      setTip((t) => t && { ...t, x: px + 12, y: py + 12 })
-    }
-
-    const edgeG = world.append("g").selectAll("g").data(laid).join("g").attr("opacity", (d) => d.op)
-    edgeG
-      .append("path")
-      .attr("d", (d) => d.d)
-      .attr("class", (d) => (d.fork ? "fork-edge" : d.merge ? "merge-edge" : null))
-      .attr("fill", "none")
-      .attr("stroke", (d) => d.stroke)
-      .attr("stroke-width", (d) => (d.fork ? 3 : 2))
-      .attr("pointer-events", "none")
-    const isSelected = (d: Cluster) => d.hash === selectedHash || d.commits?.some((c) => c.hash === selectedHash)
-    const matchSet = new Set(matchHashes || [])
-    const isSearchHit = (d: Cluster) => matchSet.has(d.hash) || d.commits?.some((c) => matchSet.has(c.hash))
-    const isAuthorHit = (d: Cluster) =>
-      !selectedAuthors ||
-      selectedAuthors.has(d.author || "(unknown)") ||
-      d.commits?.some((c) => selectedAuthors.has(c.author || "(unknown)"))
-    const isHit = (d: Cluster) => (!matchSet.size || isSearchHit(d)) && isAuthorHit(d)
-    const filterOn = matchSet.size || selectedAuthors
-    const innerR = (d: Cluster) => (d.count > 1 ? 9 : 5) + (isSelected(d) ? 2 : 0)
-
-    const commitDots = world
-      .append("g")
-      .selectAll("g")
-      .data(clusters)
-      .join("g")
-      .attr("transform", (d) => `translate(${xOfNode(d)},${yOf(d.branch)})`)
-      .attr("opacity", (d) => (filterOn && !isHit(d) ? 0.2 : 0.9) * dim(d.branch))
-      .style("cursor", "pointer")
-      .on("pointerenter", (event, d) => showTip(event, d))
-      .on("pointermove", moveTip)
-      .on("pointerleave", () => setTip(null))
-      .on("click", (event, d) => {
-        event.stopPropagation()
-        if (d.isSingleMerge) {
-          const m = d.merges?.find((x) => x.hash === d.hash && x.kind !== "branch") || d.merges?.[0]
-          if (m) {
-            onSelect({ ...m, tags: d.tags, kind: "merge" })
-            return
-          }
-          onSelect({ ...d, kind: "commit" })
-          return
+        const showTip = (event: PointerEvent, d: Cluster) => {
+            const [px, py] = d3.pointer(event, wrapRef.current)
+            setTip({ x: px + 12, y: py + 12, d })
         }
-        onSelect(d.count > 1 ? { ...d, kind: "cluster" } : { ...d, kind: "commit" })
-      })
-      .on("dblclick", (event) => event.stopPropagation())
-    commitDots.append("circle").attr("r", (d) => (isStart(d) ? START_R + 6 : 14)).attr("fill", "transparent")
-    commitDots
-      .filter((d) => !!d.isMerge && !isStart(d))
-      .append("circle")
-      .attr("r", (d) => innerR(d) + 6)
-      .attr("fill", bg)
-      .attr("stroke", (d) => nodeColor(d))
-      .attr("stroke-width", 2.5)
-    commitDots
-      .filter((d) => !isStart(d))
-      .append("circle")
-      .attr("r", innerR)
-      .attr("fill", (d) => nodeColor(d))
-      .attr("stroke", (d) => (isSelected(d) ? "var(--foreground)" : "transparent"))
-      .attr("stroke-width", 2)
-    commitDots
-      .filter(isStart)
-      .append("path")
-      .attr("d", diamondPath(START_R))
-      .attr("fill", (d) => branchColor(d.branch))
-      .attr("stroke", (d) => (isSelected(d) ? "var(--foreground)" : bg))
-      .attr("stroke-width", 2)
-    commitDots
-      .filter((d) => d.count > 1)
-      .append("text")
-      .attr("y", 3)
-      .attr("text-anchor", "middle")
-      .attr("fill", bg)
-      .attr("font-size", 9)
-      .attr("font-weight", 700)
-      .attr("pointer-events", "none")
-      .text((d) => (d.count > 99 ? "99+" : d.count))
-    commitDots
-      .filter((d) => showTags && !!d.tags?.length)
-      .append("text")
-      .attr("y", (d) => (isStart(d) ? START_R : innerR(d)) + (d.isMerge ? 16 : 14))
-      .attr("text-anchor", "middle")
-      .attr("fill", "#fbbf24")
-      .attr("stroke", bg)
-      .attr("stroke-width", 3)
-      .attr("paint-order", "stroke")
-      .attr("font-size", 10)
-      .attr("font-weight", 700)
-      .attr("pointer-events", "none")
-      .text((d) => clipLabel((d.tags || []).join(" · ")))
-    commitDots
-      .filter(isStart)
-      .append("text")
-      .attr("x", START_R + 8)
-      .attr("y", 4)
-      .attr("fill", (d) => branchColor(d.branch))
-      .attr("stroke", bg)
-      .attr("stroke-width", 3)
-      .attr("paint-order", "stroke")
-      .attr("font-size", 10)
-      .attr("font-weight", 700)
-      .attr("pointer-events", "none")
-      .text((d) => clipLabel(d.branch, 32))
-
-    function reportView(t: d3.ZoomTransform) {
-      const oldest = rangeRef.current.start ?? days[0]?.[1]?.t
-      const newest = rangeRef.current.end ?? days[days.length - 1]?.[1]?.t
-      if (!viewCb.current || oldest == null || newest == null) return
-      const screenFirst = firstX * t.k + t.x
-      const screenLast = lastX * t.k + t.x
-      let from = oldest
-      let to = newest
-      if (screenFirst > 48) from = addMonths(oldest, -3)
-      if (screenLast < width - 48 && screenLast < lastX * t.k - 24) to = Math.min(Date.now(), addMonths(newest, 3))
-      if (from === oldest && to === newest) return
-      viewCb.current(from, to)
-    }
-
-    const zoom = d3
-      .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.25, 6])
-      .clickDistance(6)
-      .on("start", () => svg.style("cursor", "grabbing"))
-      .on("end", () => svg.style("cursor", "grab"))
-      .on("zoom", (event) => {
-        zoomRef.current = event.transform
-        world.attr("transform", event.transform)
-        const t = event.transform
-        const wx = (width / 2 - t.x) / t.k
-        let i = Math.round((wx - MARGIN.left) / cw)
-        if (days.length) i = Math.max(0, Math.min(days.length - 1, i))
-        if (days[i]) {
-          const colX = MARGIN.left + i * cw
-          anchorRef.current = { key: days[i][0], k: t.k, y: t.y, sx: colX * t.k + t.x }
+        const moveTip = (event: PointerEvent) => {
+            const [px, py] = d3.pointer(event, wrapRef.current)
+            setTip(t => t && { ...t, x: px + 12, y: py + 12 })
         }
-        if (event.sourceEvent) reportView(event.transform)
-      })
 
-    svg.call(zoom)
-    svg.on("dblclick.zoom", null)
-    svg.on("dblclick", () => {
-      zoomRef.current = latestView
-      svg.transition().duration(200).call(zoom.transform, latestView)
-    })
-    const jumpKey = jumpTo?.hash ? `${jumpTo.hash}:${jumpTo.n}` : ""
-    if (!jumpKey) jumpKeyRef.current = ""
-    if (jumpKey && jumpKey !== jumpKeyRef.current) {
-      jumpKeyRef.current = jumpKey
-      const hit = clusters.find((d) => d.hash === jumpTo!.hash || d.commits?.some((c) => c.hash === jumpTo!.hash))
-      if (hit) {
-        const k = zoomRef.current.k
-        zoomRef.current = d3.zoomIdentity
-          .translate(width / 2 - k * xOfNode(hit), height / 2 - k * (yOf(hit.branch) ?? 0))
-          .scale(k)
-      }
-    }
-    svg.call(zoom.transform, zoomRef.current)
+        const edgeG = world
+            .append('g')
+            .selectAll('g')
+            .data(laid)
+            .join('g')
+            .attr('opacity', d => d.op)
+        edgeG
+            .append('path')
+            .attr('d', d => d.d)
+            .attr('class', d => (d.fork ? 'fork-edge' : d.merge ? 'merge-edge' : null))
+            .attr('fill', 'none')
+            .attr('stroke', d => d.stroke)
+            .attr('stroke-width', d => (d.fork ? 3 : 2))
+            .attr('pointer-events', 'none')
+        const isSelected = (d: Cluster) =>
+            d.hash === selectedHash || d.commits?.some(c => c.hash === selectedHash)
+        const matchSet = new Set(matchHashes || [])
+        const isSearchHit = (d: Cluster) =>
+            matchSet.has(d.hash) || d.commits?.some(c => matchSet.has(c.hash))
+        const isAuthorHit = (d: Cluster) =>
+            !selectedAuthors ||
+            selectedAuthors.has(d.author || '(unknown)') ||
+            d.commits?.some(c => selectedAuthors.has(c.author || '(unknown)'))
+        const isHit = (d: Cluster) => (!matchSet.size || isSearchHit(d)) && isAuthorHit(d)
+        const filterOn = matchSet.size || selectedAuthors
+        const innerR = (d: Cluster) => (d.count > 1 ? 9 : 5) + (isSelected(d) ? 2 : 0)
 
-    return () => {
-      d3.select(svgEl).on(".zoom", null).on("dblclick", null)
-    }
-  }, [
-    graph,
-    related,
-    size,
-    selectedHash,
-    matchHashes,
-    selectedAuthors,
-    jumpTo,
-    onSelect,
-    showTags,
-    zoomFitKey,
-    colW,
-    hideLongSelfEdge,
-    collapseDay,
-    hideOrphans,
-  ])
+        const commitDots = world
+            .append('g')
+            .selectAll('g')
+            .data(clusters)
+            .join('g')
+            .attr('transform', d => `translate(${xOfNode(d)},${yOf(d.branch)})`)
+            .attr('opacity', d => (filterOn && !isHit(d) ? 0.2 : 0.9) * dim(d.branch))
+            .style('cursor', 'pointer')
+            .on('pointerenter', (event, d) => showTip(event, d))
+            .on('pointermove', moveTip)
+            .on('pointerleave', () => setTip(null))
+            .on('click', (event, d) => {
+                event.stopPropagation()
+                if (d.isSingleMerge) {
+                    const m =
+                        d.merges?.find(x => x.hash === d.hash && x.kind !== 'branch') ||
+                        d.merges?.[0]
+                    if (m) {
+                        onSelect({ ...m, tags: d.tags, kind: 'merge' })
+                        return
+                    }
+                    onSelect({ ...d, kind: 'commit' })
+                    return
+                }
+                onSelect(d.count > 1 ? { ...d, kind: 'cluster' } : { ...d, kind: 'commit' })
+            })
+            .on('dblclick', event => event.stopPropagation())
+        commitDots
+            .append('circle')
+            .attr('r', d => (isStart(d) ? START_R + 6 : 14))
+            .attr('fill', 'transparent')
+        commitDots
+            .filter(d => !!d.isMerge && !isStart(d))
+            .append('circle')
+            .attr('r', d => innerR(d) + 6)
+            .attr('fill', bg)
+            .attr('stroke', d => nodeColor(d))
+            .attr('stroke-width', 2.5)
+        commitDots
+            .filter(d => !isStart(d))
+            .append('circle')
+            .attr('r', innerR)
+            .attr('fill', d => nodeColor(d))
+            .attr('stroke', d => (isSelected(d) ? 'var(--foreground)' : 'transparent'))
+            .attr('stroke-width', 2)
+        commitDots
+            .filter(isStart)
+            .append('path')
+            .attr('d', diamondPath(START_R))
+            .attr('fill', d => branchColor(d.branch))
+            .attr('stroke', d => (isSelected(d) ? 'var(--foreground)' : bg))
+            .attr('stroke-width', 2)
+        commitDots
+            .filter(d => d.count > 1)
+            .append('text')
+            .attr('y', 3)
+            .attr('text-anchor', 'middle')
+            .attr('fill', bg)
+            .attr('font-size', 9)
+            .attr('font-weight', 700)
+            .attr('pointer-events', 'none')
+            .text(d => (d.count > 99 ? '99+' : d.count))
+        commitDots
+            .filter(d => showTags && !!d.tags?.length)
+            .append('text')
+            .attr('y', d => (isStart(d) ? START_R : innerR(d)) + (d.isMerge ? 16 : 14))
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#fbbf24')
+            .attr('stroke', bg)
+            .attr('stroke-width', 3)
+            .attr('paint-order', 'stroke')
+            .attr('font-size', 10)
+            .attr('font-weight', 700)
+            .attr('pointer-events', 'none')
+            .text(d => clipLabel((d.tags || []).join(' · ')))
+        commitDots
+            .filter(isStart)
+            .append('text')
+            .attr('x', START_R + 8)
+            .attr('y', 4)
+            .attr('fill', d => branchColor(d.branch))
+            .attr('stroke', bg)
+            .attr('stroke-width', 3)
+            .attr('paint-order', 'stroke')
+            .attr('font-size', 10)
+            .attr('font-weight', 700)
+            .attr('pointer-events', 'none')
+            .text(d => clipLabel(d.branch, 32))
 
-  const branches = graph?.branches || []
+        function reportView(t: d3.ZoomTransform) {
+            const oldest = rangeRef.current.start ?? days[0]?.[1]?.t
+            const newest = rangeRef.current.end ?? days[days.length - 1]?.[1]?.t
+            if (!viewCb.current || oldest == null || newest == null) return
+            const screenFirst = firstX * t.k + t.x
+            const screenLast = lastX * t.k + t.x
+            let from = oldest
+            let to = newest
+            if (screenFirst > 48) from = addMonths(oldest, -3)
+            if (screenLast < width - 48 && screenLast < lastX * t.k - 24)
+                to = Math.min(Date.now(), addMonths(newest, 3))
+            if (from === oldest && to === newest) return
+            viewCb.current(from, to)
+        }
 
-  return (
-    <div ref={wrapRef} className="relative h-full w-full overflow-hidden">
-      <svg ref={svgRef} className="absolute inset-0 block h-full w-full touch-none" />
-      {branches.length > 0 && (
-        <div className="pointer-events-none absolute bottom-2 left-3 flex max-w-[80%] flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
-          {branches.map((name) => (
-            <span
-              key={name}
-              className="inline-flex items-center gap-1.5 font-medium"
-              style={{ color: branchColor(laneName(name)) }}
-            >
-              <span className="size-2 shrink-0 rounded-full" style={{ background: branchColor(laneName(name)) }} />
-              {name}
-            </span>
-          ))}
+        const zoom = d3
+            .zoom<SVGSVGElement, unknown>()
+            .scaleExtent([0.25, 6])
+            .clickDistance(6)
+            .on('start', () => svg.style('cursor', 'grabbing'))
+            .on('end', () => svg.style('cursor', 'grab'))
+            .on('zoom', event => {
+                zoomRef.current = event.transform
+                world.attr('transform', event.transform)
+                const t = event.transform
+                const wx = (width / 2 - t.x) / t.k
+                let i = Math.round((wx - MARGIN.left) / cw)
+                if (days.length) i = Math.max(0, Math.min(days.length - 1, i))
+                if (days[i]) {
+                    const colX = MARGIN.left + i * cw
+                    anchorRef.current = { key: days[i][0], k: t.k, y: t.y, sx: colX * t.k + t.x }
+                }
+                if (event.sourceEvent) reportView(event.transform)
+            })
+
+        svg.call(zoom)
+        svg.on('dblclick.zoom', null)
+        svg.on('dblclick', () => {
+            zoomRef.current = latestView
+            svg.transition().duration(200).call(zoom.transform, latestView)
+        })
+        const jumpKey = jumpTo?.hash ? `${jumpTo.hash}:${jumpTo.n}` : ''
+        if (!jumpKey) jumpKeyRef.current = ''
+        if (jumpKey && jumpKey !== jumpKeyRef.current) {
+            jumpKeyRef.current = jumpKey
+            const hit = clusters.find(
+                d => d.hash === jumpTo!.hash || d.commits?.some(c => c.hash === jumpTo!.hash),
+            )
+            if (hit) {
+                const k = zoomRef.current.k
+                zoomRef.current = d3.zoomIdentity
+                    .translate(
+                        width / 2 - k * xOfNode(hit),
+                        height / 2 - k * (yOf(hit.branch) ?? 0),
+                    )
+                    .scale(k)
+            }
+        }
+        svg.call(zoom.transform, zoomRef.current)
+
+        return () => {
+            d3.select(svgEl).on('.zoom', null).on('dblclick', null)
+        }
+    }, [
+        graph,
+        related,
+        size,
+        selectedHash,
+        matchHashes,
+        selectedAuthors,
+        jumpTo,
+        onSelect,
+        showTags,
+        zoomFitKey,
+        colW,
+        laneH,
+        edgeBend,
+        hideLongSelfEdge,
+        collapseDay,
+        hideOrphans,
+    ])
+
+    const branches = graph?.branches || []
+
+    return (
+        <div ref={wrapRef} className="relative h-full w-full overflow-hidden">
+            <svg ref={svgRef} className="absolute inset-0 block h-full w-full touch-none" />
+            {branches.length > 0 && (
+                <div className="pointer-events-none absolute bottom-2 left-3 flex max-w-[80%] flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+                    {branches.map(name => (
+                        <span
+                            key={name}
+                            className="inline-flex items-center gap-1.5 font-medium"
+                            style={{ color: branchColor(laneName(name)) }}
+                        >
+                            <span
+                                className="size-2 shrink-0 rounded-full"
+                                style={{ background: branchColor(laneName(name)) }}
+                            />
+                            {name}
+                        </span>
+                    ))}
+                </div>
+            )}
+            {tip && (
+                <div
+                    className="pointer-events-none absolute z-20 w-80 rounded-md border border-border bg-card px-3 py-2 text-xs shadow-lg"
+                    style={{
+                        left: tip.x,
+                        top: tip.y,
+                        transform: `translate(max(${8 - tip.x}px, min(0px, calc(${size.w - 8}px - 100% - ${tip.x}px))), max(${8 - tip.y}px, min(0px, calc(${size.h - 8}px - 100% - ${tip.y}px))))`,
+                    }}
+                >
+                    <TipBody d={tip.d} />
+                </div>
+            )}
         </div>
-      )}
-      {tip && (
-        <div
-          className="pointer-events-none absolute z-20 w-80 rounded-md border border-border bg-card px-3 py-2 text-xs shadow-lg"
-          style={{
-            left: tip.x,
-            top: tip.y,
-            transform: `translate(max(${8 - tip.x}px, min(0px, calc(${size.w - 8}px - 100% - ${tip.x}px))), max(${8 - tip.y}px, min(0px, calc(${size.h - 8}px - 100% - ${tip.y}px))))`,
-          }}
-        >
-          <TipBody d={tip.d} />
-        </div>
-      )}
-    </div>
-  )
+    )
 }
 
 function fmtTime(ts: string) {
-  return new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+    return new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 }
 
 function TimeChip({ ts, withDate }: { ts: string; withDate?: boolean }) {
-  const text = withDate
-    ? new Date(ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
-    : fmtTime(ts)
-  return (
-    <span className="inline-flex shrink-0 items-center rounded-md bg-amber-400 px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums text-slate-950">
-      {text}
-    </span>
-  )
+    const text = withDate
+        ? new Date(ts).toLocaleString(undefined, {
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+          })
+        : fmtTime(ts)
+    return (
+        <span className="inline-flex shrink-0 items-center rounded-md bg-amber-400 px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums text-slate-950">
+            {text}
+        </span>
+    )
 }
 
 function TipBody({ d }: { d: Cluster }) {
-  const items = d.commits?.length ? d.commits : [d]
-  const extra = items.length > 8 ? items.length - 8 : 0
-  return (
-    <div className="space-y-1.5">
-      {items.length > 1 && (
-        <div className="text-[11px] text-muted-foreground">
-          {items.length} commits ·{" "}
-          {new Date(d.timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+    const items = d.commits?.length ? d.commits : [d]
+    const extra = items.length > 8 ? items.length - 8 : 0
+    return (
+        <div className="space-y-1.5">
+            {items.length > 1 && (
+                <div className="text-[11px] text-muted-foreground">
+                    {items.length} commits ·{' '}
+                    {new Date(d.timestamp).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                    })}
+                </div>
+            )}
+            {items.slice(0, 8).map((c, i) => (
+                <div key={c.hash || i} className="flex items-start gap-2">
+                    <TimeChip ts={c.timestamp} withDate={items.length === 1} />
+                    <span
+                        className={`min-w-0 break-words ${c.isMerge || c.sourceBranch ? 'font-medium' : 'text-foreground'}`}
+                        style={
+                            c.isMerge || c.sourceBranch
+                                ? { color: branchColor(c.sourceBranch || c.branch) }
+                                : undefined
+                        }
+                    >
+                        {c.subject || c.hash}
+                        {c.tags?.length ? (
+                            <span className="ml-1 font-semibold text-amber-400">
+                                {c.tags.join(' · ')}
+                            </span>
+                        ) : null}
+                    </span>
+                </div>
+            ))}
+            {extra > 0 && <div className="text-[11px] text-muted-foreground">+{extra} more</div>}
         </div>
-      )}
-      {items.slice(0, 8).map((c, i) => (
-        <div key={c.hash || i} className="flex items-start gap-2">
-          <TimeChip ts={c.timestamp} withDate={items.length === 1} />
-          <span
-            className={`min-w-0 break-words ${c.isMerge || c.sourceBranch ? "font-medium" : "text-foreground"}`}
-            style={c.isMerge || c.sourceBranch ? { color: branchColor(c.sourceBranch || c.branch) } : undefined}
-          >
-            {c.subject || c.hash}
-            {c.tags?.length ? <span className="ml-1 font-semibold text-amber-400">{c.tags.join(" · ")}</span> : null}
-          </span>
-        </div>
-      ))}
-      {extra > 0 && <div className="text-[11px] text-muted-foreground">+{extra} more</div>}
-    </div>
-  )
+    )
 }

@@ -42,6 +42,35 @@ import { toast } from 'sonner'
 const DEFAULT_BRANCHES = 10
 const CHUNK_MONTHS = 3
 
+function NumField(props: {
+    label: string
+    value: number
+    min: number
+    step: number
+    onChange: (v: number) => void
+}) {
+    return (
+        <DropdownMenuItem closeOnClick={false} className="gap-2 pr-2">
+            <span className="min-w-24 shrink-0 text-xs">{props.label}</span>
+            <Input
+                className="h-7 w-16 px-2 text-xs tabular-nums"
+                type="number"
+                min={props.min}
+                step={props.step}
+                value={props.value}
+                onKeyDown={e => e.stopPropagation()}
+                onChange={e => {
+                    const v = Number(e.target.value)
+                    if (!Number.isNaN(v))
+                        props.onChange(
+                            Number(Math.max(props.min, v).toFixed(props.step < 1 ? 1 : 0)),
+                        )
+                }}
+            />
+        </DropdownMenuItem>
+    )
+}
+
 function authorName(c: { author?: string }) {
     return c.author || '(unknown)'
 }
@@ -147,6 +176,8 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
     const [hitIndex, setHitIndex] = useState(-1)
     const [jumpTo, setJumpTo] = useState<{ hash: string; n: number } | null>(null)
     const [colW, setColW] = useState(200)
+    const [laneH, setLaneH] = useState(88)
+    const [edgeBend, setEdgeBend] = useState(1)
     const [hideLongSelfEdge, setHideLongSelfEdge] = useState(true)
     const [collapseDay, setCollapseDay] = useState(true)
     const [hideOrphans, setHideOrphans] = useState(true)
@@ -785,33 +816,32 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
                                             Hide orphan commits
                                         </DropdownMenuItem>
                                     </DropdownMenuGroup>
+                                    <DropdownMenuGroup>
+                                        <DropdownMenuLabel>Layout</DropdownMenuLabel>
+                                        <NumField
+                                            label="X-gap"
+                                            value={colW}
+                                            min={60}
+                                            step={4}
+                                            onChange={setColW}
+                                        />
+                                        <NumField
+                                            label="Y-gap"
+                                            value={laneH}
+                                            min={40}
+                                            step={4}
+                                            onChange={setLaneH}
+                                        />
+                                        <NumField
+                                            label="Edge overlap"
+                                            value={edgeBend}
+                                            min={0}
+                                            step={0.1}
+                                            onChange={setEdgeBend}
+                                        />
+                                    </DropdownMenuGroup>
                                 </DropdownMenuContent>
                             </DropdownMenu>
-                            <div className="flex items-center gap-2" title="Day column spacing">
-                                <span className="text-xs text-muted-foreground">X-gap</span>
-                                <input
-                                    type="range"
-                                    min={100}
-                                    max={320}
-                                    step={4}
-                                    value={colW}
-                                    onChange={e => setColW(Number(e.target.value))}
-                                    className="w-24 accent-primary"
-                                />
-                                <Input
-                                    className="h-8 w-16 px-2 text-xs tabular-nums"
-                                    type="number"
-                                    min={60}
-                                    max={400}
-                                    step={4}
-                                    value={colW}
-                                    onChange={e => {
-                                        const v = Number(e.target.value)
-                                        if (!Number.isNaN(v))
-                                            setColW(Math.min(400, Math.max(60, Math.round(v))))
-                                    }}
-                                />
-                            </div>
                             <Button
                                 variant="outline"
                                 size="icon-sm"
@@ -932,6 +962,8 @@ export function GitGraphPanel({ appId, projectPath }: GitGraphPanelProps) {
                             }}
                             fitKey={`${visibleGraph!.path}:${viewGen}`}
                             colW={colW}
+                            laneH={laneH}
+                            edgeBend={edgeBend}
                             hideLongSelfEdge={hideLongSelfEdge}
                             collapseDay={collapseDay}
                             hideOrphans={hideOrphans}
