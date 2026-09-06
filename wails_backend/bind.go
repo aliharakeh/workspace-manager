@@ -7,11 +7,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"wails_backend/internal/db"
 	"wails_backend/internal/lib"
-	"wails_backend/internal/lib/gitgraph"
 	"wails_backend/internal/native"
 	"wails_backend/internal/services"
 	"wails_backend/internal/types"
@@ -884,82 +882,4 @@ func (a *App) OpenExternal(url string) (types.Ok, error) {
 	}
 	runtime.BrowserOpenURL(a.ctx, strings.TrimSpace(url))
 	return types.Ok{Ok: true}, nil
-}
-
-func (a *App) gitAppPath(id int64) (string, error) {
-	app, err := a.db.GetAppT(a.ctx, id)
-	if err != nil {
-		return "", err
-	}
-	ok, resolved, errMsg := lib.ValidateProjectPath(app.ProjectPath)
-	if !ok {
-		return "", fmt.Errorf("%s", errMsg)
-	}
-	return resolved, nil
-}
-
-func parseGitISO(s string) (time.Time, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return time.Time{}, nil
-	}
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		t, err = time.Parse(time.RFC3339Nano, s)
-	}
-	return t, err
-}
-
-func (a *App) GitGraphBranches(appID int64) ([]gitgraph.BranchInfo, error) {
-	path, err := a.gitAppPath(appID)
-	if err != nil {
-		return nil, err
-	}
-	return gitgraph.ListBranches(path)
-}
-
-func (a *App) GitGraphRemote(appID int64) (gitgraph.RemoteInfo, error) {
-	path, err := a.gitAppPath(appID)
-	if err != nil {
-		return gitgraph.RemoteInfo{}, err
-	}
-	return gitgraph.ListRemote(path)
-}
-
-func (a *App) GitGraphFetch(appID int64) (types.Ok, error) {
-	path, err := a.gitAppPath(appID)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	if err := gitgraph.FetchRemote(path); err != nil {
-		return types.Ok{}, err
-	}
-	return types.Ok{Ok: true}, nil
-}
-
-func (a *App) GitGraphLoad(appID int64, body types.GitGraphLoadInput) (gitgraph.RepoGraph, error) {
-	path, err := a.gitAppPath(appID)
-	if err != nil {
-		return gitgraph.RepoGraph{}, err
-	}
-	from, err := parseGitISO(body.Since)
-	if err != nil {
-		return gitgraph.RepoGraph{}, fmt.Errorf("invalid since: %w", err)
-	}
-	to, err := parseGitISO(body.Until)
-	if err != nil {
-		return gitgraph.RepoGraph{}, fmt.Errorf("invalid until: %w", err)
-	}
-	only := body.Branches
-	if len(only) == 0 {
-		only = nil
-	}
-	g, err := gitgraph.LoadGraphAt(path, only, from, to)
-	if err != nil {
-		return gitgraph.RepoGraph{}, err
-	}
-	if g == nil {
-		return gitgraph.RepoGraph{}, nil
-	}
-	return *g, nil
 }
