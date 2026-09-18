@@ -449,6 +449,14 @@ func (a *App) TemplatesDelete(id int64) (types.Ok, error) {
 	return types.Ok{Ok: true}, nil
 }
 
+func (a *App) PackageScriptsList(appID int64) (types.PackageScripts, error) {
+	app, err := a.db.GetAppT(a.ctx, appID)
+	if err != nil {
+		return types.PackageScripts{}, err
+	}
+	return lib.ReadPackageScripts(app.ProjectPath), nil
+}
+
 func (a *App) RunConfigGet(appID int64) (types.RunConfig, error) {
 	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
 		return types.RunConfig{}, err

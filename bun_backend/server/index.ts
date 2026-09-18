@@ -1,24 +1,25 @@
-import "@db"
-import { readyUrlPatternsRepo } from "@db/ready-url-patterns"
-import { findAvailablePort } from "@native/ports"
+import "@db";
+import { readyUrlPatternsRepo } from "@db/ready-url-patterns";
+import { isStandaloneBinary, openBrowser } from "@native/browser";
+import { findAvailablePort } from "@native/ports";
+import { handleAI } from "./routes/ai";
+import { handleApps } from "./routes/apps";
+import { handleConfigSets } from "./routes/config-sets";
+import { handleEnvVars } from "./routes/env-vars";
+import { handleFs } from "./routes/fs";
+import { health } from "./routes/health";
+import { handlePackageScripts } from "./routes/package-scripts";
+import { handlePorts } from "./routes/ports";
+import { handleReadyUrlPatterns } from "./routes/ready-url-patterns";
+import { handleRunConfigs } from "./routes/run-configs";
+import { handleRunner } from "./routes/runner";
+import { handleSettings } from "./routes/settings";
+import { handleTemplates } from "./routes/templates";
+import { handleWorkspaces } from "./routes/workspaces";
+import { hasFrontendBuild, serveStatic } from "./static";
 
 // Persist built-in log URL patterns so they show up in Settings by default.
 readyUrlPatternsRepo.ensureSeeded()
-import { health } from "./routes/health"
-import { handleWorkspaces } from "./routes/workspaces"
-import { handleApps } from "./routes/apps"
-import { handleFs } from "./routes/fs"
-import { handleConfigSets } from "./routes/config-sets"
-import { handleEnvVars } from "./routes/env-vars"
-import { handleTemplates } from "./routes/templates"
-import { handleRunConfigs } from "./routes/run-configs"
-import { handleRunner } from "./routes/runner"
-import { handlePorts } from "./routes/ports"
-import { handleReadyUrlPatterns } from "./routes/ready-url-patterns"
-import { handleSettings } from "./routes/settings"
-import { handleAI } from "./routes/ai"
-import { isStandaloneBinary, openBrowser } from "@native/browser"
-import { hasFrontendBuild, serveStatic } from "./static"
 
 const preferredPort = Number(process.env.PORT || process.env.API_PORT) || 3000
 // Prefer PORT / API_PORT when set, otherwise 3000. Always walk upward if busy
@@ -71,6 +72,7 @@ const server = Bun.serve({
       handleEnvVars,
       handleTemplates,
       handleRunConfigs,
+      handlePackageScripts,
       handleRunner,
       handlePorts,
       handleReadyUrlPatterns,

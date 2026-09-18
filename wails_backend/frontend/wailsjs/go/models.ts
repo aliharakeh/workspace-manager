@@ -916,6 +916,56 @@ export namespace types {
 	        this.ok = source["ok"];
 	    }
 	}
+	export class PackageScript {
+	    name: string;
+	    script: string;
+	    command: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PackageScript(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.script = source["script"];
+	        this.command = source["command"];
+	    }
+	}
+	export class PackageScripts {
+	    has_package_json: boolean;
+	    package_manager: string;
+	    scripts: PackageScript[];
+	
+	    static createFrom(source: any = {}) {
+	        return new PackageScripts(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.has_package_json = source["has_package_json"];
+	        this.package_manager = source["package_manager"];
+	        this.scripts = this.convertValues(source["scripts"], PackageScript);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class PickFileResult {
 	    cancelled: boolean;
 	    path?: string;

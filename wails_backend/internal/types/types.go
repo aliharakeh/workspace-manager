@@ -72,6 +72,20 @@ type ConfigSetDetail struct {
 	RunConfig *RunConfig `json:"run_config"`
 }
 
+type PackageScript struct {
+	Name string `json:"name"`
+	// Script is the raw script value from package.json.
+	Script string `json:"script"`
+	// Command is the full command line for the detected package manager.
+	Command string `json:"command"`
+}
+
+type PackageScripts struct {
+	HasPackageJSON bool            `json:"has_package_json"`
+	PackageManager string          `json:"package_manager"`
+	Scripts        []PackageScript `json:"scripts"`
+}
+
 type CopyParts struct {
 	Env       any `json:"env,omitempty"`
 	Templates any `json:"templates,omitempty"`

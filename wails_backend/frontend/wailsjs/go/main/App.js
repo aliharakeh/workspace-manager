@@ -126,6 +126,10 @@ export function OpenExternal(arg1) {
   return window['go']['main']['App']['OpenExternal'](arg1);
 }
 
+export function PackageScriptsList(arg1) {
+  return window['go']['main']['App']['PackageScriptsList'](arg1);
+}
+
 export function PortsKill(arg1) {
   return window['go']['main']['App']['PortsKill'](arg1);
 }

@@ -64,6 +64,8 @@ export function FsValidatePath(arg1:string):Promise<types.ValidatePathResult>;
 
 export function OpenExternal(arg1:string):Promise<types.Ok>;
 
+export function PackageScriptsList(arg1:number):Promise<types.PackageScripts>;
+
 export function PortsKill(arg1:number):Promise<types.PortsKillResult>;
 
 export function PortsList():Promise<types.PortsListResult>;

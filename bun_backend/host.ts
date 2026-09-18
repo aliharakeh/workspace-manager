@@ -1,3 +1,4 @@
+import type { AppAIChatResult, AppAIStreamEvent } from "@/lib/app-ai";
 import type {
   AIConfigInfo,
   AIProviderConfig,
@@ -7,6 +8,7 @@ import type {
   CopyParts,
   EnvVar,
   ListeningProcess,
+  PackageScripts,
   ReadyUrlPattern,
   RunConfig,
   RunMode,
@@ -15,8 +17,7 @@ import type {
   StatusEvent,
   Template,
   Workspace,
-} from "@/lib/types"
-import type { AppAIChatResult, AppAIStreamEvent } from "@/lib/app-ai"
+} from "@/lib/types";
 
 class ApiError extends Error {
   status: number
@@ -275,6 +276,11 @@ export const api = {
       request<void>(`/api/templates/${id}`, { method: "DELETE" }),
   },
 
+  packageScripts: {
+    list: (appId: number) =>
+      request<PackageScripts>(`/api/apps/${appId}/package-scripts`),
+  },
+
   runConfig: {
     get: (appId: number) => request<RunConfig>(`/api/apps/${appId}/run-config`),
     save: (
@@ -451,4 +457,5 @@ export const api = {
   },
 }
 
-export { ApiError }
+export { ApiError };
+
