@@ -9,6 +9,7 @@ import { configSetsRepo } from "@db/config-sets"
 import { envVarsRepo } from "@db/env-vars"
 import { runConfigsRepo } from "@db/run-configs"
 import type { RunCommand, RunMode } from "@db/types"
+import { idleSeconds, notifyApp } from "./notifier"
 import { matchReadyUrl } from "./ready-url"
 import { applyTemplates, restoreTemplates } from "./templates"
 
@@ -48,12 +49,22 @@ export type RunnerEvent = LogEvent | StatusEvent
 type Session = {
   id: string
   appId: number
+  appName: string
   mode: RunMode
   processes: ProcessState[]
   children: Map<number, SpawnedProcess>
   running: boolean
   abortSequential: boolean
   restored: boolean
+  /** Set when the user (not a natural exit) stopped the session. */
+  userStopped: boolean
+  /** Set on any spawn/template failure or non-zero exit. */
+  hadError: boolean
+  readyNotified: boolean
+  idleNotified: boolean
+  /** Idle countdown window, resolved once per session. */
+  idleMs: number
+  idleTimer: ReturnType<typeof setTimeout> | null
   logBuffer: LogEvent[]
 }
 
@@ -137,6 +148,11 @@ function noteReadyUrl(session: Session, commandId: number, line: string) {
     commandId,
     `Detected URL (${match.label}): ${match.url}`
   )
+  if (!session.readyNotified) {
+    session.readyNotified = true
+    clearIdleTimer(session)
+    notifyApp("ready", `${session.appName} is running`, match.url)
+  }
   emit(session, statusEvent(session))
 }
 
@@ -144,6 +160,37 @@ function clearReadyUrls(session: Session) {
   for (const processState of session.processes) {
     processState.urls = []
   }
+}
+
+function clearIdleTimer(session: Session) {
+  if (session.idleTimer) {
+    clearTimeout(session.idleTimer)
+    session.idleTimer = null
+  }
+}
+
+/**
+ * Fallback for apps whose logs never match a ready-URL pattern: only once the
+ * output has been quiet for the idle delay do we assume the app is running.
+ * Every log line calls this again, restarting the countdown.
+ */
+function scheduleIdleCheck(session: Session) {
+  clearIdleTimer(session)
+  session.idleTimer = setTimeout(() => {
+    session.idleTimer = null
+    if (!session.running || session.readyNotified || session.idleNotified) return
+    session.idleNotified = true
+    systemLog(
+      session,
+      session.processes[0]?.commandId ?? 0,
+      "No output for a while — assuming the app is running"
+    )
+    notifyApp(
+      "idle",
+      `${session.appName} is running`,
+      "No output for a while — assuming it is running"
+    )
+  }, session.idleMs)
 }
 
 function emitLogLine(
@@ -160,6 +207,10 @@ function emitLogLine(
     ts: Date.now(),
   })
   noteReadyUrl(session, commandId, text)
+  // Any output resets the idle countdown; it only runs once logs go quiet.
+  if (session.running && !session.readyNotified && !session.idleNotified) {
+    scheduleIdleCheck(session)
+  }
 }
 
 async function pipeStream(
@@ -213,11 +264,10 @@ async function spawnCommand(
   } catch (err) {
     processState.status = "error"
     processState.exitCode = 1
-    systemLog(
-      session,
-      cmd.id,
-      `Failed to start: ${err instanceof Error ? err.message : String(err)}`
-    )
+    session.hadError = true
+    const message = err instanceof Error ? err.message : String(err)
+    systemLog(session, cmd.id, `Failed to start: ${message}`)
+    notifyApp("error", `${session.appName} failed to start`, message)
     emit(session, statusEvent(session))
     return 1
   }
@@ -225,6 +275,7 @@ async function spawnCommand(
   processState.pid = child.pid
   session.children.set(cmd.id, child)
   emit(session, statusEvent(session))
+  scheduleIdleCheck(session)
 
   const pipes = Promise.all([
     pipeStream(session, cmd.id, child.stdout, "stdout"),
@@ -242,6 +293,14 @@ async function spawnCommand(
 
   processState.status = exitCode === 0 ? "exited" : "error"
   processState.exitCode = exitCode
+  if (exitCode !== 0) {
+    session.hadError = true
+    notifyApp(
+      "error",
+      `${session.appName} failed`,
+      `${processState.label} exited with code ${exitCode}`
+    )
+  }
   systemLog(
     session,
     cmd.id,
@@ -260,6 +319,7 @@ async function runSession(session: Session) {
     emit(session, statusEvent(session, "App not found"))
     return
   }
+  session.appName = app.name
 
   try {
     applyTemplates(session.appId, session.id)
@@ -270,12 +330,14 @@ async function runSession(session: Session) {
     )
   } catch (err) {
     session.running = false
+    session.hadError = true
     const message = err instanceof Error ? err.message : String(err)
     systemLog(
       session,
       session.processes[0]?.commandId ?? 0,
       `Template apply failed: ${message}`
     )
+    notifyApp("error", `${session.appName} failed to start`, message)
     emit(session, statusEvent(session, `Template apply failed: ${message}`))
     return
   }
@@ -306,6 +368,7 @@ async function runSession(session: Session) {
     }
   } finally {
     session.running = false
+    clearIdleTimer(session)
     clearReadyUrls(session)
     if (!session.restored) {
       restoreTemplates(session.appId, session.id)
@@ -315,6 +378,9 @@ async function runSession(session: Session) {
         session.processes[0]?.commandId ?? 0,
         "Original files restored"
       )
+    }
+    if (!session.userStopped && !session.hadError) {
+      notifyApp("finished", `${session.appName} finished`)
     }
     emit(session, statusEvent(session))
   }
@@ -330,6 +396,7 @@ function createSession(appId: number): Session {
   return {
     id: `${appId}-${Date.now()}`,
     appId,
+    appName: "",
     mode: config.mode,
     processes: config.commands.map((cmd) => ({
       commandId: cmd.id,
@@ -344,6 +411,12 @@ function createSession(appId: number): Session {
     running: true,
     abortSequential: false,
     restored: false,
+    userStopped: false,
+    hadError: false,
+    readyNotified: false,
+    idleNotified: false,
+    idleMs: idleSeconds() * 1000,
+    idleTimer: null,
     logBuffer: [],
   }
 }
@@ -437,6 +510,8 @@ export const runner = {
 
     session.abortSequential = true
     session.running = false
+    session.userStopped = true
+    clearIdleTimer(session)
     clearReadyUrls(session)
     for (const processState of session.processes) {
       if (processState.status === "running") {

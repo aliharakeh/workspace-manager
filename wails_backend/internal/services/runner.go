@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"regexp"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"wails_backend/internal/db"
@@ -24,25 +25,38 @@ type childProc struct {
 type session struct {
 	id              string
 	appID           int64
+	appName         string
 	mode            string
 	processes       []types.ProcessState
 	children        map[int64]*childProc
 	running         bool
 	abortSequential bool
 	restored        bool
-	logBuffer       []types.LogEvent
+	// userStopped marks a manual stop so no "finished" notification is sent.
+	userStopped bool
+	// hadError is set on spawn/template failure or a non-zero exit.
+	hadError      bool
+	readyNotified bool
+	idleNotified  bool
+	// idleDone stops the idle watcher; lastLogAt is refreshed on every output
+	// line so the countdown only runs once the logs go quiet.
+	idleDone  chan struct{}
+	idleOnce  sync.Once
+	lastLogAt atomic.Int64
+	logBuffer []types.LogEvent
 }
 
 type Runner struct {
 	db        *db.DB
 	broadcast func(appID int64, event any)
+	notify    func(title, body string)
 
 	mu       sync.Mutex
 	sessions map[int64]*session
 }
 
-func NewRunner(d *db.DB, broadcast func(appID int64, event any)) *Runner {
-	return &Runner{db: d, broadcast: broadcast, sessions: map[int64]*session{}}
+func NewRunner(d *db.DB, broadcast func(appID int64, event any), notify func(title, body string)) *Runner {
+	return &Runner{db: d, broadcast: broadcast, notify: notify, sessions: map[int64]*session{}}
 }
 
 func (r *Runner) emit(s *session, event any) {
@@ -108,6 +122,11 @@ func (r *Runner) noteReadyURL(s *session, commandID int64, line string) {
 		}
 		s.processes[i].URLs = append(s.processes[i].URLs, match.URL)
 		r.systemLog(s, commandID, fmt.Sprintf("Detected URL (%s): %s", match.Label, match.URL))
+		if !s.readyNotified {
+			s.readyNotified = true
+			r.stopIdleWatcher(s)
+			r.maybeNotify(s, NotifyReady, s.appName+" is running", match.URL)
+		}
 		r.emit(s, r.statusEvent(s, ""))
 		return
 	}
@@ -117,6 +136,68 @@ func (r *Runner) clearReadyURLs(s *session) {
 	for i := range s.processes {
 		s.processes[i].URLs = []string{}
 	}
+}
+
+func (r *Runner) stopIdleWatcher(s *session) {
+	if s.idleDone != nil {
+		s.idleOnce.Do(func() { close(s.idleDone) })
+	}
+}
+
+func (r *Runner) maybeNotify(s *session, kind, title, body string) {
+	if r.notify == nil {
+		return
+	}
+	settings, err := r.db.SettingsMap(context.Background())
+	if err != nil {
+		return
+	}
+	if !notifyEnabled(settings, kind) {
+		return
+	}
+	r.notify(title, body)
+}
+
+func firstCommandID(s *session) int64 {
+	if len(s.processes) > 0 {
+		return s.processes[0].CommandID
+	}
+	return 0
+}
+
+// startIdleWatcher is the fallback for apps whose logs never match a ready-URL
+// pattern. It assumes the app is running once no new output has arrived for the
+// idle delay: every log line refreshes lastLogAt, so the clock only advances
+// after the output goes quiet. The watcher exits on ready, idle, or stop.
+func (r *Runner) startIdleWatcher(s *session) {
+	secs := DefaultIdleSeconds
+	if settings, err := r.db.SettingsMap(context.Background()); err == nil {
+		secs = idleSeconds(settings)
+	}
+	window := time.Duration(secs) * time.Second
+	s.lastLogAt.Store(time.Now().UnixNano())
+
+	ticker := time.NewTicker(time.Second)
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-s.idleDone:
+				return
+			case <-ticker.C:
+				if s.readyNotified || s.idleNotified {
+					return
+				}
+				if time.Since(time.Unix(0, s.lastLogAt.Load())) < window {
+					continue
+				}
+				s.idleNotified = true
+				r.systemLog(s, firstCommandID(s), "No output for a while — assuming the app is running")
+				r.maybeNotify(s, NotifyIdle, s.appName+" is running", "No output for a while — assuming it is running")
+				return
+			}
+		}
+	}()
 }
 
 var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07`)
@@ -129,6 +210,7 @@ func (r *Runner) emitLogLine(s *session, commandID int64, kind, text string) {
 	if !stringsHasNL(text) {
 		text += "\n"
 	}
+	s.lastLogAt.Store(time.Now().UnixNano())
 	r.emit(s, types.LogEvent{
 		Type: "log", AppID: s.appID, CommandID: commandID, Stream: kind,
 		Text: text, Ts: time.Now().UnixMilli(),
@@ -188,44 +270,34 @@ func (r *Runner) spawnCommand(s *session, cmd types.RunCommand, cwd string, env 
 	if processState == nil {
 		return 1
 	}
+	fail := func(err error) int {
+		processState.Status = "error"
+		code := int64(1)
+		processState.ExitCode = &code
+		s.hadError = true
+		r.systemLog(s, cmd.ID, "Failed to start: "+err.Error())
+		r.maybeNotify(s, NotifyError, s.appName+" failed to start", err.Error())
+		r.emit(s, r.statusEvent(s, ""))
+		return 1
+	}
 	processState.Status = "running"
 	r.emit(s, r.statusEvent(s, ""))
 	r.systemLog(s, cmd.ID, "$ "+cmd.Command)
 
 	child, err := native.SpawnShell(cmd.Command, cwd, env)
 	if err != nil {
-		processState.Status = "error"
-		code := int64(1)
-		processState.ExitCode = &code
-		r.systemLog(s, cmd.ID, "Failed to start: "+err.Error())
-		r.emit(s, r.statusEvent(s, ""))
-		return 1
+		return fail(err)
 	}
 	stdout, err := child.StdoutPipe()
 	if err != nil {
-		processState.Status = "error"
-		code := int64(1)
-		processState.ExitCode = &code
-		r.systemLog(s, cmd.ID, "Failed to start: "+err.Error())
-		r.emit(s, r.statusEvent(s, ""))
-		return 1
+		return fail(err)
 	}
 	stderr, err := child.StderrPipe()
 	if err != nil {
-		processState.Status = "error"
-		code := int64(1)
-		processState.ExitCode = &code
-		r.systemLog(s, cmd.ID, "Failed to start: "+err.Error())
-		r.emit(s, r.statusEvent(s, ""))
-		return 1
+		return fail(err)
 	}
 	if err := child.Start(); err != nil {
-		processState.Status = "error"
-		code := int64(1)
-		processState.ExitCode = &code
-		r.systemLog(s, cmd.ID, "Failed to start: "+err.Error())
-		r.emit(s, r.statusEvent(s, ""))
-		return 1
+		return fail(err)
 	}
 	pid := int64(child.Process.Pid)
 	processState.PID = &pid
@@ -264,7 +336,10 @@ func (r *Runner) spawnCommand(s *session, cmd types.RunCommand, cwd string, env 
 		r.systemLog(s, cmd.ID, fmt.Sprintf("Process exited with code %d", exitCode))
 	} else {
 		processState.Status = "error"
+		s.hadError = true
 		r.systemLog(s, cmd.ID, fmt.Sprintf("Process failed with code %d", exitCode))
+		r.maybeNotify(s, NotifyError, s.appName+" failed",
+			fmt.Sprintf("%s exited with code %d", processState.Label, exitCode))
 	}
 	r.emit(s, r.statusEvent(s, ""))
 	return exitCode
@@ -278,14 +353,17 @@ func (r *Runner) runSession(s *session) {
 		r.emit(s, r.statusEvent(s, "App not found"))
 		return
 	}
+	s.appName = app.Name
 	if err := ApplyTemplates(ctx, r.db, s.appID, s.id); err != nil {
 		s.running = false
+		s.hadError = true
 		msg := err.Error()
 		cmdID := int64(0)
 		if len(s.processes) > 0 {
 			cmdID = s.processes[0].CommandID
 		}
 		r.systemLog(s, cmdID, "Template apply failed: "+msg)
+		r.maybeNotify(s, NotifyError, s.appName+" failed to start", msg)
 		r.emit(s, r.statusEvent(s, "Template apply failed: "+msg))
 		return
 	}
@@ -314,14 +392,20 @@ func (r *Runner) runSession(s *session) {
 		commands = config.Commands
 	}
 
+	r.startIdleWatcher(s)
+
 	func() {
 		defer func() {
 			s.running = false
+			r.stopIdleWatcher(s)
 			r.clearReadyURLs(s)
 			if !s.restored {
 				_ = RestoreTemplates(ctx, r.db, s.appID, s.id)
 				s.restored = true
 				r.systemLog(s, cmdID, "Original files restored")
+			}
+			if !s.userStopped && !s.hadError {
+				r.maybeNotify(s, NotifyFinished, s.appName+" finished", "")
 			}
 			r.emit(s, r.statusEvent(s, ""))
 		}()
@@ -378,6 +462,7 @@ func (r *Runner) createSession(ctx context.Context, appID int64) (*session, erro
 		processes: procs,
 		children:  map[int64]*childProc{},
 		running:   true,
+		idleDone:  make(chan struct{}),
 	}, nil
 }
 
@@ -439,6 +524,8 @@ func (r *Runner) Stop(ctx context.Context, appID int64) (types.StatusEvent, erro
 	}
 	s.abortSequential = true
 	s.running = false
+	s.userStopped = true
+	r.stopIdleWatcher(s)
 	r.clearReadyURLs(s)
 	for i := range s.processes {
 		if s.processes[i].Status == "running" {

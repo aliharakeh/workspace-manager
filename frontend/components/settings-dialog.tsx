@@ -1,7 +1,14 @@
 import { useState } from "react"
-import { BotIcon, KeyboardIcon, Link2Icon, NetworkIcon } from "lucide-react"
+import {
+  BellRingIcon,
+  BotIcon,
+  KeyboardIcon,
+  Link2Icon,
+  NetworkIcon,
+} from "lucide-react"
 import { AIPanel } from "@/components/ai-panel"
 import { KeyboardShortcutsPanel } from "@/components/keyboard-shortcuts-panel"
+import { NotificationsPanel } from "@/components/notifications-panel"
 import { PortsPanel } from "@/components/ports-panel"
 import { ReadyUrlPatternsPanel } from "@/components/ready-url-patterns-panel"
 import {
@@ -18,7 +25,7 @@ type SettingsDialogProps = {
   onOpenChange: (open: boolean) => void
 }
 
-type SettingsTab = "ai" | "ports" | "ready-urls" | "shortcuts"
+type SettingsTab = "ai" | "ports" | "ready-urls" | "shortcuts" | "notifications"
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [tab, setTab] = useState<SettingsTab>("ports")
@@ -30,7 +37,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
             Manage AI provider connections, listening ports, keyboard shortcuts,
-            and how Workspace Manager detects ready URLs from logs.
+            system notifications, and how Workspace Manager detects ready URLs
+            from logs.
           </DialogDescription>
         </DialogHeader>
 
@@ -41,7 +49,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               value === "ai" ||
               value === "ports" ||
               value === "ready-urls" ||
-              value === "shortcuts"
+              value === "shortcuts" ||
+              value === "notifications"
             ) {
               setTab(value)
             }
@@ -69,6 +78,10 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               <KeyboardIcon data-icon="inline-start" />
               Keyboard shortcuts
             </TabsTrigger>
+            <TabsTrigger value="notifications" className="justify-start">
+              <BellRingIcon data-icon="inline-start" />
+              Notifications
+            </TabsTrigger>
           </TabsList>
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-4">
@@ -95,6 +108,12 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               className="mt-0 flex min-h-0 flex-1 flex-col data-hidden:hidden"
             >
               <KeyboardShortcutsPanel />
+            </TabsContent>
+            <TabsContent
+              value="notifications"
+              className="mt-0 flex min-h-0 flex-1 flex-col data-hidden:hidden"
+            >
+              <NotificationsPanel />
             </TabsContent>
           </div>
         </Tabs>

@@ -8,6 +8,7 @@ export {
 } from "./dialog"
 export { isStandaloneBinary, openBrowser } from "./browser"
 export { openInEditor } from "./editor"
+export { notify, notificationsSupported, type NotifyOptions } from "./notify"
 export {
   findAvailablePort,
   listListeningProcesses,

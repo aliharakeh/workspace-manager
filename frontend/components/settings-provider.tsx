@@ -2,6 +2,7 @@
 import * as React from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
+import { DEFAULT_NOTIFICATIONS } from "@/lib/notifications"
 import { DEFAULT_SHORTCUTS } from "@/lib/shortcuts"
 
 type SettingsProviderState = {
@@ -25,6 +26,7 @@ type SettingsProviderProps = {
 export function SettingsProvider({ children }: SettingsProviderProps) {
   const [settings, setSettings] = React.useState<Record<string, string>>(() => ({
     ...DEFAULT_SHORTCUTS,
+    ...DEFAULT_NOTIFICATIONS,
   }))
   const [ready, setReady] = React.useState(false)
 
@@ -64,7 +66,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
 
   const resetSetting = React.useCallback(
     async (key: string) => {
-      const fallback = DEFAULT_SHORTCUTS[key]
+      const fallback = DEFAULT_SHORTCUTS[key] ?? DEFAULT_NOTIFICATIONS[key]
       if (fallback) await setSetting(key, fallback)
     },
     [setSetting]
