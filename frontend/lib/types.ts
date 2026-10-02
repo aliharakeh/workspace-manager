@@ -201,6 +201,8 @@ export type Blueprint = {
     id: number
     name: string
     description: string
+    /** Example app name the new-app dialog starts with. */
+    sample_name: string
     create_folder: boolean
     commands: BlueprintCommand[]
     created_at: string
@@ -210,8 +212,21 @@ export type Blueprint = {
 export type BlueprintInput = {
     name: string
     description: string
+    sample_name: string
     create_folder: boolean
     commands: BlueprintCommand[]
+}
+
+export type BlueprintAIInput = {
+    instruction: string
+    /** What the editor holds now, so the AI changes it instead of starting over. */
+    draft: BlueprintInput | null
+}
+
+export type BlueprintAIResult = {
+    blueprint: BlueprintInput
+    /** The AI's short notes: assumptions and tools that must be installed. */
+    message: string
 }
 
 export type BlueprintRunInput = {

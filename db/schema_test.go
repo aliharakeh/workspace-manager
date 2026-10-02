@@ -70,6 +70,38 @@ func TestApplySchemaMakesBlueprintsGlobal(t *testing.T) {
 	}
 }
 
+func TestApplySchemaAddsBlueprintSampleName(t *testing.T) {
+	sqlDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+	sqlDB.SetMaxOpenConns(1)
+	// Shape of the global blueprints table before sample_name existed.
+	if _, err := sqlDB.Exec(`
+		CREATE TABLE blueprints (
+		  id integer PRIMARY KEY AUTOINCREMENT NOT NULL, name text NOT NULL,
+		  description text DEFAULT '' NOT NULL, create_folder integer DEFAULT true NOT NULL,
+		  commands text DEFAULT '[]' NOT NULL, created_at text DEFAULT (datetime('now')) NOT NULL,
+		  updated_at text DEFAULT (datetime('now')) NOT NULL);
+		CREATE UNIQUE INDEX blueprints_name_unique ON blueprints (name);
+		INSERT INTO blueprints (name, commands) VALUES ('Vite', '[{"label":null,"command":"bun install"}]');`); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := applySchema(sqlDB); err != nil {
+			t.Fatalf("apply #%d: %v", i+1, err)
+		}
+	}
+	var name, sample, commands string
+	if err := sqlDB.QueryRow(`SELECT name, sample_name, commands FROM blueprints`).Scan(&name, &sample, &commands); err != nil {
+		t.Fatal(err)
+	}
+	if name != "Vite" || sample != "" || commands != `[{"label":null,"command":"bun install"}]` {
+		t.Fatalf("row not preserved: %q %q %q", name, sample, commands)
+	}
+}
+
 func TestApplySchemaIsIdempotent(t *testing.T) {
 	sqlDB, err := sql.Open("sqlite", ":memory:")
 	if err != nil {

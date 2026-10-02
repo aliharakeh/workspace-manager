@@ -16,7 +16,7 @@ func blueprintFrom(row Blueprint) (types.Blueprint, error) {
 		return types.Blueprint{}, fmt.Errorf("Blueprint commands are corrupt: %w", err)
 	}
 	return types.Blueprint{
-		ID: row.ID, Name: row.Name, Description: row.Description,
+		ID: row.ID, Name: row.Name, Description: row.Description, SampleName: row.SampleName,
 		CreateFolder: row.CreateFolder != 0, Commands: cmds,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}, nil
@@ -29,6 +29,7 @@ func cleanBlueprint(in types.BlueprintInput) (types.BlueprintInput, error) {
 		return in, fmt.Errorf("name is required")
 	}
 	in.Description = strings.TrimSpace(in.Description)
+	in.SampleName = strings.TrimSpace(in.SampleName)
 	cmds := make([]types.BlueprintCommand, 0, len(in.Commands))
 	for _, c := range in.Commands {
 		c.Command = strings.TrimSpace(c.Command)
@@ -82,7 +83,7 @@ func (d *DB) CreateBlueprintT(ctx context.Context, in types.BlueprintInput) (typ
 	}
 	cmds, _ := json.Marshal(in.Commands)
 	row, err := d.CreateBlueprint(ctx, CreateBlueprintParams{
-		Name: in.Name, Description: in.Description,
+		Name: in.Name, Description: in.Description, SampleName: in.SampleName,
 		CreateFolder: BoolInt(in.CreateFolder), Commands: string(cmds),
 	})
 	if err != nil {
@@ -98,8 +99,8 @@ func (d *DB) UpdateBlueprintT(ctx context.Context, id int64, in types.BlueprintI
 	}
 	cmds, _ := json.Marshal(in.Commands)
 	row, err := d.UpdateBlueprint(ctx, UpdateBlueprintParams{
-		Name: in.Name, Description: in.Description, CreateFolder: BoolInt(in.CreateFolder),
-		Commands: string(cmds), ID: id,
+		Name: in.Name, Description: in.Description, SampleName: in.SampleName,
+		CreateFolder: BoolInt(in.CreateFolder), Commands: string(cmds), ID: id,
 	})
 	if err != nil {
 		if err == sql.ErrNoRows {

@@ -499,6 +499,7 @@ export namespace types {
 	    id: number;
 	    name: string;
 	    description: string;
+	    sample_name: string;
 	    create_folder: boolean;
 	    commands: BlueprintCommand[];
 	    created_at: string;
@@ -513,6 +514,7 @@ export namespace types {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.description = source["description"];
+	        this.sample_name = source["sample_name"];
 	        this.create_folder = source["create_folder"];
 	        this.commands = this.convertValues(source["commands"], BlueprintCommand);
 	        this.created_at = source["created_at"];
@@ -537,10 +539,10 @@ export namespace types {
 		    return a;
 		}
 	}
-	
 	export class BlueprintInput {
 	    name: string;
 	    description: string;
+	    sample_name: string;
 	    create_folder: boolean;
 	    commands: BlueprintCommand[];
 	
@@ -552,6 +554,7 @@ export namespace types {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.description = source["description"];
+	        this.sample_name = source["sample_name"];
 	        this.create_folder = source["create_folder"];
 	        this.commands = this.convertValues(source["commands"], BlueprintCommand);
 	    }
@@ -574,6 +577,72 @@ export namespace types {
 		    return a;
 		}
 	}
+	export class BlueprintAIInput {
+	    instruction: string;
+	    draft?: BlueprintInput;
+	
+	    static createFrom(source: any = {}) {
+	        return new BlueprintAIInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.instruction = source["instruction"];
+	        this.draft = this.convertValues(source["draft"], BlueprintInput);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class BlueprintAIResult {
+	    blueprint: BlueprintInput;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BlueprintAIResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.blueprint = this.convertValues(source["blueprint"], BlueprintInput);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
 	export class BlueprintRunInput {
 	    run_id: string;
 	    blueprint_id: number;

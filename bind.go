@@ -929,6 +929,16 @@ func (a *App) BlueprintsDelete(id int64) (types.Ok, error) {
 	return types.Ok{Ok: true}, nil
 }
 
+// BlueprintsAIPropose asks the AI for a blueprint, or for a change to the one
+// in body.Draft. It saves nothing: the UI loads the result into the editor.
+func (a *App) BlueprintsAIPropose(body types.BlueprintAIInput) (types.BlueprintAIResult, error) {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return services.ProposeBlueprintAI(ctx, body.Instruction, body.Draft)
+}
+
 // BlueprintsCreateApp runs a blueprint to completion (logs stream on the
 // "blueprintEvent" event) and returns the created app.
 func (a *App) BlueprintsCreateApp(body types.BlueprintRunInput) (types.BlueprintRunResult, error) {

@@ -6,7 +6,9 @@ import {
   LayoutTemplateIcon,
   PencilIcon,
   PlusIcon,
+  SparklesIcon,
   Trash2Icon,
+  Undo2Icon,
   XIcon,
 } from "lucide-react"
 import { api } from "@/lib/api"
@@ -38,6 +40,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 
 type BlueprintsPanelProps = {
   active: boolean
@@ -49,8 +52,13 @@ type Draft = {
   id: number | null
   name: string
   description: string
+  sampleName: string
   createFolder: boolean
   commands: CommandRow[]
+}
+
+function isBlank(draft: Draft) {
+  return !draft.name.trim() && draft.commands.every((c) => !c.command.trim())
 }
 
 export function BlueprintsPanel({ active }: BlueprintsPanelProps) {
@@ -59,7 +67,15 @@ export function BlueprintsPanel({ active }: BlueprintsPanelProps) {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<Blueprint | null>(null)
+  const [aiReady, setAiReady] = useState(false)
+  const [aiPrompt, setAiPrompt] = useState("")
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiNote, setAiNote] = useState("")
+  // The draft as it was before the last AI change, for undo.
+  const [aiUndo, setAiUndo] = useState<Draft | null>(null)
   const nextKey = useRef(0)
+  // Bumped when the editor changes, so a late AI answer is not applied to it.
+  const aiRun = useRef(0)
 
   function newRow(label = "", command = ""): CommandRow {
     return { key: nextKey.current++, label, command }
@@ -88,16 +104,103 @@ export function BlueprintsPanel({ active }: BlueprintsPanelProps) {
     }
   }, [active])
 
+  // Whether an AI connection is set up (checked each time the panel is shown,
+  // since the AI tab may have changed it).
+  useEffect(() => {
+    if (!active) return
+    let cancelled = false
+    api.ai
+      .getConfig()
+      .then((config) => {
+        if (cancelled) return
+        setAiReady(config.providers.some((p) => p.name === config.active))
+      })
+      .catch(() => {
+        if (!cancelled) setAiReady(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [active])
+
+  function rowsFrom(commands: Blueprint["commands"]) {
+    return commands.length
+      ? commands.map((c) => newRow(c.label ?? "", c.command))
+      : [newRow()]
+  }
+
+  function closeEditor() {
+    aiRun.current++
+    setDraft(null)
+  }
+
   function startEdit(blueprint: Blueprint | null) {
+    aiRun.current++
+    setAiBusy(false)
+    setAiPrompt("")
+    setAiNote("")
+    setAiUndo(null)
     setDraft({
       id: blueprint?.id ?? null,
       name: blueprint?.name ?? "",
       description: blueprint?.description ?? "",
+      sampleName: blueprint?.sample_name ?? "",
       createFolder: blueprint?.create_folder ?? true,
-      commands: blueprint?.commands.length
-        ? blueprint.commands.map((c) => newRow(c.label ?? "", c.command))
-        : [newRow()],
+      commands: rowsFrom(blueprint?.commands ?? []),
     })
+  }
+
+  function toInput(d: Draft): BlueprintInput {
+    return {
+      name: d.name,
+      description: d.description,
+      sample_name: d.sampleName,
+      create_folder: d.createFolder,
+      commands: d.commands.map((c) => ({
+        label: c.label.trim() || null,
+        command: c.command,
+      })),
+    }
+  }
+
+  async function handleAi() {
+    const current = draft
+    const instruction = aiPrompt.trim()
+    if (!current || !instruction || aiBusy) return
+    const run = ++aiRun.current
+    setAiBusy(true)
+    try {
+      const result = await api.blueprints.aiPropose({
+        instruction,
+        draft: isBlank(current) ? null : toInput(current),
+      })
+      if (run !== aiRun.current) return
+      const bp = result.blueprint
+      setAiUndo(current)
+      setAiNote(result.message)
+      setAiPrompt("")
+      setDraft({
+        id: current.id,
+        name: bp.name,
+        description: bp.description,
+        sampleName: bp.sample_name,
+        createFolder: bp.create_folder,
+        commands: rowsFrom(bp.commands),
+      })
+      toast.success("Draft updated. Review it, then save.")
+    } catch (err) {
+      if (run !== aiRun.current) return
+      toast.error(err instanceof Error ? err.message : "AI request failed")
+    } finally {
+      if (run === aiRun.current) setAiBusy(false)
+    }
+  }
+
+  function handleAiUndo() {
+    if (!aiUndo) return
+    setDraft(aiUndo)
+    setAiUndo(null)
+    setAiNote("")
   }
 
   function patch(next: Partial<Draft>) {
@@ -137,15 +240,7 @@ export function BlueprintsPanel({ active }: BlueprintsPanelProps) {
       toast.error("Name is required")
       return
     }
-    const body: BlueprintInput = {
-      name: draft.name,
-      description: draft.description,
-      create_folder: draft.createFolder,
-      commands: draft.commands.map((c) => ({
-        label: c.label.trim() || null,
-        command: c.command,
-      })),
-    }
+    const body = toInput(draft)
     setSaving(true)
     try {
       const saved =
@@ -158,7 +253,7 @@ export function BlueprintsPanel({ active }: BlueprintsPanelProps) {
           : prev.map((b) => (b.id === saved.id ? saved : b))
         ).sort((a, b) => a.name.localeCompare(b.name))
       )
-      setDraft(null)
+      closeEditor()
       toast.success("Blueprint saved")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save")
@@ -199,6 +294,67 @@ export function BlueprintsPanel({ active }: BlueprintsPanelProps) {
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             <FieldGroup>
               <Field>
+                <FieldLabel htmlFor="blueprint-ai">
+                  <SparklesIcon className="size-3.5" />
+                  {isBlank(draft) ? "Create with AI" : "Change with AI"}
+                </FieldLabel>
+                <Textarea
+                  id="blueprint-ai"
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault()
+                      void handleAi()
+                    }
+                  }}
+                  disabled={!aiReady || aiBusy}
+                  rows={2}
+                  placeholder={
+                    isBlank(draft)
+                      ? "A Next.js app with Tailwind and Prisma"
+                      : "Also add ESLint and Prettier"
+                  }
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!aiReady || aiBusy || !aiPrompt.trim()}
+                    onClick={() => void handleAi()}
+                  >
+                    <SparklesIcon data-icon="inline-start" />
+                    {aiBusy
+                      ? "Working…"
+                      : isBlank(draft)
+                        ? "Generate"
+                        : "Update with AI"}
+                  </Button>
+                  {aiUndo ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={aiBusy}
+                      onClick={handleAiUndo}
+                    >
+                      <Undo2Icon data-icon="inline-start" />
+                      Undo
+                    </Button>
+                  ) : null}
+                </div>
+                <FieldDescription>
+                  {aiReady
+                    ? "Fills in the form below; nothing is saved until you click Save. Check the commands before you run them. Ctrl+Enter to send."
+                    : "Set up an AI connection in the AI tab to use this."}
+                </FieldDescription>
+                {aiNote ? (
+                  <p className="rounded-md bg-muted px-2.5 py-2 text-xs whitespace-pre-wrap text-muted-foreground">
+                    {aiNote}
+                  </p>
+                ) : null}
+              </Field>
+              <Field>
                 <FieldLabel htmlFor="blueprint-name">Name</FieldLabel>
                 <Input
                   id="blueprint-name"
@@ -218,6 +374,20 @@ export function BlueprintsPanel({ active }: BlueprintsPanelProps) {
                   onChange={(e) => patch({ description: e.target.value })}
                   placeholder="Optional"
                 />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="blueprint-sample-name">
+                  Sample app name
+                </FieldLabel>
+                <Input
+                  id="blueprint-sample-name"
+                  value={draft.sampleName}
+                  onChange={(e) => patch({ sampleName: e.target.value })}
+                  placeholder="my-vite-app"
+                />
+                <FieldDescription>
+                  Optional. The new-app dialog starts with this name.
+                </FieldDescription>
               </Field>
               <Field orientation="horizontal" className="items-start gap-2">
                 <Checkbox
@@ -326,7 +496,7 @@ export function BlueprintsPanel({ active }: BlueprintsPanelProps) {
             </FieldGroup>
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setDraft(null)}>
+            <Button variant="outline" onClick={closeEditor}>
               Back
             </Button>
             <Button disabled={saving} onClick={() => void handleSave()}>

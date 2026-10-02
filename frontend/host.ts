@@ -1,6 +1,7 @@
 import type { AppAIChatResult, AppAIStreamEvent } from '@/lib/app-ai'
 import type {
     AIProviderConfig,
+    BlueprintAIInput,
     BlueprintInput,
     BlueprintLogEvent,
     BlueprintRunInput,
@@ -87,6 +88,8 @@ export const api = {
         update: (id: number, body: BlueprintInput) =>
             call(() => Go.BlueprintsUpdate(id, types.BlueprintInput.createFrom(body))),
         delete: (id: number) => call(() => Go.BlueprintsDelete(id)),
+        aiPropose: (body: BlueprintAIInput) =>
+            call(() => Go.BlueprintsAIPropose(types.BlueprintAIInput.createFrom(body))),
         createApp: (body: BlueprintRunInput) => call(() => Go.BlueprintsCreateApp(body)),
         resolve: (runId: string, action: 'skip' | 'abort') =>
             call(() => Go.BlueprintsResolve(runId, action)),

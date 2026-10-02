@@ -82,7 +82,7 @@ function AppContent() {
     const [blueprintWorkspaceId, setBlueprintWorkspaceId] = useState<number | null>(null)
     const [blueprintDialogOpen, setBlueprintDialogOpen] = useState(false)
     const [settingsOpen, setSettingsOpen] = useState(false)
-    const [settingsTab, setSettingsTab] = useState<SettingsTab>('ports')
+    const [settingsTab, setSettingsTab] = useState<SettingsTab>('ai')
     // Set when Settings was opened from the blueprint dialog, to return there.
     const [returnToBlueprintDialog, setReturnToBlueprintDialog] = useState(false)
 
@@ -458,7 +458,10 @@ function AppContent() {
                         setBlueprintWorkspaceId(workspaceId)
                         setBlueprintDialogOpen(true)
                     }}
-                    onOpenSettings={() => setSettingsOpen(true)}
+                    onOpenSettings={() => {
+                        setSettingsTab('ai')
+                        setSettingsOpen(true)
+                    }}
                     onStatus={handleStatus}
                 />
                 <SidebarInset>

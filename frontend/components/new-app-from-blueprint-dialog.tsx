@@ -135,6 +135,10 @@ export function NewAppFromBlueprintDialog({
         setBlueprints(list)
         setBlueprintId(list[0]?.id ?? null)
         setCreateFolder(list[0]?.create_folder ?? true)
+        // The name was just reset, so the first blueprint's sample can fill it.
+        const sample = list[0]?.sample_name ?? ""
+        setName(sample)
+        setFolderName(sample ? slugify(sample) : "")
       })
       .catch((err) => {
         if (cancelled) return
@@ -153,6 +157,13 @@ export function NewAppFromBlueprintDialog({
     if (!next) return
     setBlueprintId(next.id)
     setCreateFolder(next.create_folder)
+    // Swap the sample name unless the user typed their own name.
+    if (!name.trim() || name === blueprint?.sample_name) {
+      setName(next.sample_name)
+      if (!folderTouched) {
+        setFolderName(next.sample_name ? slugify(next.sample_name) : "")
+      }
+    }
   }
 
   function handleNameChange(value: string) {

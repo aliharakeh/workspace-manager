@@ -28,6 +28,7 @@ type Blueprint struct {
 	Commands     string `json:"commands"`
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    string `json:"updated_at"`
+	SampleName   string `json:"sample_name"`
 }
 
 type ConfigSet struct {

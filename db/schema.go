@@ -19,7 +19,21 @@ func applySchema(sqlDB *sql.DB) error {
 	if _, err := sqlDB.Exec(schemaSQL); err != nil {
 		return err
 	}
-	return restoreBlueprints(sqlDB)
+	if err := restoreBlueprints(sqlDB); err != nil {
+		return err
+	}
+	return addBlueprintSampleName(sqlDB)
+}
+
+// addBlueprintSampleName upgrades a blueprints table created before the
+// sample_name column existed. A fresh table already has it from schemaSQL.
+func addBlueprintSampleName(sqlDB *sql.DB) error {
+	has, err := hasColumn(sqlDB, "blueprints", "sample_name")
+	if err != nil || has {
+		return err
+	}
+	_, err = sqlDB.Exec(`ALTER TABLE blueprints ADD COLUMN sample_name text DEFAULT '' NOT NULL`)
+	return err
 }
 
 func tableColumns(sqlDB *sql.DB, table string) ([]string, error) {

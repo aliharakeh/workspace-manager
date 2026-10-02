@@ -346,7 +346,7 @@ func TestBlueprintCRUD(t *testing.T) {
 	ws, _ := d.CreateWorkspaceT(ctx, "ws", nil)
 	label := "  Install "
 	bp, err := d.CreateBlueprintT(ctx, types.BlueprintInput{
-		Name: " Vite ", CreateFolder: true,
+		Name: " Vite ", SampleName: " my-vite-app ", CreateFolder: true,
 		Commands: []types.BlueprintCommand{{Label: &label, Command: " bun install "}, {Command: "  "}},
 	})
 	if err != nil {
@@ -354,6 +354,13 @@ func TestBlueprintCRUD(t *testing.T) {
 	}
 	if bp.Name != "Vite" || len(bp.Commands) != 1 || bp.Commands[0].Command != "bun install" || *bp.Commands[0].Label != "Install" || !bp.CreateFolder {
 		t.Fatalf("not normalised: %+v", bp)
+	}
+	if bp.SampleName != "my-vite-app" {
+		t.Fatalf("sample name not stored trimmed: %q", bp.SampleName)
+	}
+	bp, err = d.UpdateBlueprintT(ctx, bp.ID, types.BlueprintInput{Name: "Vite", SampleName: "other-app", CreateFolder: true})
+	if err != nil || bp.SampleName != "other-app" {
+		t.Fatalf("update sample name: %q, %v", bp.SampleName, err)
 	}
 	if _, err := d.CreateBlueprintT(ctx, types.BlueprintInput{Name: "Vite"}); err == nil {
 		t.Fatal("duplicate name should fail")

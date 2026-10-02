@@ -28,6 +28,8 @@ export function AppsOpenInEditor(arg1:number):Promise<types.Ok>;
 
 export function AppsUpdate(arg1:number,arg2:types.AppUpdateInput):Promise<types.App>;
 
+export function BlueprintsAIPropose(arg1:types.BlueprintAIInput):Promise<types.BlueprintAIResult>;
+
 export function BlueprintsCancel(arg1:string):Promise<types.Ok>;
 
 export function BlueprintsCreate(arg1:types.BlueprintInput):Promise<types.Blueprint>;

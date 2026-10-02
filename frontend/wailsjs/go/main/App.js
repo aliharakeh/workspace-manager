@@ -54,6 +54,10 @@ export function AppsUpdate(arg1, arg2) {
   return window['go']['main']['App']['AppsUpdate'](arg1, arg2);
 }
 
+export function BlueprintsAIPropose(arg1) {
+  return window['go']['main']['App']['BlueprintsAIPropose'](arg1);
+}
+
 export function BlueprintsCancel(arg1) {
   return window['go']['main']['App']['BlueprintsCancel'](arg1);
 }

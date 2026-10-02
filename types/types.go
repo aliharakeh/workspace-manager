@@ -433,9 +433,11 @@ type BlueprintCommand struct {
 }
 
 type Blueprint struct {
-	ID           int64              `json:"id"`
-	Name         string             `json:"name"`
-	Description  string             `json:"description"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// SampleName is an example app name the new-app dialog starts with.
+	SampleName   string             `json:"sample_name"`
 	CreateFolder bool               `json:"create_folder"`
 	Commands     []BlueprintCommand `json:"commands"`
 	CreatedAt    string             `json:"created_at"`
@@ -445,8 +447,25 @@ type Blueprint struct {
 type BlueprintInput struct {
 	Name         string             `json:"name"`
 	Description  string             `json:"description"`
+	SampleName   string             `json:"sample_name"`
 	CreateFolder bool               `json:"create_folder"`
 	Commands     []BlueprintCommand `json:"commands"`
+}
+
+// BlueprintAIInput asks the blueprint agent for a blueprint. Draft is what the
+// editor currently holds (nil for a blank one), so the instruction can either
+// describe a new blueprint or change that draft.
+type BlueprintAIInput struct {
+	Instruction string          `json:"instruction"`
+	Draft       *BlueprintInput `json:"draft"`
+}
+
+// BlueprintAIResult is the agent's proposal. Nothing is saved; the UI loads
+// Blueprint into the editor for the user to review. Message holds the agent's
+// short notes (assumptions, things to check).
+type BlueprintAIResult struct {
+	Blueprint BlueprintInput `json:"blueprint"`
+	Message   string         `json:"message"`
 }
 
 // BlueprintRunInput starts a blueprint run. RunID is chosen by the UI so it can

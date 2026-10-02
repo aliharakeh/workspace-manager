@@ -37,14 +37,15 @@ func (q *Queries) CreateApp(ctx context.Context, arg CreateAppParams) (App, erro
 }
 
 const createBlueprint = `-- name: CreateBlueprint :one
-INSERT INTO blueprints (name, description, create_folder, commands)
-VALUES (?, ?, ?, ?)
-RETURNING id, name, description, create_folder, commands, created_at, updated_at
+INSERT INTO blueprints (name, description, sample_name, create_folder, commands)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, name, description, create_folder, commands, created_at, updated_at, sample_name
 `
 
 type CreateBlueprintParams struct {
 	Name         string `json:"name"`
 	Description  string `json:"description"`
+	SampleName   string `json:"sample_name"`
 	CreateFolder int64  `json:"create_folder"`
 	Commands     string `json:"commands"`
 }
@@ -53,6 +54,7 @@ func (q *Queries) CreateBlueprint(ctx context.Context, arg CreateBlueprintParams
 	row := q.db.QueryRowContext(ctx, createBlueprint,
 		arg.Name,
 		arg.Description,
+		arg.SampleName,
 		arg.CreateFolder,
 		arg.Commands,
 	)
@@ -65,6 +67,7 @@ func (q *Queries) CreateBlueprint(ctx context.Context, arg CreateBlueprintParams
 		&i.Commands,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SampleName,
 	)
 	return i, err
 }
@@ -417,7 +420,7 @@ func (q *Queries) GetApp(ctx context.Context, id int64) (GetAppRow, error) {
 }
 
 const getBlueprint = `-- name: GetBlueprint :one
-SELECT id, name, description, create_folder, commands, created_at, updated_at FROM blueprints WHERE id = ?
+SELECT id, name, description, create_folder, commands, created_at, updated_at, sample_name FROM blueprints WHERE id = ?
 `
 
 func (q *Queries) GetBlueprint(ctx context.Context, id int64) (Blueprint, error) {
@@ -431,6 +434,7 @@ func (q *Queries) GetBlueprint(ctx context.Context, id int64) (Blueprint, error)
 		&i.Commands,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SampleName,
 	)
 	return i, err
 }
@@ -658,7 +662,7 @@ func (q *Queries) ListAppsByWorkspace(ctx context.Context, workspaceID int64) ([
 }
 
 const listBlueprints = `-- name: ListBlueprints :many
-SELECT id, name, description, create_folder, commands, created_at, updated_at FROM blueprints ORDER BY name COLLATE NOCASE ASC
+SELECT id, name, description, create_folder, commands, created_at, updated_at, sample_name FROM blueprints ORDER BY name COLLATE NOCASE ASC
 `
 
 // blueprints
@@ -679,6 +683,7 @@ func (q *Queries) ListBlueprints(ctx context.Context) ([]Blueprint, error) {
 			&i.Commands,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SampleName,
 		); err != nil {
 			return nil, err
 		}
@@ -1022,14 +1027,15 @@ func (q *Queries) UpdateApp(ctx context.Context, arg UpdateAppParams) (App, erro
 
 const updateBlueprint = `-- name: UpdateBlueprint :one
 UPDATE blueprints
-SET name = ?, description = ?, create_folder = ?, commands = ?, updated_at = datetime('now')
+SET name = ?, description = ?, sample_name = ?, create_folder = ?, commands = ?, updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, name, description, create_folder, commands, created_at, updated_at
+RETURNING id, name, description, create_folder, commands, created_at, updated_at, sample_name
 `
 
 type UpdateBlueprintParams struct {
 	Name         string `json:"name"`
 	Description  string `json:"description"`
+	SampleName   string `json:"sample_name"`
 	CreateFolder int64  `json:"create_folder"`
 	Commands     string `json:"commands"`
 	ID           int64  `json:"id"`
@@ -1039,6 +1045,7 @@ func (q *Queries) UpdateBlueprint(ctx context.Context, arg UpdateBlueprintParams
 	row := q.db.QueryRowContext(ctx, updateBlueprint,
 		arg.Name,
 		arg.Description,
+		arg.SampleName,
 		arg.CreateFolder,
 		arg.Commands,
 		arg.ID,
@@ -1052,6 +1059,7 @@ func (q *Queries) UpdateBlueprint(ctx context.Context, arg UpdateBlueprintParams
 		&i.Commands,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SampleName,
 	)
 	return i, err
 }

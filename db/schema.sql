@@ -110,7 +110,8 @@ CREATE TABLE IF NOT EXISTS blueprints (
   create_folder integer DEFAULT true NOT NULL,
   commands text DEFAULT '[]' NOT NULL,
   created_at text DEFAULT (datetime('now')) NOT NULL,
-  updated_at text DEFAULT (datetime('now')) NOT NULL
+  updated_at text DEFAULT (datetime('now')) NOT NULL,
+  sample_name text DEFAULT '' NOT NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS blueprints_name_unique ON blueprints (name);
