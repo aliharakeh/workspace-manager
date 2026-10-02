@@ -1,6 +1,15 @@
 import type { AppAIChatResult, AppAIStreamEvent } from '@/lib/app-ai'
-import type { AIProviderConfig, CopyParts, RunMode, RunnerEvent } from '@/lib/types'
+import type {
+    AIProviderConfig,
+    BlueprintInput,
+    BlueprintLogEvent,
+    BlueprintRunInput,
+    CopyParts,
+    RunMode,
+    RunnerEvent,
+} from '@/lib/types'
 import * as Go from './wailsjs/go/main/App'
+import { types } from './wailsjs/go/models'
 import { EventsOn } from './wailsjs/runtime/runtime'
 
 type RunnerEventHandler = (appId: number, event: RunnerEvent) => void
@@ -18,6 +27,12 @@ export function onRunnerEvent(handler: RunnerEventHandler, appId?: number) {
     return () => {
         listeners.delete(handler)
     }
+}
+
+export function onBlueprintLog(handler: (event: BlueprintLogEvent) => void) {
+    return EventsOn('blueprintEvent', (event: BlueprintLogEvent) => {
+        if (event) handler(event)
+    })
 }
 
 class ApiError extends Error {
@@ -55,6 +70,17 @@ export const api = {
             call(() => Go.AppsUpdate(id, body)),
         delete: (id: number) => call(() => Go.AppsDelete(id)),
         openInEditor: (id: number) => call(() => Go.AppsOpenInEditor(id)),
+    },
+
+    blueprints: {
+        list: () => call(() => Go.BlueprintsList()),
+        create: (body: BlueprintInput) =>
+            call(() => Go.BlueprintsCreate(types.BlueprintInput.createFrom(body))),
+        update: (id: number, body: BlueprintInput) =>
+            call(() => Go.BlueprintsUpdate(id, types.BlueprintInput.createFrom(body))),
+        delete: (id: number) => call(() => Go.BlueprintsDelete(id)),
+        createApp: (body: BlueprintRunInput) => call(() => Go.BlueprintsCreateApp(body)),
+        cancel: (runId: string) => call(() => Go.BlueprintsCancel(runId)),
     },
 
     configSets: {

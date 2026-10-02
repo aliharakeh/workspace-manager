@@ -1,4 +1,3 @@
-import { useState } from "react"
 import {
   AppWindowIcon,
   FolderIcon,
@@ -10,7 +9,6 @@ import {
 } from "lucide-react"
 import type { App, StatusEvent, Workspace } from "@/lib/types"
 import { AppRunControls, AppStatusDot } from "@/components/app-run-controls"
-import { SettingsDialog } from "@/components/settings-dialog"
 import { useTheme } from "@/components/theme-provider"
 import {
   Sidebar,
@@ -49,6 +47,8 @@ type AppSidebarProps = {
   onEditWorkspace: (workspace: Workspace) => void
   onDeleteWorkspace: (workspace: Workspace) => void
   onCreateApp: (workspaceId: number) => void
+  onCreateAppFromBlueprint: (workspaceId: number) => void
+  onOpenSettings: () => void
   onStatus: (status: StatusEvent) => void
 }
 
@@ -64,9 +64,10 @@ export function AppSidebar({
   onEditWorkspace,
   onDeleteWorkspace,
   onCreateApp,
+  onCreateAppFromBlueprint,
+  onOpenSettings,
   onStatus,
 }: AppSidebarProps) {
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const { resolvedTheme, toggleTheme } = useTheme()
   const dark = resolvedTheme === "dark"
 
@@ -78,14 +79,15 @@ export function AppSidebar({
             <AppWindowIcon className="size-4" />
           </div>
           <div className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
-            <span className="truncate text-sm font-medium">Workspace Manager</span>
+            <span className="truncate text-sm font-medium">
+              Workspace Manager
+            </span>
             <span className="truncate text-xs text-muted-foreground">
               Local workspaces
             </span>
           </div>
         </div>
       </SidebarHeader>
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Workspaces</SidebarGroupLabel>
@@ -137,6 +139,13 @@ export function AppSidebar({
                             onClick={() => onCreateApp(workspace.id)}
                           >
                             Add app
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              onCreateAppFromBlueprint(workspace.id)
+                            }
+                          >
+                            New app from blueprint
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => onEditWorkspace(workspace)}
@@ -213,10 +222,7 @@ export function AppSidebar({
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              tooltip="Settings"
-              onClick={() => setSettingsOpen(true)}
-            >
+            <SidebarMenuButton tooltip="Settings" onClick={onOpenSettings}>
               <SettingsIcon />
               <span>Settings</span>
             </SidebarMenuButton>

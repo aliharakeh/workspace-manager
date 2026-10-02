@@ -28,6 +28,18 @@ export function AppsOpenInEditor(arg1:number):Promise<types.Ok>;
 
 export function AppsUpdate(arg1:number,arg2:types.AppUpdateInput):Promise<types.App>;
 
+export function BlueprintsCancel(arg1:string):Promise<types.Ok>;
+
+export function BlueprintsCreate(arg1:types.BlueprintInput):Promise<types.Blueprint>;
+
+export function BlueprintsCreateApp(arg1:types.BlueprintRunInput):Promise<types.BlueprintRunResult>;
+
+export function BlueprintsDelete(arg1:number):Promise<types.Ok>;
+
+export function BlueprintsList():Promise<Array<types.Blueprint>>;
+
+export function BlueprintsUpdate(arg1:number,arg2:types.BlueprintInput):Promise<types.Blueprint>;
+
 export function ConfigSetsActivate(arg1:number):Promise<types.ConfigSetActivateResult>;
 
 export function ConfigSetsCopyFrom(arg1:number,arg2:number,arg3:types.CopyParts):Promise<types.ConfigSet>;

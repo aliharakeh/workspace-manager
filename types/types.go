@@ -419,3 +419,50 @@ type AITestResult struct {
 	Ok   bool   `json:"ok"`
 	Text string `json:"text"`
 }
+
+type BlueprintCommand struct {
+	Label   *string `json:"label"`
+	Command string  `json:"command"`
+}
+
+type Blueprint struct {
+	ID           int64              `json:"id"`
+	Name         string             `json:"name"`
+	Description  string             `json:"description"`
+	CreateFolder bool               `json:"create_folder"`
+	Commands     []BlueprintCommand `json:"commands"`
+	CreatedAt    string             `json:"created_at"`
+	UpdatedAt    string             `json:"updated_at"`
+}
+
+type BlueprintInput struct {
+	Name         string             `json:"name"`
+	Description  string             `json:"description"`
+	CreateFolder bool               `json:"create_folder"`
+	Commands     []BlueprintCommand `json:"commands"`
+}
+
+// BlueprintRunInput starts a blueprint run. RunID is chosen by the UI so it can
+// filter blueprintEvent logs and cancel the run.
+type BlueprintRunInput struct {
+	RunID       string `json:"run_id"`
+	BlueprintID int64  `json:"blueprint_id"`
+	// WorkspaceID is the workspace the new app is added to.
+	WorkspaceID  int64  `json:"workspace_id"`
+	Name         string `json:"name"`
+	ParentPath   string `json:"parent_path"`
+	FolderName   string `json:"folder_name"`
+	CreateFolder bool   `json:"create_folder"`
+}
+
+type BlueprintRunResult struct {
+	App     App    `json:"app"`
+	Warning string `json:"warning,omitempty"`
+}
+
+type BlueprintLogEvent struct {
+	RunID  string `json:"runId"`
+	Stream string `json:"stream"`
+	Text   string `json:"text"`
+	Ts     int64  `json:"ts"`
+}

@@ -20,6 +20,16 @@ type AppSetting struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+type Blueprint struct {
+	ID           int64  `json:"id"`
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	CreateFolder int64  `json:"create_folder"`
+	Commands     string `json:"commands"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
 type ConfigSet struct {
 	ID        int64  `json:"id"`
 	AppID     int64  `json:"app_id"`

@@ -54,6 +54,30 @@ export function AppsUpdate(arg1, arg2) {
   return window['go']['main']['App']['AppsUpdate'](arg1, arg2);
 }
 
+export function BlueprintsCancel(arg1) {
+  return window['go']['main']['App']['BlueprintsCancel'](arg1);
+}
+
+export function BlueprintsCreate(arg1) {
+  return window['go']['main']['App']['BlueprintsCreate'](arg1);
+}
+
+export function BlueprintsCreateApp(arg1) {
+  return window['go']['main']['App']['BlueprintsCreateApp'](arg1);
+}
+
+export function BlueprintsDelete(arg1) {
+  return window['go']['main']['App']['BlueprintsDelete'](arg1);
+}
+
+export function BlueprintsList() {
+  return window['go']['main']['App']['BlueprintsList']();
+}
+
+export function BlueprintsUpdate(arg1, arg2) {
+  return window['go']['main']['App']['BlueprintsUpdate'](arg1, arg2);
+}
+
 export function ConfigSetsActivate(arg1) {
   return window['go']['main']['App']['ConfigSetsActivate'](arg1);
 }

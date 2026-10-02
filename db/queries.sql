@@ -201,3 +201,24 @@ WHERE id = ?;
 
 -- name: DeleteReadyUrlPattern :execrows
 DELETE FROM ready_url_patterns WHERE id = ?;
+
+-- blueprints
+-- name: ListBlueprints :many
+SELECT * FROM blueprints ORDER BY name COLLATE NOCASE ASC;
+
+-- name: GetBlueprint :one
+SELECT * FROM blueprints WHERE id = ?;
+
+-- name: CreateBlueprint :one
+INSERT INTO blueprints (name, description, create_folder, commands)
+VALUES (?, ?, ?, ?)
+RETURNING *;
+
+-- name: UpdateBlueprint :one
+UPDATE blueprints
+SET name = ?, description = ?, create_folder = ?, commands = ?, updated_at = datetime('now')
+WHERE id = ?
+RETURNING *;
+
+-- name: DeleteBlueprint :execrows
+DELETE FROM blueprints WHERE id = ?;

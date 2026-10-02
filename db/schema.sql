@@ -102,3 +102,15 @@ CREATE TABLE IF NOT EXISTS ready_url_patterns (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS ready_url_patterns_key_unique ON ready_url_patterns (key);
+
+CREATE TABLE IF NOT EXISTS blueprints (
+  id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+  name text NOT NULL,
+  description text DEFAULT '' NOT NULL,
+  create_folder integer DEFAULT true NOT NULL,
+  commands text DEFAULT '[]' NOT NULL,
+  created_at text DEFAULT (datetime('now')) NOT NULL,
+  updated_at text DEFAULT (datetime('now')) NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS blueprints_name_unique ON blueprints (name);

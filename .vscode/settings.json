@@ -1,0 +1,20 @@
+{
+    "runConfig.configurations": [
+        {
+            "name": "Wails Build",
+            "bin": "wails",
+            "args": [
+                "build"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Wails Dev",
+            "bin": "wails",
+            "args": [
+                "dev"
+            ],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

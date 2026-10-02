@@ -1,12 +1,13 @@
-import { useState } from "react"
 import {
   BellRingIcon,
   BotIcon,
   KeyboardIcon,
+  LayoutTemplateIcon,
   Link2Icon,
   NetworkIcon,
 } from "lucide-react"
 import { AIPanel } from "@/components/ai-panel"
+import { BlueprintsPanel } from "@/components/blueprints-panel"
 import { KeyboardShortcutsPanel } from "@/components/keyboard-shortcuts-panel"
 import { NotificationsPanel } from "@/components/notifications-panel"
 import { PortsPanel } from "@/components/ports-panel"
@@ -20,25 +21,31 @@ import {
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
+export type SettingsTab =
+  "ai" | "ports" | "ready-urls" | "blueprints" | "shortcuts" | "notifications"
+
 type SettingsDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  tab: SettingsTab
+  onTabChange: (tab: SettingsTab) => void
 }
 
-type SettingsTab = "ai" | "ports" | "ready-urls" | "shortcuts" | "notifications"
-
-export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
-  const [tab, setTab] = useState<SettingsTab>("ports")
-
+export function SettingsDialog({
+  open,
+  onOpenChange,
+  tab,
+  onTabChange,
+}: SettingsDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[min(42rem,90vh)] max-h-[min(42rem,90vh)] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
         <DialogHeader className="shrink-0 border-b p-4 pr-12">
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
-            Manage AI provider connections, listening ports, keyboard shortcuts,
-            system notifications, and how Workspace Manager detects ready URLs
-            from logs.
+            Manage AI provider connections, listening ports, app blueprints,
+            keyboard shortcuts, system notifications, and how Workspace Manager
+            detects ready URLs from logs.
           </DialogDescription>
         </DialogHeader>
 
@@ -49,10 +56,11 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               value === "ai" ||
               value === "ports" ||
               value === "ready-urls" ||
+              value === "blueprints" ||
               value === "shortcuts" ||
               value === "notifications"
             ) {
-              setTab(value)
+              onTabChange(value)
             }
           }}
           orientation="vertical"
@@ -73,6 +81,10 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             <TabsTrigger value="ready-urls" className="justify-start">
               <Link2Icon data-icon="inline-start" />
               Log URL patterns
+            </TabsTrigger>
+            <TabsTrigger value="blueprints" className="justify-start">
+              <LayoutTemplateIcon data-icon="inline-start" />
+              Blueprints
             </TabsTrigger>
             <TabsTrigger value="shortcuts" className="justify-start">
               <KeyboardIcon data-icon="inline-start" />
@@ -102,6 +114,12 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               className="mt-0 flex min-h-0 flex-1 flex-col data-hidden:hidden"
             >
               <ReadyUrlPatternsPanel active={open && tab === "ready-urls"} />
+            </TabsContent>
+            <TabsContent
+              value="blueprints"
+              className="mt-0 flex min-h-0 flex-1 flex-col data-hidden:hidden"
+            >
+              <BlueprintsPanel active={open && tab === "blueprints"} />
             </TabsContent>
             <TabsContent
               value="shortcuts"

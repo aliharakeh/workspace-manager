@@ -1,6 +1,6 @@
 import { api } from "@/host"
 
-export { api, ApiError, onRunnerEvent } from "@/host"
+export { api, ApiError, onBlueprintLog, onRunnerEvent } from "@/host"
 
 export function handleReadyUrlClick(
   event: { preventDefault(): void; stopPropagation(): void },

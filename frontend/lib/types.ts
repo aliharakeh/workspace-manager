@@ -186,3 +186,48 @@ export type AIConfigInfo = {
     providers: AIConnectionInfo[]
     active: string
 }
+
+export type BlueprintCommand = {
+    label?: string | null
+    command: string
+}
+
+export type Blueprint = {
+    id: number
+    name: string
+    description: string
+    create_folder: boolean
+    commands: BlueprintCommand[]
+    created_at: string
+    updated_at: string
+}
+
+export type BlueprintInput = {
+    name: string
+    description: string
+    create_folder: boolean
+    commands: BlueprintCommand[]
+}
+
+export type BlueprintRunInput = {
+    run_id: string
+    blueprint_id: number
+    /** Workspace the new app is added to. */
+    workspace_id: number
+    name: string
+    parent_path: string
+    folder_name: string
+    create_folder: boolean
+}
+
+export type BlueprintRunResult = {
+    app: App
+    warning?: string
+}
+
+export type BlueprintLogEvent = {
+    runId: string
+    stream: 'stdout' | 'stderr' | 'system'
+    text: string
+    ts: number
+}

@@ -14,6 +14,7 @@ The database file lives in the OS user-data directory: Windows `%LOCALAPPDATA%\w
 - **Apps** — name + local project folder, picked with a native folder dialog
 - **Live status** — running / idle indicators, plus Run / Stop / Reload on the app and workspace views
 - **Open in editor** — opens the app’s project path in your local editor (`$VISUAL` / `$EDITOR`, or the OS file manager)
+- **Blueprints** — reusable recipes for new apps, managed under **Settings → Blueprints** and usable in any workspace: a list of shell commands (with `{{app_name}}`, `{{folder_name}}`, `{{app_dir}}`). **From blueprint** next to **Add app** asks for a parent folder and the app name, then runs the commands either inside a new app folder or in the parent (your choice), streams the output, runs `git init` unless a repo exists, and adds the app
 
 ### Config sets
 
@@ -80,7 +81,7 @@ Frontend scripts (`bun install` once in `frontend/`): `bun run dev`, `bun run bu
 | Path | Role |
 |---|---|
 | `main.go`, `app.go`, `bind.go`, `events.go` | Wails entry point, `App` lifecycle, bound API methods, event emission |
-| `services/` | Runner, templates, ready URLs, notifier, AI |
+| `services/` | Runner, templates, blueprints, ready URLs, notifier, AI |
 | `lib/`, `native/` | fs / env / import helpers; OS helpers (process, ports, editor, browser) |
 | `db/` | SQLite schema, queries, sqlc-generated code |
 | `types/` | Types shared with the UI (JSON tags match `frontend/lib/types.ts`) |

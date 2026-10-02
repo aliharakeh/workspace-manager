@@ -1,6 +1,7 @@
 import {
   AppWindowIcon,
   ExternalLinkIcon,
+  LayoutTemplateIcon,
   PlusIcon,
 } from "lucide-react"
 import { handleReadyUrlClick } from "@/lib/api"
@@ -24,6 +25,7 @@ type WorkspaceDetailProps = {
   statusByAppId: Record<number, StatusEvent>
   onSelectApp: (appId: number) => void
   onCreateApp: () => void
+  onCreateAppFromBlueprint: () => void
   onStatus: (status: StatusEvent) => void
   onAppChange: (app: App) => void
 }
@@ -34,6 +36,7 @@ export function WorkspaceDetail({
   statusByAppId,
   onSelectApp,
   onCreateApp,
+  onCreateAppFromBlueprint,
   onStatus,
   onAppChange,
 }: WorkspaceDetailProps) {
@@ -51,14 +54,18 @@ export function WorkspaceDetail({
             </EmptyMedia>
             <EmptyTitle>{workspace.name}</EmptyTitle>
             <EmptyDescription>
-              This workspace has no apps yet. Add one to configure env, templates,
-              and run commands.
+              This workspace has no apps yet. Add one to configure env,
+              templates, and run commands.
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
             <Button onClick={onCreateApp}>
               <PlusIcon data-icon="inline-start" />
               Add app
+            </Button>
+            <Button variant="outline" onClick={onCreateAppFromBlueprint}>
+              <LayoutTemplateIcon data-icon="inline-start" />
+              From blueprint
             </Button>
           </EmptyContent>
         </Empty>
@@ -81,8 +88,8 @@ export function WorkspaceDetail({
           </Badge>
         </div>
         <p className="text-sm text-muted-foreground">
-          Overview of apps in this workspace. Open an app for env, templates, and
-          logs.
+          Overview of apps in this workspace. Open an app for env, templates,
+          and logs.
         </p>
       </div>
 
@@ -149,7 +156,7 @@ export function WorkspaceDetail({
                 {readyUrls.length > 0 ? (
                   <ul className="flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
                     {readyUrls.map((url) => (
-                      <li key={url} className="min-w-0 max-w-full">
+                      <li key={url} className="max-w-full min-w-0">
                         <Badge
                           variant="secondary"
                           className="max-w-full font-mono"
@@ -159,7 +166,9 @@ export function WorkspaceDetail({
                               href={url}
                               target="_blank"
                               rel="noreferrer"
-                              onClick={(event) => handleReadyUrlClick(event, url)}
+                              onClick={(event) =>
+                                handleReadyUrlClick(event, url)
+                              }
                             />
                           }
                         >

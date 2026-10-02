@@ -897,3 +897,37 @@ func (a *App) OpenExternal(url string) (types.Ok, error) {
 	runtime.BrowserOpenURL(a.ctx, strings.TrimSpace(url))
 	return types.Ok{Ok: true}, nil
 }
+
+func (a *App) BlueprintsList() ([]types.Blueprint, error) {
+	return a.db.ListBlueprintsT(a.ctx)
+}
+
+func (a *App) BlueprintsCreate(body types.BlueprintInput) (types.Blueprint, error) {
+	return a.db.CreateBlueprintT(a.ctx, body)
+}
+
+func (a *App) BlueprintsUpdate(id int64, body types.BlueprintInput) (types.Blueprint, error) {
+	return a.db.UpdateBlueprintT(a.ctx, id, body)
+}
+
+func (a *App) BlueprintsDelete(id int64) (types.Ok, error) {
+	n, err := a.db.DeleteBlueprint(a.ctx, id)
+	if err != nil {
+		return types.Ok{}, err
+	}
+	if n == 0 {
+		return types.Ok{}, fmt.Errorf("Blueprint not found")
+	}
+	return types.Ok{Ok: true}, nil
+}
+
+// BlueprintsCreateApp runs a blueprint to completion (logs stream on the
+// "blueprintEvent" event) and returns the created app.
+func (a *App) BlueprintsCreateApp(body types.BlueprintRunInput) (types.BlueprintRunResult, error) {
+	return a.blueprints.Run(a.ctx, body)
+}
+
+func (a *App) BlueprintsCancel(runID string) types.Ok {
+	a.blueprints.Cancel(runID)
+	return types.Ok{Ok: true}
+}

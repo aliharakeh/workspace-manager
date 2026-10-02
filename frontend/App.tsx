@@ -2,6 +2,8 @@ import { AppDetail } from '@/components/app-detail'
 import { AppDialog, DeleteAppDialog } from '@/components/app-dialogs'
 import { AppSidebar } from '@/components/app-sidebar'
 import { CommandPalette, type PaletteItem } from '@/components/command-palette'
+import { NewAppFromBlueprintDialog } from '@/components/new-app-from-blueprint-dialog'
+import { SettingsDialog, type SettingsTab } from '@/components/settings-dialog'
 import { SettingsProvider, useSettings } from '@/components/settings-provider'
 import { isEditableTarget, useTheme } from '@/components/theme-provider'
 import { Button } from '@/components/ui/button'
@@ -35,7 +37,7 @@ import {
     shortcutParts,
 } from '@/lib/shortcuts'
 import type { App as AppEntity, StatusEvent, Workspace } from '@/lib/types'
-import { FolderIcon, PlusIcon, SearchIcon } from 'lucide-react'
+import { FolderIcon, LayoutTemplateIcon, PlusIcon, SearchIcon } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -70,6 +72,13 @@ function AppContent() {
     const [editingApp, setEditingApp] = useState<AppEntity | null>(null)
     const [deletingApp, setDeletingApp] = useState<AppEntity | null>(null)
 
+    const [blueprintWorkspaceId, setBlueprintWorkspaceId] = useState<number | null>(null)
+    const [blueprintDialogOpen, setBlueprintDialogOpen] = useState(false)
+    const [settingsOpen, setSettingsOpen] = useState(false)
+    const [settingsTab, setSettingsTab] = useState<SettingsTab>('ports')
+    // Set when Settings was opened from the blueprint dialog, to return there.
+    const [returnToBlueprintDialog, setReturnToBlueprintDialog] = useState(false)
+
     const { status, logs, setStatus, connected } = useRunnerLogs(selectedAppId)
     const workspaceIds = useMemo(() => workspaces.map(workspace => workspace.id), [workspaces])
     const { statusByAppId, setAppStatus } = useAppStatuses(workspaceIds)
@@ -77,6 +86,11 @@ function AppContent() {
     const selectedWorkspace = useMemo(
         () => workspaces.find(w => w.id === selectedWorkspaceId) ?? null,
         [workspaces, selectedWorkspaceId],
+    )
+
+    const blueprintWorkspace = useMemo(
+        () => workspaces.find(w => w.id === blueprintWorkspaceId) ?? null,
+        [workspaces, blueprintWorkspaceId],
     )
 
     const selectedApps = useMemo(
@@ -125,6 +139,20 @@ function AppContent() {
     useEffect(() => {
         void bootstrap()
     }, [bootstrap])
+
+    function handleAppSaved(app: AppEntity) {
+        setAppsByWorkspace(prev => {
+            const list = prev[app.workspace_id] ?? []
+            const exists = list.some(a => a.id === app.id)
+            const next = exists ? list.map(a => (a.id === app.id ? app : a)) : [...list, app]
+            return {
+                ...prev,
+                [app.workspace_id]: next.sort((a, b) => a.name.localeCompare(b.name)),
+            }
+        })
+        const workspace = workspaces.find(w => w.id === app.workspace_id)
+        if (workspace) handleGoApp(workspace, app)
+    }
 
     function handleSelectWorkspace(id: number) {
         const workspace = workspaces.find(w => w.id === id)
@@ -354,6 +382,11 @@ function AppContent() {
                         setEditingApp(null)
                         setAppDialogOpen(true)
                     }}
+                    onCreateAppFromBlueprint={workspaceId => {
+                        setBlueprintWorkspaceId(workspaceId)
+                        setBlueprintDialogOpen(true)
+                    }}
+                    onOpenSettings={() => setSettingsOpen(true)}
                     onStatus={handleStatus}
                 />
                 <SidebarInset>
@@ -386,6 +419,19 @@ function AppContent() {
                             </span>
                             <span className="sr-only">Search</span>
                         </Button>
+                        {selectedWorkspace && !selectedApp ? (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                    setBlueprintWorkspaceId(selectedWorkspace.id)
+                                    setBlueprintDialogOpen(true)
+                                }}
+                            >
+                                <LayoutTemplateIcon data-icon="inline-start" />
+                                From blueprint
+                            </Button>
+                        ) : null}
                         {selectedWorkspace && !selectedApp ? (
                             <Button
                                 size="sm"
@@ -433,6 +479,10 @@ function AppContent() {
                                 setAppDialogWorkspaceId(selectedWorkspace.id)
                                 setEditingApp(null)
                                 setAppDialogOpen(true)
+                            }}
+                            onCreateAppFromBlueprint={() => {
+                                setBlueprintWorkspaceId(selectedWorkspace.id)
+                                setBlueprintDialogOpen(true)
                             }}
                             onStatus={handleStatus}
                             onAppChange={handleAppChange}
@@ -509,25 +559,35 @@ function AppContent() {
                         onOpenChange={setAppDialogOpen}
                         workspaceId={appDialogWorkspaceId}
                         app={editingApp}
-                        onSaved={app => {
-                            setAppsByWorkspace(prev => {
-                                const list = prev[app.workspace_id] ?? []
-                                const exists = list.some(a => a.id === app.id)
-                                const next = exists
-                                    ? list.map(a => (a.id === app.id ? app : a))
-                                    : [...list, app]
-                                return {
-                                    ...prev,
-                                    [app.workspace_id]: next.sort((a, b) =>
-                                        a.name.localeCompare(b.name),
-                                    ),
-                                }
-                            })
-                            const workspace = workspaces.find(w => w.id === app.workspace_id)
-                            if (workspace) handleGoApp(workspace, app)
-                        }}
+                        onSaved={handleAppSaved}
                     />
                 ) : null}
+
+                <NewAppFromBlueprintDialog
+                    open={blueprintDialogOpen}
+                    onOpenChange={setBlueprintDialogOpen}
+                    workspace={blueprintWorkspace}
+                    onCreated={handleAppSaved}
+                    onManage={() => {
+                        setBlueprintDialogOpen(false)
+                        setReturnToBlueprintDialog(true)
+                        setSettingsTab('blueprints')
+                        setSettingsOpen(true)
+                    }}
+                />
+
+                <SettingsDialog
+                    open={settingsOpen}
+                    onOpenChange={open => {
+                        setSettingsOpen(open)
+                        if (!open && returnToBlueprintDialog) {
+                            setReturnToBlueprintDialog(false)
+                            setBlueprintDialogOpen(true)
+                        }
+                    }}
+                    tab={settingsTab}
+                    onTabChange={setSettingsTab}
+                />
 
                 <DeleteAppDialog
                     app={deletingApp}

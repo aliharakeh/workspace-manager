@@ -36,6 +36,39 @@ func (q *Queries) CreateApp(ctx context.Context, arg CreateAppParams) (App, erro
 	return i, err
 }
 
+const createBlueprint = `-- name: CreateBlueprint :one
+INSERT INTO blueprints (name, description, create_folder, commands)
+VALUES (?, ?, ?, ?)
+RETURNING id, name, description, create_folder, commands, created_at, updated_at
+`
+
+type CreateBlueprintParams struct {
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	CreateFolder int64  `json:"create_folder"`
+	Commands     string `json:"commands"`
+}
+
+func (q *Queries) CreateBlueprint(ctx context.Context, arg CreateBlueprintParams) (Blueprint, error) {
+	row := q.db.QueryRowContext(ctx, createBlueprint,
+		arg.Name,
+		arg.Description,
+		arg.CreateFolder,
+		arg.Commands,
+	)
+	var i Blueprint
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.CreateFolder,
+		&i.Commands,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createConfigSet = `-- name: CreateConfigSet :one
 INSERT INTO config_sets (app_id, name) VALUES (?, ?) RETURNING id, app_id, name, created_at, updated_at
 `
@@ -238,6 +271,18 @@ func (q *Queries) DeleteApp(ctx context.Context, id int64) (int64, error) {
 	return result.RowsAffected()
 }
 
+const deleteBlueprint = `-- name: DeleteBlueprint :execrows
+DELETE FROM blueprints WHERE id = ?
+`
+
+func (q *Queries) DeleteBlueprint(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteBlueprint, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteConfigSet = `-- name: DeleteConfigSet :execrows
 DELETE FROM config_sets WHERE id = ?
 `
@@ -367,6 +412,25 @@ func (q *Queries) GetApp(ctx context.Context, id int64) (GetAppRow, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ActiveConfigSetName,
+	)
+	return i, err
+}
+
+const getBlueprint = `-- name: GetBlueprint :one
+SELECT id, name, description, create_folder, commands, created_at, updated_at FROM blueprints WHERE id = ?
+`
+
+func (q *Queries) GetBlueprint(ctx context.Context, id int64) (Blueprint, error) {
+	row := q.db.QueryRowContext(ctx, getBlueprint, id)
+	var i Blueprint
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.CreateFolder,
+		&i.Commands,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -579,6 +643,42 @@ func (q *Queries) ListAppsByWorkspace(ctx context.Context, workspaceID int64) ([
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.ActiveConfigSetName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBlueprints = `-- name: ListBlueprints :many
+SELECT id, name, description, create_folder, commands, created_at, updated_at FROM blueprints ORDER BY name COLLATE NOCASE ASC
+`
+
+// blueprints
+func (q *Queries) ListBlueprints(ctx context.Context) ([]Blueprint, error) {
+	rows, err := q.db.QueryContext(ctx, listBlueprints)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Blueprint{}
+	for rows.Next() {
+		var i Blueprint
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.CreateFolder,
+			&i.Commands,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -914,6 +1014,42 @@ func (q *Queries) UpdateApp(ctx context.Context, arg UpdateAppParams) (App, erro
 		&i.Name,
 		&i.ProjectPath,
 		&i.ActiveConfigSetID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateBlueprint = `-- name: UpdateBlueprint :one
+UPDATE blueprints
+SET name = ?, description = ?, create_folder = ?, commands = ?, updated_at = datetime('now')
+WHERE id = ?
+RETURNING id, name, description, create_folder, commands, created_at, updated_at
+`
+
+type UpdateBlueprintParams struct {
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	CreateFolder int64  `json:"create_folder"`
+	Commands     string `json:"commands"`
+	ID           int64  `json:"id"`
+}
+
+func (q *Queries) UpdateBlueprint(ctx context.Context, arg UpdateBlueprintParams) (Blueprint, error) {
+	row := q.db.QueryRowContext(ctx, updateBlueprint,
+		arg.Name,
+		arg.Description,
+		arg.CreateFolder,
+		arg.Commands,
+		arg.ID,
+	)
+	var i Blueprint
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.CreateFolder,
+		&i.Commands,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

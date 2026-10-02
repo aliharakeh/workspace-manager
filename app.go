@@ -6,14 +6,16 @@ import (
 	"workspace-manager/db"
 	"workspace-manager/native"
 	"workspace-manager/services"
+	"workspace-manager/types"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type App struct {
-	ctx    context.Context
-	db     *db.DB
-	runner *services.Runner
+	ctx        context.Context
+	db         *db.DB
+	runner     *services.Runner
+	blueprints *services.BlueprintRunner
 }
 
 func NewApp(database *db.DB) *App {
@@ -23,6 +25,9 @@ func NewApp(database *db.DB) *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	_ = runtime.InitializeNotifications(ctx)
+	a.blueprints = services.NewBlueprintRunner(a.db, func(event types.BlueprintLogEvent) {
+		EventsEmitBlueprint(a.ctx, event)
+	})
 	a.runner = services.NewRunner(a.db, func(appID int64, event any) {
 		if a.ctx == nil {
 			return

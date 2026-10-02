@@ -481,6 +481,155 @@ export namespace types {
 	        this.project_path = source["project_path"];
 	    }
 	}
+	export class BlueprintCommand {
+	    label?: string;
+	    command: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BlueprintCommand(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.command = source["command"];
+	    }
+	}
+	export class Blueprint {
+	    id: number;
+	    name: string;
+	    description: string;
+	    create_folder: boolean;
+	    commands: BlueprintCommand[];
+	    created_at: string;
+	    updated_at: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Blueprint(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.create_folder = source["create_folder"];
+	        this.commands = this.convertValues(source["commands"], BlueprintCommand);
+	        this.created_at = source["created_at"];
+	        this.updated_at = source["updated_at"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class BlueprintInput {
+	    name: string;
+	    description: string;
+	    create_folder: boolean;
+	    commands: BlueprintCommand[];
+	
+	    static createFrom(source: any = {}) {
+	        return new BlueprintInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.create_folder = source["create_folder"];
+	        this.commands = this.convertValues(source["commands"], BlueprintCommand);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class BlueprintRunInput {
+	    run_id: string;
+	    blueprint_id: number;
+	    workspace_id: number;
+	    name: string;
+	    parent_path: string;
+	    folder_name: string;
+	    create_folder: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new BlueprintRunInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.run_id = source["run_id"];
+	        this.blueprint_id = source["blueprint_id"];
+	        this.workspace_id = source["workspace_id"];
+	        this.name = source["name"];
+	        this.parent_path = source["parent_path"];
+	        this.folder_name = source["folder_name"];
+	        this.create_folder = source["create_folder"];
+	    }
+	}
+	export class BlueprintRunResult {
+	    app: App;
+	    warning?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BlueprintRunResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.app = this.convertValues(source["app"], App);
+	        this.warning = source["warning"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class ConfigSet {
 	    id: number;
 	    app_id: number;
