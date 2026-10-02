@@ -1,9 +1,8 @@
 /**
  * Keys and defaults for runner lifecycle notifications.
  *
- * The backends are opt-out: a missing key means enabled, "0" disables it.
- * Keep these keys in sync with `bun_backend/server/services/notifier.ts` and
- * `wails_backend/internal/services/notifier.go`.
+ * The backend is opt-out: a missing key means enabled, "0" disables it.
+ * Keep these keys in sync with `services/notifier.go`.
  */
 
 export const NOTIFY_ENABLED_KEY = "notifications.enabled"

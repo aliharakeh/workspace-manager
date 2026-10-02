@@ -166,6 +166,7 @@ export type AIProviderConfig = {
     apiKey?: string
     model?: string
     temperature?: number
+    opencodeSession?: boolean
     clearApiKey?: boolean
 }
 
@@ -177,6 +178,7 @@ export type AIConnectionInfo = {
     model?: string
     hasApiKey: boolean
     temperature?: number
+    opencodeSession?: boolean
 }
 
 /** All saved connections plus which name is the active default for chat. */

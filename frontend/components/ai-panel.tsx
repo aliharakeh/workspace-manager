@@ -98,6 +98,7 @@ type FormState = {
   apiKey: string
   model: string
   temperature: string
+  opencodeSession: boolean
   clearApiKey: boolean
 }
 
@@ -109,6 +110,7 @@ function emptyForm(): FormState {
     apiKey: "",
     model: "",
     temperature: "",
+    opencodeSession: false,
     clearApiKey: false,
   }
 }
@@ -121,6 +123,7 @@ function formFor(conn: AIConnectionInfo): FormState {
     apiKey: "",
     model: conn.model ?? "",
     temperature: conn.temperature != null ? String(conn.temperature) : "",
+    opencodeSession: conn.opencodeSession ?? false,
     clearApiKey: false,
   }
 }
@@ -289,6 +292,7 @@ export function AIPanel({ active }: AIPanelProps) {
         apiKey: form.apiKey.trim() || undefined,
         model: form.model.trim() || undefined,
         temperature,
+        opencodeSession: form.opencodeSession,
         clearApiKey: form.clearApiKey,
       })
       setInfo(next)
@@ -316,6 +320,7 @@ export function AIPanel({ active }: AIPanelProps) {
         baseURL: form.baseUrl.trim() || undefined,
         apiKey: form.apiKey.trim() || undefined,
         model: form.model.trim() || undefined,
+        opencodeSession: form.opencodeSession,
       })
       toast.success(
         `Connection works — model replied: ${res.text.slice(0, 80)}`
@@ -552,6 +557,30 @@ export function AIPanel({ active }: AIPanelProps) {
                       placeholder="Provider default"
                     />
                   </Field>
+
+                  {!preset.noBaseUrl ? (
+                    <Field orientation="horizontal" className="gap-2">
+                      <Checkbox
+                        id="ai-opencode-session"
+                        checked={form.opencodeSession}
+                        onCheckedChange={(checked) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            opencodeSession: checked === true,
+                          }))
+                        }
+                      />
+                      <div className="flex flex-col gap-0.5">
+                        <FieldLabel htmlFor="ai-opencode-session">
+                          Send x-opencode-session header
+                        </FieldLabel>
+                        <FieldDescription>
+                          Required by OpenCode gateways (e.g. zen/go) that
+                          reject requests with “MissingSessionID”.
+                        </FieldDescription>
+                      </div>
+                    </Field>
+                  ) : null}
 
                   <div className="flex justify-end gap-2">
                     <Button

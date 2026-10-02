@@ -2,42 +2,9 @@
 
 A local desktop tool for running and managing multiple apps from one place. Group projects into workspaces, give each app its own config (env vars, file templates, start commands), then run, stop, and restart them while watching live logs.
 
-Same product, two shells:
+A [Wails](https://wails.io/) v2 desktop app: Go owns the window, SQLite (sqlc), process runner, and OS integration. The React UI in `frontend/` talks to it through generated Wails bindings (`frontend/host.ts`) and Wails events (`runnerEvent`). File/folder pickers and opening URLs use the Wails runtime.
 
-| | **bun_backend** (`bun_backend/`) | **wails_backend** (`wails_backend/`) |
-|---|---|---|
-| What it is | Compiled **Bun** server + React UI | **Wails** v2 desktop app (Go) |
-| How you use it | HTTP server in the browser (or a standalone compiled app) | Native window; Go is the main process |
-| Native work | Shared helpers under `native/` | Go ports in `wails_backend/internal/native/` (Wails dialogs / browser) |
-| UI | Shared `frontend/` + `bun_backend/host.ts` (`fetch` / SSE) | Shared `frontend/` + `wails_backend/frontend/host.ts` (Wails bindings) |
-| Live logs | Server-Sent Events (`EventSource`) | Wails events (`runnerEvent`) |
-| SQLite | Drizzle (`db/`) | sqlc mapped from the same Drizzle schema |
-| Ship it | `bun run bun_backend:compile:{win,mac,linux}` | `bun run wails_backend:build` on that OS |
-
-Both share one React UI in `frontend/` and one SQLite database. Each shell provides a small host adapter so the UI talks to one `api` surface.
-
-The database file lives in the OS user-data directory (same path for every shell): Windows `%LOCALAPPDATA%\workspace-manager`, macOS `~/Library/Application Support/workspace-manager`, Linux `$XDG_DATA_HOME/workspace-manager` or `~/.local/share/workspace-manager`.
-
-## bun_backend vs wails_backend
-
-**bun_backend** is a Bun HTTP server that serves the shared React app and a JSON/SSE API. In development it sits next to Vite; in production it serves the built frontend from the same origin. `bun run bun_backend:compile` embeds the UI and Drizzle migrations and produces a standalone binary (cross-compile with `bun_backend:compile:win` / `bun_backend:compile:mac` / `bun_backend:compile:linux`). Native bits (folder pickers, process spawn/kill, ports, opening the browser) live in shared `native/` and are invoked by the server. The UI reaches them through `bun_backend/host.ts` (`fetch` + `EventSource`).
-
-**wails_backend** is a [Wails](https://wails.io/) v2 app. Go owns the window, SQLite (sqlc), process runner, and OS integration. The same `frontend/` UI talks to it through `wails_backend/frontend/host.ts` (generated Wails bindings + `EventsOn("runnerEvent")`). Native helpers are Go versions of `native/` under `wails_backend/internal/native/`; file/folder pickers and opening URLs use the Wails runtime.
-
-## Updating one shell without drifting the others
-
-You can work on a single backend, but anything the UI or the database cares about has to land in **both** shells that implement it.
-
-| You changed… | Also update… |
-|---|---|
-| Shared UI only (`frontend/`, no `api` change) | Nothing else |
-| `api` shape / host methods | `bun_backend/host.ts` + `server/routes/`, and `wails_backend/frontend/host.ts` + `bind.go` |
-| Runner, templates, ready URLs, fs/env import | `bun_backend/server/` and `wails_backend/internal/` |
-| JS native helpers (`native/*.ts`) | The matching file in `wails_backend/internal/native/` |
-| Drizzle schema or `db/*.ts` queries | `bun run db:generate`, then copy new `drizzle/*.sql` into `wails_backend/internal/db/migrations/`, update `wails_backend/internal/db/schema.sql` + `queries.sql`, run `bun run wails_backend:sqlc` |
-| Wails bound methods or Go JSON types | `cd wails_backend && wails generate module` so `frontend/wailsjs/` matches |
-
-`bun_backend` uses `db/` at runtime. Wails applies the same Drizzle SQL (hash-compatible `__drizzle_migrations`) so both can open the same user-data SQLite file.
+The database file lives in the OS user-data directory: Windows `%LOCALAPPDATA%\workspace-manager`, macOS `~/Library/Application Support/workspace-manager`, Linux `$XDG_DATA_HOME/workspace-manager` or `~/.local/share/workspace-manager`.
 
 ## Features
 
@@ -80,7 +47,7 @@ Handlebars templates written over project files when you hit **Run**. Originals 
 
 ### Live logs
 
-Stdout and stderr stream as they arrive. bun_backend uses SSE; wails_backend pushes the same events over Wails events. ANSI codes are stripped. stdout and stderr are split per process tab, with system lines (commands, exits, template apply/restore) inline.
+Stdout and stderr stream as they arrive over Wails events. ANSI codes are stripped. stdout and stderr are split per process tab, with system lines (commands, exits, template apply/restore) inline.
 
 ### Ready URLs
 
@@ -96,31 +63,26 @@ Log lines are matched against configurable regex patterns (named `url` / `port` 
 
 ## Run
 
-From the repo root, `bun install` once (one `package.json`, one `node_modules`). Then:
-
-**bun_backend**
+Needs [Go](https://go.dev/), [Wails](https://wails.io/) v2 and [Bun](https://bun.sh/). From the repo root:
 
 ```bash
-bun run bun_backend:dev              # API + Vite
-bun run bun_backend:start            # production (build + serve)
-bun run bun_backend:compile          # this machine → bun_backend/release/workspace-manager(.exe)
-bun run bun_backend:compile:win      # Windows x64 → bun_backend/release/workspace-manager-windows.exe
-bun run bun_backend:compile:mac      # macOS arm64 → bun_backend/release/workspace-manager-macos
-bun run bun_backend:compile:linux    # Linux x64 → bun_backend/release/workspace-manager-linux
+wails dev                # Wails + Vite (port 5174)
+wails build              # production native app → build/bin (builds for the OS you run it on)
+wails generate module    # regenerate frontend/wailsjs after changing bound Go methods or types
+sqlc generate            # regenerate db after editing schema.sql / queries.sql
+go test ./db/... ./lib/... ./native/... ./services/...
 ```
 
-**wails_backend**
+Frontend scripts (`bun install` once in `frontend/`): `bun run dev`, `bun run build`, `bun run lint`, `bun run typecheck`.
 
-Needs [Wails](https://wails.io/) v2 and Go. Packages the OS you run the command on (no cross-compile).
+## Layout
 
-```bash
-bun run wails_backend:dev       # Wails + Vite (port 5174)
-bun run wails_backend:build     # production native app → wails_backend/build/bin
-bun run wails_backend:sqlc      # regenerate Go from sqlc after schema/query edits
-```
-
-| | **bun_backend** (`bun run bun_backend:compile:win`) | **wails_backend** |
-|---|---|---|
-| How the OS is chosen | Bun `--target` (cross-compile) | Host OS |
-| Build Windows from a Mac | Yes | No — run the command on Windows |
-| Build Mac from Windows | Yes | No — run it on a Mac |
+| Path | Role |
+|---|---|
+| `main.go`, `app.go`, `bind.go`, `events.go` | Wails entry point, `App` lifecycle, bound API methods, event emission |
+| `services/` | Runner, templates, ready URLs, notifier, AI |
+| `lib/`, `native/` | fs / env / import helpers; OS helpers (process, ports, editor, browser) |
+| `db/` | SQLite schema, queries, sqlc-generated code |
+| `types/` | Types shared with the UI (JSON tags match `frontend/lib/types.ts`) |
+| `frontend/` | React UI (Vite); `host.ts` is the Wails adapter, `wailsjs/` is generated |
+| `build/` | Wails packaging assets |
