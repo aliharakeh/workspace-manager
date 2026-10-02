@@ -89,6 +89,8 @@ export function NewAppFromBlueprintDialog({
   const [browsing, setBrowsing] = useState(false)
   const [phase, setPhase] = useState<Phase>("form")
   const [error, setError] = useState("")
+  // Set while a command has failed and the run waits for skip / stop.
+  const [failure, setFailure] = useState("")
   const [logs, setLogs] = useState<LogLine[]>([])
   const [adding, setAdding] = useState(false)
   const runId = useRef("")
@@ -190,9 +192,11 @@ export function NewAppFromBlueprintDialog({
     runId.current = id
     setLogs([])
     setError("")
+    setFailure("")
     setPhase("running")
     const off = onBlueprintLog((event) => {
       if (event.runId !== id) return
+      if (event.stream === "failed") setFailure(event.text)
       setLogs((prev) => [
         ...prev,
         { id: logId.current++, stream: event.stream, text: event.text },
@@ -207,6 +211,7 @@ export function NewAppFromBlueprintDialog({
         parent_path: trimmedParent,
         folder_name: folder,
         create_folder: createFolder,
+        ask_on_error: true,
       })
       try {
         localStorage.setItem(PARENT_KEY, trimmedParent)
@@ -223,6 +228,11 @@ export function NewAppFromBlueprintDialog({
     } finally {
       off()
     }
+  }
+
+  function handleResolve(action: "skip" | "abort") {
+    setFailure("")
+    void api.blueprints.resolve(runId.current, action)
   }
 
   async function handleAddAnyway() {
@@ -428,6 +438,13 @@ export function NewAppFromBlueprintDialog({
               <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
                 {error}
               </div>
+            ) : failure ? (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                {failure}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Skip it to continue with the next command, or stop here.
+                </p>
+              </div>
             ) : (
               <p className="text-sm text-muted-foreground">
                 Running commands in{" "}
@@ -442,7 +459,8 @@ export function NewAppFromBlueprintDialog({
                     className={cn(
                       "block",
                       line.stream === "system" && "text-muted-foreground",
-                      line.stream === "stderr" && "text-destructive"
+                      (line.stream === "stderr" || line.stream === "failed") &&
+                        "text-destructive"
                     )}
                   >
                     {line.text}
@@ -452,7 +470,16 @@ export function NewAppFromBlueprintDialog({
               </pre>
             </div>
             <DialogFooter>
-              {running ? (
+              {running && failure ? (
+                <>
+                  <Button variant="outline" onClick={() => handleResolve("abort")}>
+                    Stop
+                  </Button>
+                  <Button onClick={() => handleResolve("skip")}>
+                    Skip and continue
+                  </Button>
+                </>
+              ) : running ? (
                 <Button
                   variant="outline"
                   onClick={() => void api.blueprints.cancel(runId.current)}

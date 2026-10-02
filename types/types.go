@@ -453,6 +453,9 @@ type BlueprintRunInput struct {
 	ParentPath   string `json:"parent_path"`
 	FolderName   string `json:"folder_name"`
 	CreateFolder bool   `json:"create_folder"`
+	// AskOnError pauses the run when a command fails and waits for
+	// BlueprintsResolve ("skip" or "abort"); otherwise a failure stops the run.
+	AskOnError bool `json:"ask_on_error"`
 }
 
 type BlueprintRunResult struct {

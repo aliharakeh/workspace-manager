@@ -218,6 +218,8 @@ export type BlueprintRunInput = {
     parent_path: string
     folder_name: string
     create_folder: boolean
+    /** Pause on a failed command and wait for `blueprints.resolve`. */
+    ask_on_error: boolean
 }
 
 export type BlueprintRunResult = {
@@ -227,7 +229,8 @@ export type BlueprintRunResult = {
 
 export type BlueprintLogEvent = {
     runId: string
-    stream: 'stdout' | 'stderr' | 'system'
+    /** `failed` is a command failure waiting for a skip/abort answer. */
+    stream: 'stdout' | 'stderr' | 'system' | 'failed'
     text: string
     ts: number
 }

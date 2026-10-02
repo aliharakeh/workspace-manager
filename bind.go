@@ -927,6 +927,13 @@ func (a *App) BlueprintsCreateApp(body types.BlueprintRunInput) (types.Blueprint
 	return a.blueprints.Run(a.ctx, body)
 }
 
+// BlueprintsResolve answers a run that paused on a failed command: action is
+// "skip" (continue with the next command) or "abort".
+func (a *App) BlueprintsResolve(runID, action string) types.Ok {
+	a.blueprints.Resolve(runID, action)
+	return types.Ok{Ok: true}
+}
+
 func (a *App) BlueprintsCancel(runID string) types.Ok {
 	a.blueprints.Cancel(runID)
 	return types.Ok{Ok: true}

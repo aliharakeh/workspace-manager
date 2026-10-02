@@ -51,6 +51,8 @@ func validateFolderName(name string) (string, error) {
 type blueprintRun struct {
 	cancelled atomic.Bool
 	pid       atomic.Int64
+	// decision carries the UI's answer ("skip" or "abort") after a command fails.
+	decision chan string
 }
 
 // BlueprintRunner creates apps from blueprints: it runs the blueprint's shell
@@ -89,9 +91,47 @@ func (b *BlueprintRunner) Cancel(runID string) {
 		return
 	}
 	run.cancelled.Store(true)
+	run.answer("abort")
 	if pid := run.pid.Load(); pid > 0 {
 		_ = native.KillPid(int(pid))
 	}
+}
+
+// Resolve answers a failed command of a run: "skip" continues with the next
+// command, anything else stops the run.
+func (b *BlueprintRunner) Resolve(runID, action string) {
+	b.mu.Lock()
+	run := b.runs[runID]
+	b.mu.Unlock()
+	if run != nil {
+		run.answer(action)
+	}
+}
+
+func (r *blueprintRun) answer(action string) {
+	select {
+	case r.decision <- action:
+	default:
+	}
+}
+
+// askSkip reports a failed command to the UI and blocks until it answers.
+// It returns nil when the command should be skipped.
+func (b *BlueprintRunner) askSkip(runID string, run *blueprintRun, failure string) error {
+	select {
+	case <-run.decision: // drop an answer left over from an earlier prompt
+	default:
+	}
+	b.log(runID, "failed", failure)
+	choice := <-run.decision
+	if run.cancelled.Load() {
+		return errBlueprintCancelled
+	}
+	if choice != "skip" {
+		return errors.New(failure)
+	}
+	b.log(runID, "system", "Skipped failed command, continuing")
+	return nil
 }
 
 func (b *BlueprintRunner) shell(runID string, run *blueprintRun, command, cwd string) (int, error) {
@@ -174,7 +214,7 @@ func (b *BlueprintRunner) Run(ctx context.Context, in types.BlueprintRunInput) (
 		commands[i] = renderBlueprintCommand(c.Command, vars)
 	}
 
-	run := &blueprintRun{}
+	run := &blueprintRun{decision: make(chan string, 1)}
 	b.mu.Lock()
 	if _, busy := b.runs[in.RunID]; busy {
 		b.mu.Unlock()
@@ -199,11 +239,20 @@ func (b *BlueprintRunner) Run(ctx context.Context, in types.BlueprintRunInput) (
 	for _, command := range commands {
 		b.log(in.RunID, "system", "$ "+command)
 		code, err := b.shell(in.RunID, run, command, cwd)
-		if err != nil {
+		if err == errBlueprintCancelled {
 			return types.BlueprintRunResult{}, err
 		}
-		if code != 0 {
-			return types.BlueprintRunResult{}, fmt.Errorf("Command failed with exit code %d: %s", code, command)
+		if err == nil && code != 0 {
+			err = fmt.Errorf("Command failed with exit code %d: %s", code, command)
+		}
+		if err == nil {
+			continue
+		}
+		if !in.AskOnError {
+			return types.BlueprintRunResult{}, err
+		}
+		if err := b.askSkip(in.RunID, run, err.Error()); err != nil {
+			return types.BlueprintRunResult{}, err
 		}
 	}
 

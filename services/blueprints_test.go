@@ -194,6 +194,69 @@ func TestBlueprintRun(t *testing.T) {
 	})
 }
 
+func TestBlueprintAskOnError(t *testing.T) {
+	ctx := context.Background()
+	d := newBlueprintTestDB(t)
+	ws, _ := d.CreateWorkspaceT(ctx, "ws", nil)
+	var runner *BlueprintRunner
+	answer := "skip"
+	prompts := 0
+	runner = NewBlueprintRunner(d, func(e types.BlueprintLogEvent) {
+		if e.Stream != "failed" {
+			return
+		}
+		prompts++
+		if answer == "cancel" {
+			runner.Cancel(e.RunID)
+		} else {
+			runner.Resolve(e.RunID, answer)
+		}
+	})
+	run := func(id string, cmds ...string) (types.BlueprintRunResult, string, error) {
+		in := types.BlueprintInput{Name: "bp-" + id, CreateFolder: true}
+		for _, c := range cmds {
+			in.Commands = append(in.Commands, types.BlueprintCommand{Command: c})
+		}
+		bp, err := d.CreateBlueprintT(ctx, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		parent := t.TempDir()
+		res, err := runner.Run(ctx, types.BlueprintRunInput{
+			WorkspaceID: ws.ID, RunID: id, BlueprintID: bp.ID, Name: id, ParentPath: parent,
+			FolderName: "app", CreateFolder: true, AskOnError: true,
+		})
+		return res, filepath.Join(parent, "app"), err
+	}
+
+	prompts = 0
+	answer = "skip"
+	res, dir, err := run("skip", "exit 3", "echo ok> after.txt")
+	if err != nil {
+		t.Fatalf("skipping should let the run finish: %v", err)
+	}
+	if prompts != 1 || res.App.ProjectPath != dir {
+		t.Fatalf("prompts=%d app=%+v", prompts, res.App)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "after.txt")); err != nil {
+		t.Fatalf("command after the skipped one did not run: %v", err)
+	}
+
+	answer = "abort"
+	_, dir, err = run("abort", "exit 3", "echo ok> after.txt")
+	if err == nil || !strings.Contains(err.Error(), "exit code 3") {
+		t.Fatalf("expected exit code error, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "after.txt")); err == nil {
+		t.Fatal("run must stop after abort")
+	}
+
+	answer = "cancel"
+	if _, _, err = run("cancel", "exit 3", "echo ok> after.txt"); err != errBlueprintCancelled {
+		t.Fatalf("expected cancelled, got %v", err)
+	}
+}
+
 func TestBlueprintCRUD(t *testing.T) {
 	ctx := context.Background()
 	d := newBlueprintTestDB(t)

@@ -74,6 +74,10 @@ export function BlueprintsList() {
   return window['go']['main']['App']['BlueprintsList']();
 }
 
+export function BlueprintsResolve(arg1, arg2) {
+  return window['go']['main']['App']['BlueprintsResolve'](arg1, arg2);
+}
+
 export function BlueprintsUpdate(arg1, arg2) {
   return window['go']['main']['App']['BlueprintsUpdate'](arg1, arg2);
 }

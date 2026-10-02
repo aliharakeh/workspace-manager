@@ -80,6 +80,8 @@ export const api = {
             call(() => Go.BlueprintsUpdate(id, types.BlueprintInput.createFrom(body))),
         delete: (id: number) => call(() => Go.BlueprintsDelete(id)),
         createApp: (body: BlueprintRunInput) => call(() => Go.BlueprintsCreateApp(body)),
+        resolve: (runId: string, action: 'skip' | 'abort') =>
+            call(() => Go.BlueprintsResolve(runId, action)),
         cancel: (runId: string) => call(() => Go.BlueprintsCancel(runId)),
     },
 

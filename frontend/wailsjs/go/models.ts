@@ -582,6 +582,7 @@ export namespace types {
 	    parent_path: string;
 	    folder_name: string;
 	    create_folder: boolean;
+	    ask_on_error: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new BlueprintRunInput(source);
@@ -596,6 +597,7 @@ export namespace types {
 	        this.parent_path = source["parent_path"];
 	        this.folder_name = source["folder_name"];
 	        this.create_folder = source["create_folder"];
+	        this.ask_on_error = source["ask_on_error"];
 	    }
 	}
 	export class BlueprintRunResult {

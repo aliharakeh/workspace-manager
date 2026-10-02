@@ -38,6 +38,8 @@ export function BlueprintsDelete(arg1:number):Promise<types.Ok>;
 
 export function BlueprintsList():Promise<Array<types.Blueprint>>;
 
+export function BlueprintsResolve(arg1:string,arg2:string):Promise<types.Ok>;
+
 export function BlueprintsUpdate(arg1:number,arg2:types.BlueprintInput):Promise<types.Blueprint>;
 
 export function ConfigSetsActivate(arg1:number):Promise<types.ConfigSetActivateResult>;
