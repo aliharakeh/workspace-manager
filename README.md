@@ -1,68 +1,42 @@
 # Workspace Manager
 
-A local desktop tool for running and managing multiple apps from one place. Group projects into workspaces, give each app its own config (env vars, file templates, start commands), then run, stop, and restart them while watching live logs.
+**Get your local projects running without the terminal shuffle.**
 
-A [Wails](https://wails.io/) v2 desktop app: Go owns the window, SQLite (sqlc), process runner, and OS integration. The React UI in `frontend/` talks to it through generated Wails bindings (`frontend/host.ts`) and Wails events (`runnerEvent`). File/folder pickers and opening URLs use the Wails runtime.
+Workspace Manager brings your projects, startup setup, and live output into one desktop app. Group related apps into a workspace, then start, stop, or restart them from one place.
 
-The database file lives in the OS user-data directory: Windows `%LOCALAPPDATA%\workspace-manager`, macOS `~/Library/Application Support/workspace-manager`, Linux `$XDG_DATA_HOME/workspace-manager` or `~/.local/share/workspace-manager`.
+## The problem it solves
+
+Getting into a project often means opening several terminal tabs, remembering environment settings, starting services in the right order, and hunting through output when something breaks. When you switch between projects or run a frontend, API, and worker together, that setup steals time before you can get to the work.
+
+Workspace Manager saves that setup with each app and gives you one place to run and monitor a workspace.
 
 ## Features
 
-### Workspaces and apps
+### Keep related apps together
 
-- **Workspaces** — named groups of apps (optional icon), managed from the sidebar
-- **Apps** — name + local project folder, picked with a native folder dialog
-- **Live status** — running / idle indicators, plus Run / Stop / Reload on the app and workspace views
-- **Open in editor** — opens the app’s project path in your local editor (`$VISUAL` / `$EDITOR`, or the OS file manager)
-- **Blueprints** — reusable recipes for new apps, managed under **Settings → Blueprints** and usable in any workspace: a list of shell commands (with `{{app_name}}`, `{{folder_name}}`, `{{app_dir}}`). **From blueprint** next to **Add app** asks for a parent folder and the app name, then runs the commands either inside a new app folder or in the parent (your choice), shows the commands in an interactive terminal (so prompts can be answered, including passwords and menus), runs `git init` unless a repo exists, and adds the app
+Group related apps into a workspace and see all of them on one screen, with each app's status and running count visible at a glance.
 
-### Config sets
+### Start each app with one click
 
-Each app has named **config sets** (e.g. dev, staging, prod). One is active at a time. A set bundles:
+Give an app its commands once, then run, stop, or reload it with a single click instead of typing commands into a terminal. Commands inside an app run in parallel or in sequence, depending on what that app needs.
 
-- environment variables
-- file templates
-- run commands
+### Keep project setup reusable
 
-You can switch, rename, or delete sets (the last one stays). You can also copy another set into a new or existing one and pick exactly which env vars, templates, or commands to take.
+Save run commands, environment variables, and file templates in named config sets such as `dev` and `staging`. Switch setups without retyping variables or preparing files by hand.
 
-### Environment variables
+### See what's running
 
-- Key/value pairs on the active config set
-- Injected into every process that set starts
-- Import from a `.env` or `.yaml` / `.yml` file via the native file picker (YAML nests flatten to dot-notation keys)
+Check each app's status and follow live, searchable output in one place. When a development server prints its local URL, open it with a click.
 
-### Templates
+### Create new projects from a recipe
 
-Handlebars templates written over project files when you hit **Run**. Originals are backed up and restored on **Stop** or exit.
+Save setup commands as blueprints and use them to create new apps. If a command asks for input, answer it in the built-in terminal.
 
-- Paths stay inside the project directory
-- Theme-aware editor with syntax highlighting (TS, JS, JSON, CSS, HTML, Python, YAML, …), with Handlebars `{{var}}` still visible
+### Find local port conflicts
 
-### Run config
+See which process is using a listening port and stop it from Settings.
 
-- Multiple labeled commands per config set
-- **Parallel** (default) or **sequential** (stops on the first non-zero exit)
-- **Run / Stop / Reload** — one session per app; stop kills the process tree; reload restarts it
-- Per-process tabs in the logs panel (pending / running / exited / killed / error)
-
-### Live logs
-
-Each run command runs in a real pseudo-terminal (ConPTY on Windows) and its output streams over Wails events into a read-only terminal (xterm.js) per process tab, so colors, progress bars and cursor control render as in a normal shell. stdout and stderr are merged, as in any terminal. The app's own lines (commands, exits, template apply/restore) are shown dimmed inline. The terminal has scrollback, search (Ctrl+F), clickable links and copy; it never sends input to the command.
-
-### Ready URLs
-
-Output lines (with terminal escape codes removed) are matched against configurable regex patterns (named `url` / `port` groups) so Vite, Next.js, Spring Boot, .NET, Django, and similar servers show up as clickable links on the app, workspace, and logs. Defaults are seeded; you can add or edit patterns under Settings → Log URL patterns.
-
-### Settings and UX
-
-- **Listening ports** — list local listeners (PID, port, name) and kill one from Settings
-- **Command palette** — search workspaces and apps (`Ctrl+P` by default)
-- **Keyboard shortcuts** — rebind the palette and theme toggle
-- **Deep linking** — workspace / app / tab / config set stay in the URL
-- **Theme** — light, dark, or system
-
-## Run
+## Development
 
 Needs [Go](https://go.dev/), [Wails](https://wails.io/) v2 and [Bun](https://bun.sh/). From the repo root:
 
@@ -76,7 +50,7 @@ go test ./db/... ./lib/... ./native/... ./services/...
 
 Frontend scripts (`bun install` once in `frontend/`): `bun run dev`, `bun run build`, `bun run lint`, `bun run typecheck`.
 
-## Layout
+## Project layout
 
 | Path | Role |
 |---|---|
