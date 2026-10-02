@@ -2,7 +2,6 @@ import { useMemo, useState } from "react"
 import { ExternalLinkIcon, PencilIcon, Trash2Icon } from "lucide-react"
 import { handleReadyUrlClick } from "@/lib/api"
 import type { App, StatusEvent } from "@/lib/types"
-import type { LogLine } from "@/hooks/use-runner-logs"
 import type { AppTab } from "@/lib/routes"
 import { AppRunControls } from "@/components/app-run-controls"
 import { ConfigSetSwitcher } from "@/components/config-set-switcher"
@@ -20,8 +19,6 @@ import { cn } from "@/lib/utils"
 type AppDetailProps = {
   app: App
   status: StatusEvent | null
-  logs: LogLine[]
-  connected: boolean
   tab: AppTab
   onTabChange: (tab: AppTab) => void
   onEdit: () => void
@@ -33,8 +30,6 @@ type AppDetailProps = {
 export function AppDetail({
   app,
   status,
-  logs,
-  connected,
   tab,
   onTabChange,
   onEdit,
@@ -150,7 +145,7 @@ export function AppDetail({
           />
         </TabsContent>
         <TabsContent value="logs" className="mt-4 min-h-0 overflow-y-auto">
-          <LogsPanel status={status} logs={logs} connected={connected} />
+          <LogsPanel appId={app.id} status={status} />
         </TabsContent>
       </Tabs>
     </div>

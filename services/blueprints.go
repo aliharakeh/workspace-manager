@@ -1,11 +1,10 @@
 package services
 
 import (
-	"bufio"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -48,15 +47,61 @@ func validateFolderName(name string) (string, error) {
 	return name, nil
 }
 
+// Terminal size a blueprint command starts with, until the UI reports its own.
+const (
+	blueprintCols = 100
+	blueprintRows = 24
+)
+
 type blueprintRun struct {
 	cancelled atomic.Bool
 	pid       atomic.Int64
 	// decision carries the UI's answer ("skip" or "abort") after a command fails.
 	decision chan string
+	// lastByte is the last byte shown in the terminal, to start app messages
+	// on a fresh line.
+	lastByte atomic.Uint32
+
+	// pty is the running command's terminal; nil between commands. cols and rows
+	// are the size the UI last reported.
+	ptyMu      sync.Mutex
+	pty        *native.Pty
+	cols, rows int
+}
+
+func (r *blueprintRun) setPty(p *native.Pty) {
+	r.ptyMu.Lock()
+	r.pty = p
+	r.ptyMu.Unlock()
+}
+
+func (r *blueprintRun) size() (int, int) {
+	r.ptyMu.Lock()
+	defer r.ptyMu.Unlock()
+	return r.cols, r.rows
+}
+
+func (r *blueprintRun) write(data []byte) error {
+	r.ptyMu.Lock()
+	defer r.ptyMu.Unlock()
+	if r.pty == nil {
+		return errors.New("No command is running")
+	}
+	_, err := r.pty.Write(data)
+	return err
+}
+
+func (r *blueprintRun) resize(cols, rows int) {
+	r.ptyMu.Lock()
+	defer r.ptyMu.Unlock()
+	r.cols, r.rows = cols, rows
+	if r.pty != nil {
+		_ = r.pty.Resize(cols, rows)
+	}
 }
 
 // BlueprintRunner creates apps from blueprints: it runs the blueprint's shell
-// commands, runs git init, then registers the app.
+// commands in a terminal, runs git init, then registers the app.
 type BlueprintRunner struct {
 	d    *db.DB
 	emit func(types.BlueprintLogEvent)
@@ -68,25 +113,65 @@ func NewBlueprintRunner(d *db.DB, emit func(types.BlueprintLogEvent)) *Blueprint
 	return &BlueprintRunner{d: d, emit: emit, runs: map[string]*blueprintRun{}}
 }
 
-func (b *BlueprintRunner) log(runID, stream, text string) {
+func (b *BlueprintRunner) get(runID string) *blueprintRun {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.runs[runID]
+}
+
+// output sends terminal bytes to the UI.
+func (b *BlueprintRunner) output(runID string, p []byte) {
+	if len(p) == 0 {
+		return
+	}
+	if run := b.get(runID); run != nil {
+		run.lastByte.Store(uint32(p[len(p)-1]))
+	}
 	if b.emit != nil {
-		b.emit(types.BlueprintLogEvent{RunID: runID, Stream: stream, Text: text, Ts: time.Now().UnixMilli()})
+		b.emit(types.BlueprintLogEvent{
+			RunID: runID, Stream: "data", Data: base64.StdEncoding.EncodeToString(p), Ts: time.Now().UnixMilli(),
+		})
 	}
 }
 
-func (b *BlueprintRunner) pipe(runID string, r io.Reader, stream string) {
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 64*1024), 1024*1024)
-	for sc.Scan() {
-		b.log(runID, stream, stripANSI(sc.Text()))
+// log shows one of the app's own messages in the run's terminal. Stream
+// "failed" also tells the UI that a command failed and waits for an answer.
+func (b *BlueprintRunner) log(runID, stream, text string) {
+	line := dimLine(text)
+	if stream == "failed" {
+		line = redLine(text)
+	}
+	if run := b.get(runID); run != nil && run.lastByte.Load() != 0 && run.lastByte.Load() != '\n' {
+		line = append([]byte("\r\n"), line...)
+	}
+	b.output(runID, line)
+	if stream == "failed" && b.emit != nil {
+		b.emit(types.BlueprintLogEvent{RunID: runID, Stream: "failed", Text: text, Ts: time.Now().UnixMilli()})
+	}
+}
+
+// Write sends keystrokes to the command a run is currently executing.
+func (b *BlueprintRunner) Write(runID, data string) error {
+	run := b.get(runID)
+	if run == nil {
+		return errors.New("Run is not active")
+	}
+	return run.write([]byte(data))
+}
+
+// Resize sets the size of the run's terminal.
+func (b *BlueprintRunner) Resize(runID string, cols, rows int) {
+	if cols <= 0 || rows <= 0 {
+		return
+	}
+	if run := b.get(runID); run != nil {
+		run.resize(cols, rows)
 	}
 }
 
 // Cancel stops the running command of a run; the run then fails as cancelled.
 func (b *BlueprintRunner) Cancel(runID string) {
-	b.mu.Lock()
-	run := b.runs[runID]
-	b.mu.Unlock()
+	run := b.get(runID)
 	if run == nil {
 		return
 	}
@@ -100,10 +185,7 @@ func (b *BlueprintRunner) Cancel(runID string) {
 // Resolve answers a failed command of a run: "skip" continues with the next
 // command, anything else stops the run.
 func (b *BlueprintRunner) Resolve(runID, action string) {
-	b.mu.Lock()
-	run := b.runs[runID]
-	b.mu.Unlock()
-	if run != nil {
+	if run := b.get(runID); run != nil {
 		run.answer(action)
 	}
 }
@@ -134,46 +216,31 @@ func (b *BlueprintRunner) askSkip(runID string, run *blueprintRun, failure strin
 	return nil
 }
 
+// shell runs a command on a terminal and returns its exit code.
 func (b *BlueprintRunner) shell(runID string, run *blueprintRun, command, cwd string) (int, error) {
 	if run.cancelled.Load() {
 		return 1, errBlueprintCancelled
 	}
-	child, err := native.SpawnShell(command, cwd, native.MergeSpawnEnv(nil))
+	cols, rows := run.size()
+	proc, err := native.StartPty(command, cwd, native.MergeTerminalEnv(nil), cols, rows)
 	if err != nil {
 		return 1, err
 	}
-	stdout, err := child.StdoutPipe()
-	if err != nil {
-		return 1, err
-	}
-	stderr, err := child.StderrPipe()
-	if err != nil {
-		return 1, err
-	}
-	if err := child.Start(); err != nil {
-		return 1, err
-	}
-	run.pid.Store(int64(child.Process.Pid))
+	run.setPty(proc)
+	run.pid.Store(int64(proc.Pid()))
 	if run.cancelled.Load() {
-		_ = native.KillPid(child.Process.Pid)
+		_ = native.KillPid(proc.Pid())
 	}
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() { defer wg.Done(); b.pipe(runID, stdout, "stdout") }()
-	go func() { defer wg.Done(); b.pipe(runID, stderr, "stderr") }()
-	waitErr := child.Wait()
-	wg.Wait()
+	code, err := proc.Stream(func(p []byte) { b.output(runID, p) })
+	run.setPty(nil)
 	run.pid.Store(0)
 	if run.cancelled.Load() {
 		return 1, errBlueprintCancelled
 	}
-	if waitErr != nil {
-		if ee, ok := waitErr.(interface{ ExitCode() int }); ok {
-			return ee.ExitCode(), nil
-		}
-		return 1, waitErr
+	if err != nil && code == 0 {
+		return 1, err
 	}
-	return 0, nil
+	return code, nil
 }
 
 func (b *BlueprintRunner) Run(ctx context.Context, in types.BlueprintRunInput) (types.BlueprintRunResult, error) {
@@ -214,7 +281,7 @@ func (b *BlueprintRunner) Run(ctx context.Context, in types.BlueprintRunInput) (
 		commands[i] = renderBlueprintCommand(c.Command, vars)
 	}
 
-	run := &blueprintRun{decision: make(chan string, 1)}
+	run := &blueprintRun{decision: make(chan string, 1), cols: blueprintCols, rows: blueprintRows}
 	b.mu.Lock()
 	if _, busy := b.runs[in.RunID]; busy {
 		b.mu.Unlock()

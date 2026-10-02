@@ -508,8 +508,16 @@ func (a *App) RunnerWorkspaceStatus(workspaceID int64) ([]types.StatusEvent, err
 	return out, nil
 }
 
-func (a *App) RunnerLogs(appID int64) types.RunnerLogsSnapshot {
-	return a.runner.GetSnapshot(appID)
+// RunnerOutput returns the recent terminal output of one command of the app's
+// current run, so a terminal opened late can catch up before live events.
+func (a *App) RunnerOutput(appID, commandID int64) types.RunnerOutput {
+	return a.runner.GetOutput(appID, commandID)
+}
+
+// RunnerResize sets the terminal size of a running command.
+func (a *App) RunnerResize(appID, commandID int64, cols, rows int) types.Ok {
+	a.runner.Resize(appID, commandID, cols, rows)
+	return types.Ok{Ok: true}
 }
 
 func (a *App) RunnerRun(appID int64) (types.StatusEvent, error) {
@@ -931,6 +939,21 @@ func (a *App) BlueprintsCreateApp(body types.BlueprintRunInput) (types.Blueprint
 // "skip" (continue with the next command) or "abort".
 func (a *App) BlueprintsResolve(runID, action string) types.Ok {
 	a.blueprints.Resolve(runID, action)
+	return types.Ok{Ok: true}
+}
+
+// BlueprintsSendInput writes keystrokes to the terminal of the command a run is
+// executing.
+func (a *App) BlueprintsSendInput(runID, data string) (types.Ok, error) {
+	if err := a.blueprints.Write(runID, data); err != nil {
+		return types.Ok{}, err
+	}
+	return types.Ok{Ok: true}, nil
+}
+
+// BlueprintsResize sets the size of a run's terminal.
+func (a *App) BlueprintsResize(runID string, cols, rows int) types.Ok {
+	a.blueprints.Resize(runID, cols, rows)
 	return types.Ok{Ok: true}
 }
 

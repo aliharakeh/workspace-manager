@@ -4,10 +4,11 @@ import { toast } from "sonner"
 import { FolderOpenIcon, LayoutTemplateIcon } from "lucide-react"
 import { api, onBlueprintLog } from "@/lib/api"
 import { slugify } from "@/lib/routes"
+import { decodeTerminalData } from "@/lib/terminal"
 import type { App, Blueprint, Workspace } from "@/lib/types"
-import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Terminal, type TerminalHandle } from "@/components/terminal"
 import {
   Dialog,
   DialogContent,
@@ -48,7 +49,6 @@ type NewAppFromBlueprintDialogProps = {
 }
 
 type Phase = "form" | "running" | "failed"
-type LogLine = { id: number; stream: string; text: string }
 
 const PARENT_KEY = "blueprint-parent-path"
 
@@ -91,11 +91,11 @@ export function NewAppFromBlueprintDialog({
   const [error, setError] = useState("")
   // Set while a command has failed and the run waits for skip / stop.
   const [failure, setFailure] = useState("")
-  const [logs, setLogs] = useState<LogLine[]>([])
   const [adding, setAdding] = useState(false)
   const runId = useRef("")
-  const logId = useRef(0)
-  const logEnd = useRef<HTMLDivElement>(null)
+  // Output that arrives before the terminal has mounted waits here.
+  const terminal = useRef<TerminalHandle | null>(null)
+  const pendingOutput = useRef<Uint8Array[]>([])
 
   const blueprint = blueprints?.find((b) => b.id === blueprintId) ?? null
   const trimmedParent = parentPath.trim()
@@ -116,7 +116,6 @@ export function NewAppFromBlueprintDialog({
     if (open) {
       setPhase("form")
       setError("")
-      setLogs([])
       setName("")
       setFolderName("")
       setFolderTouched(false)
@@ -148,10 +147,6 @@ export function NewAppFromBlueprintDialog({
       cancelled = true
     }
   }, [open, workspace])
-
-  useEffect(() => {
-    logEnd.current?.scrollIntoView({ block: "end" })
-  }, [logs.length])
 
   function handleSelectBlueprint(value: string | null) {
     const next = blueprints?.find((b) => String(b.id) === value)
@@ -190,17 +185,19 @@ export function NewAppFromBlueprintDialog({
     if (!blueprint || !workspace) return
     const id = crypto.randomUUID()
     runId.current = id
-    setLogs([])
+    pendingOutput.current = []
     setError("")
     setFailure("")
     setPhase("running")
     const off = onBlueprintLog((event) => {
       if (event.runId !== id) return
-      if (event.stream === "failed") setFailure(event.text)
-      setLogs((prev) => [
-        ...prev,
-        { id: logId.current++, stream: event.stream, text: event.text },
-      ])
+      if (event.stream === "failed") {
+        setFailure(event.text)
+      } else if (event.stream === "data") {
+        const bytes = decodeTerminalData(event.data)
+        if (terminal.current) terminal.current.write(bytes)
+        else pendingOutput.current.push(bytes)
+      }
     })
     try {
       const result = await api.blueprints.createApp({
@@ -228,6 +225,12 @@ export function NewAppFromBlueprintDialog({
     } finally {
       off()
     }
+  }
+
+  function handleTerminal(handle: TerminalHandle | null) {
+    terminal.current = handle
+    if (!handle) return
+    for (const bytes of pendingOutput.current.splice(0)) handle.write(bytes)
   }
 
   function handleResolve(action: "skip" | "abort") {
@@ -267,7 +270,9 @@ export function NewAppFromBlueprintDialog({
         onOpenChange(next)
       }}
     >
-      <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-xl">
+      <DialogContent
+        className={`flex max-h-[90vh] flex-col ${phase === "form" ? "sm:max-w-xl" : "sm:max-w-3xl"}`}
+      >
         <DialogHeader>
           <DialogTitle>New app from blueprint</DialogTitle>
           <DialogDescription>
@@ -451,24 +456,17 @@ export function NewAppFromBlueprintDialog({
                 <span className="font-mono break-all">{cwd}</span>…
               </p>
             )}
-            <div className="h-64 min-h-0 overflow-auto rounded-lg border bg-muted/30">
-              <pre className="p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
-                {logs.map((line) => (
-                  <span
-                    key={line.id}
-                    className={cn(
-                      "block",
-                      line.stream === "system" && "text-muted-foreground",
-                      (line.stream === "stderr" || line.stream === "failed") &&
-                        "text-destructive"
-                    )}
-                  >
-                    {line.text}
-                  </span>
-                ))}
-                <div ref={logEnd} />
-              </pre>
-            </div>
+            <Terminal
+              className="h-80"
+              onHandle={handleTerminal}
+              onData={(data) => {
+                // Keystrokes only matter while a command runs; ignore the rest.
+                if (running) void api.blueprints.sendInput(runId.current, data).catch(() => {})
+              }}
+              onResize={(cols, rows) => {
+                void api.blueprints.resize(runId.current, cols, rows).catch(() => {})
+              }}
+            />
             <DialogFooter>
               {running && failure ? (
                 <>

@@ -38,7 +38,11 @@ export function BlueprintsDelete(arg1:number):Promise<types.Ok>;
 
 export function BlueprintsList():Promise<Array<types.Blueprint>>;
 
+export function BlueprintsResize(arg1:string,arg2:number,arg3:number):Promise<types.Ok>;
+
 export function BlueprintsResolve(arg1:string,arg2:string):Promise<types.Ok>;
+
+export function BlueprintsSendInput(arg1:string,arg2:string):Promise<types.Ok>;
 
 export function BlueprintsUpdate(arg1:number,arg2:types.BlueprintInput):Promise<types.Blueprint>;
 
@@ -96,9 +100,11 @@ export function RunConfigGet(arg1:number):Promise<types.RunConfig>;
 
 export function RunConfigSave(arg1:number,arg2:types.RunConfigSaveInput):Promise<types.RunConfig>;
 
-export function RunnerLogs(arg1:number):Promise<types.RunnerLogsSnapshot>;
+export function RunnerOutput(arg1:number,arg2:number):Promise<types.RunnerOutput>;
 
 export function RunnerReload(arg1:number):Promise<types.StatusEvent>;
+
+export function RunnerResize(arg1:number,arg2:number,arg3:number,arg4:number):Promise<types.Ok>;
 
 export function RunnerRun(arg1:number):Promise<types.StatusEvent>;
 

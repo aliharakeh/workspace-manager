@@ -10,7 +10,7 @@ Wails v2 desktop app. Go owns the window, SQLite, process runner and OS integrat
 | `bind.go` | API surface: exported `App` methods bound to the UI. |
 | `services/` | Runner, templates, ready URLs, notifier, AI. |
 | `lib/` | fs, parse-env, import-formats, package scripts. |
-| `native/` | OS helpers (process, ports, editor, browser, run). |
+| `native/` | OS helpers (process, ports, editor, browser, run) and `pty*.go`, the pseudo-terminal (ConPTY on Windows, `creack/pty` elsewhere). |
 | `db/` | SQLite via sqlc: `schema.sql` (final schema, also run at startup), `queries.sql`, generated code. |
 | `types/` | UI types (JSON tags match `frontend/lib/types.ts`). |
 | `frontend/` | React UI (Vite). Own `package.json`; Bun is the package manager. |
@@ -22,6 +22,7 @@ Wails v2 desktop app. Go owns the window, SQLite, process runner and OS integrat
 
 - Adding or changing an API method: edit the `App` method in `bind.go`, run `wails generate module` from the repo root, then update `frontend/host.ts` and any UI callers. Keep Go JSON tags in sync with `frontend/lib/types.ts`.
 - Schema or query changes: edit `db/schema.sql` / `db/queries.sql`, then run `sqlc generate` from the repo root. `schema.sql` is embedded and run at every startup with `IF NOT EXISTS` statements, so it only creates missing tables: it does not alter existing ones. There is no migration system; a change to an existing table needs explicit upgrade code.
+- Run-config and blueprint commands run on a pseudo-terminal (`native.StartPty`), so output is raw terminal bytes, not lines. It reaches the UI base64-encoded: `LogEvent`/`RunnerOutput` for runs (with byte offsets so a late terminal can catch up), `BlueprintLogEvent` for blueprints. The UI renders both with `frontend/components/terminal.tsx` (xterm.js): run logs are read-only and never write to the command's input; the blueprint dialog is interactive (`BlueprintsSendInput`, `BlueprintsResize`). Line-based logic (ready-URL detection) works on a plain-text copy made in `services/terminal.go`.
 - Notification setting keys live in both `services/notifier.go` and `frontend/lib/notifications.ts`; keep them in sync.
 - Dialogs and `openExternal` use the Wails runtime.
 

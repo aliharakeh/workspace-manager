@@ -24,8 +24,8 @@ import { WorkspaceDetail } from '@/components/workspace-detail'
 import { DeleteWorkspaceDialog, WorkspaceDialog } from '@/components/workspace-dialogs'
 import { useAppStatuses } from '@/hooks/use-app-statuses'
 import { useRoute } from '@/hooks/use-route'
-import { useRunnerLogs } from '@/hooks/use-runner-logs'
-import { api } from '@/lib/api'
+import { useRunnerStatus } from '@/hooks/use-runner-status'
+import { api, onFileDrop } from '@/lib/api'
 import { formatRoute, type AppTab } from '@/lib/routes'
 import {
     DEFAULT_SHORTCUTS,
@@ -38,8 +38,15 @@ import {
 } from '@/lib/shortcuts'
 import type { App as AppEntity, StatusEvent, Workspace } from '@/lib/types'
 import { FolderIcon, LayoutTemplateIcon, PlusIcon, SearchIcon } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+
+// Last path segment, e.g. "C:\code\my-app\" -> "my-app". Falls back to the
+// whole path for roots like "C:\".
+function folderName(path: string) {
+    const parts = path.split(/[\\/]/).filter(Boolean)
+    return parts[parts.length - 1] ?? path
+}
 
 export function App() {
     return (
@@ -79,7 +86,7 @@ function AppContent() {
     // Set when Settings was opened from the blueprint dialog, to return there.
     const [returnToBlueprintDialog, setReturnToBlueprintDialog] = useState(false)
 
-    const { status, logs, setStatus, connected } = useRunnerLogs(selectedAppId)
+    const { status, setStatus } = useRunnerStatus(selectedAppId)
     const workspaceIds = useMemo(() => workspaces.map(workspace => workspace.id), [workspaces])
     const { statusByAppId, setAppStatus } = useAppStatuses(workspaceIds)
 
@@ -153,6 +160,71 @@ function AppContent() {
         const workspace = workspaces.find(w => w.id === app.workspace_id)
         if (workspace) handleGoApp(workspace, app)
     }
+
+    // Dropped folders become apps in the open workspace, or in a new "Default"
+    // workspace when none is open.
+    async function handleDropPaths(paths: string[]) {
+        if (loading) return
+        const folders: { name: string; path: string }[] = []
+        for (const dropped of paths) {
+            try {
+                const result = await api.fs.validatePath(dropped)
+                if (result.ok && result.path) {
+                    folders.push({ name: folderName(result.path), path: result.path })
+                } else {
+                    toast.error(result.error ?? `Cannot add ${dropped}`)
+                }
+            } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to read dropped item')
+            }
+        }
+        if (!folders.length) return
+
+        let target: Workspace
+        if (selectedWorkspace) {
+            target = selectedWorkspace
+        } else {
+            try {
+                const created = (await api.workspaces.create({ name: 'Default' })) as Workspace
+                target = created
+                setWorkspaces(prev =>
+                    [...prev, created].sort((a, b) => a.name.localeCompare(b.name)),
+                )
+                setAppsByWorkspace(prev => ({ ...prev, [created.id]: [] }))
+            } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to create workspace')
+                return
+            }
+        }
+
+        let last: AppEntity | null = null
+        for (const folder of folders) {
+            try {
+                const app = (await api.apps.create(target.id, {
+                    name: folder.name,
+                    project_path: folder.path,
+                })) as AppEntity
+                last = app
+                setAppsByWorkspace(prev => ({
+                    ...prev,
+                    [target.id]: [...(prev[target.id] ?? []), app].sort((a, b) =>
+                        a.name.localeCompare(b.name),
+                    ),
+                }))
+                toast.success(`Added ${app.name} to ${target.name}`)
+            } catch (err) {
+                toast.error(err instanceof Error ? err.message : `Failed to add ${folder.name}`)
+            }
+        }
+        if (last) handleGoApp(target, last)
+        else handleGoWorkspace(target)
+    }
+
+    const handleDropPathsRef = useRef(handleDropPaths)
+    useEffect(() => {
+        handleDropPathsRef.current = handleDropPaths
+    })
+    useEffect(() => onFileDrop(paths => void handleDropPathsRef.current(paths)), [])
 
     function handleSelectWorkspace(id: number) {
         const workspace = workspaces.find(w => w.id === id)
@@ -456,8 +528,6 @@ function AppContent() {
                             key={selectedApp.id}
                             app={selectedApp}
                             status={status ?? statusByAppId[selectedApp.id] ?? null}
-                            logs={logs}
-                            connected={connected}
                             tab={route.tab ?? 'env'}
                             onTabChange={handleTabChange}
                             onEdit={() => {

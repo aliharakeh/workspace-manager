@@ -4,9 +4,11 @@ go 1.25.0
 
 require (
 	github.com/aymerick/raymond v2.0.2+incompatible
+	github.com/creack/pty v1.1.24
 	github.com/firebase/genkit/go v1.12.0
 	github.com/openai/openai-go v1.12.0
 	github.com/wailsapp/wails/v2 v2.14.0
+	golang.org/x/sys v0.47.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.57.0
 )
@@ -74,7 +76,6 @@ require (
 	go.yaml.in/yaml/v4 v4.0.0-rc.4 // indirect
 	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.39.0 // indirect
 	google.golang.org/genai v1.57.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect

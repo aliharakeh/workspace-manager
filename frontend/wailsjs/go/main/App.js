@@ -74,8 +74,16 @@ export function BlueprintsList() {
   return window['go']['main']['App']['BlueprintsList']();
 }
 
+export function BlueprintsResize(arg1, arg2, arg3) {
+  return window['go']['main']['App']['BlueprintsResize'](arg1, arg2, arg3);
+}
+
 export function BlueprintsResolve(arg1, arg2) {
   return window['go']['main']['App']['BlueprintsResolve'](arg1, arg2);
+}
+
+export function BlueprintsSendInput(arg1, arg2) {
+  return window['go']['main']['App']['BlueprintsSendInput'](arg1, arg2);
 }
 
 export function BlueprintsUpdate(arg1, arg2) {
@@ -190,12 +198,16 @@ export function RunConfigSave(arg1, arg2) {
   return window['go']['main']['App']['RunConfigSave'](arg1, arg2);
 }
 
-export function RunnerLogs(arg1) {
-  return window['go']['main']['App']['RunnerLogs'](arg1);
+export function RunnerOutput(arg1, arg2) {
+  return window['go']['main']['App']['RunnerOutput'](arg1, arg2);
 }
 
 export function RunnerReload(arg1) {
   return window['go']['main']['App']['RunnerReload'](arg1);
+}
+
+export function RunnerResize(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['RunnerResize'](arg1, arg2, arg3, arg4);
 }
 
 export function RunnerRun(arg1) {

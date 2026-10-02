@@ -2,13 +2,17 @@ package services
 
 import (
 	"context"
+	"encoding/base64"
 	"database/sql"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"workspace-manager/db"
 	"workspace-manager/types"
@@ -254,6 +258,85 @@ func TestBlueprintAskOnError(t *testing.T) {
 	answer = "cancel"
 	if _, _, err = run("cancel", "exit 3", "echo ok> after.txt"); err != errBlueprintCancelled {
 		t.Fatalf("expected cancelled, got %v", err)
+	}
+}
+
+func decodeBlueprintData(t *testing.T, e types.BlueprintLogEvent) string {
+	t.Helper()
+	if e.Stream != "data" {
+		return ""
+	}
+	raw, err := base64.StdEncoding.DecodeString(e.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(raw)
+}
+
+func TestBlueprintTerminal(t *testing.T) {
+	ctx := context.Background()
+	d := newBlueprintTestDB(t)
+	ws, _ := d.CreateWorkspaceT(ctx, "ws", nil)
+
+	// Prompts without a newline, reads a line, then writes what it got to got.txt.
+	command := `set /p ans=Your name: & call echo %^ans%> got.txt`
+	if runtime.GOOS != "windows" {
+		command = `printf 'Your name: '; read ans; echo "$ans" > got.txt`
+	}
+	prompted := make(chan struct{})
+	var once sync.Once
+	var mu sync.Mutex
+	var out strings.Builder
+	runner := NewBlueprintRunner(d, func(e types.BlueprintLogEvent) {
+		text := decodeBlueprintData(t, e)
+		mu.Lock()
+		out.WriteString(text)
+		// The first match is the echoed "$ command" line; the second is the prompt.
+		seen := strings.Count(out.String(), "Your name:") >= 2
+		mu.Unlock()
+		if seen {
+			once.Do(func() { close(prompted) })
+		}
+	})
+	bp, err := d.CreateBlueprintT(ctx, types.BlueprintInput{
+		Name: "ask", CreateFolder: true, Commands: []types.BlueprintCommand{{Command: command}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := t.TempDir()
+	done := make(chan error, 1)
+	go func() {
+		_, err := runner.Run(ctx, types.BlueprintRunInput{
+			WorkspaceID: ws.ID, RunID: "term", BlueprintID: bp.ID, Name: "app", ParentPath: parent,
+			FolderName: "app", CreateFolder: true,
+		})
+		done <- err
+	}()
+
+	select {
+	case <-prompted:
+	case <-time.After(10 * time.Second):
+		t.Fatal("prompt was never shown")
+	}
+	runner.Resize("term", 90, 20)
+	if err := runner.Write("term", "bob\r"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("run did not finish after input")
+	}
+	got, err := os.ReadFile(filepath.Join(parent, "app", "got.txt"))
+	if err != nil || !strings.Contains(string(got), "bob") {
+		t.Fatalf("command did not receive the input: %q, %v", got, err)
+	}
+	if err := runner.Write("term", "late"); err == nil {
+		t.Fatal("input to a finished run must fail")
 	}
 }
 

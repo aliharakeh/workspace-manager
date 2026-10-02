@@ -1,12 +1,9 @@
 package services
 
 import (
-	"bufio"
 	"context"
+	"encoding/base64"
 	"fmt"
-	"io"
-	"os/exec"
-	"regexp"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,10 +13,8 @@ import (
 	"workspace-manager/types"
 )
 
-const maxLogBuffer = 5000
-
 type childProc struct {
-	cmd *exec.Cmd
+	pty *native.Pty
 }
 
 type session struct {
@@ -38,12 +33,15 @@ type session struct {
 	hadError      bool
 	readyNotified bool
 	idleNotified  bool
-	// idleDone stops the idle watcher; lastLogAt is refreshed on every output
-	// line so the countdown only runs once the logs go quiet.
+	// idleDone stops the idle watcher; lastLogAt is refreshed on every chunk of
+	// output so the countdown only runs once the terminal goes quiet.
 	idleDone  chan struct{}
 	idleOnce  sync.Once
 	lastLogAt atomic.Int64
-	logBuffer []types.LogEvent
+	// outputs holds the recent terminal output of each command, for a UI that
+	// opens after the command started.
+	outMu   sync.Mutex
+	outputs map[int64]*termBuffer
 }
 
 type Runner struct {
@@ -53,22 +51,40 @@ type Runner struct {
 
 	mu       sync.Mutex
 	sessions map[int64]*session
+	// cols and rows are the size the UI last reported; new commands start there.
+	cols, rows int
 }
 
 func NewRunner(d *db.DB, broadcast func(appID int64, event any), notify func(title, body string)) *Runner {
-	return &Runner{db: d, broadcast: broadcast, notify: notify, sessions: map[int64]*session{}}
+	return &Runner{
+		db: d, broadcast: broadcast, notify: notify, sessions: map[int64]*session{},
+		cols: native.DefaultPtyCols, rows: native.DefaultPtyRows,
+	}
 }
 
 func (r *Runner) emit(s *session, event any) {
-	if log, ok := event.(types.LogEvent); ok {
-		s.logBuffer = append(s.logBuffer, log)
-		if len(s.logBuffer) > maxLogBuffer {
-			s.logBuffer = s.logBuffer[len(s.logBuffer)-maxLogBuffer:]
-		}
-	}
 	if r.broadcast != nil {
 		r.broadcast(s.appID, event)
 	}
+}
+
+// emitOutput records a chunk of a command's terminal output and sends it to the UI.
+func (r *Runner) emitOutput(s *session, commandID int64, p []byte) {
+	if len(p) == 0 {
+		return
+	}
+	s.outMu.Lock()
+	buf := s.outputs[commandID]
+	if buf == nil {
+		buf = &termBuffer{}
+		s.outputs[commandID] = buf
+	}
+	offset := buf.add(p)
+	s.outMu.Unlock()
+	r.emit(s, types.LogEvent{
+		Type: "log", AppID: s.appID, CommandID: commandID, Offset: offset,
+		Data: base64.StdEncoding.EncodeToString(p), Ts: time.Now().UnixMilli(),
+	})
 }
 
 func (r *Runner) statusEvent(s *session, errMsg string) types.StatusEvent {
@@ -89,18 +105,16 @@ func (r *Runner) statusEvent(s *session, errMsg string) types.StatusEvent {
 	return ev
 }
 
+// systemLog writes one of the app's own messages (dimmed) into a command's
+// terminal, on a fresh line.
 func (r *Runner) systemLog(s *session, commandID int64, text string) {
-	if !stringsHasNL(text) {
-		text += "\n"
+	line := dimLine(text)
+	s.outMu.Lock()
+	if buf := s.outputs[commandID]; buf != nil && buf.total > 0 && buf.lastByte != '\n' {
+		line = append([]byte("\r\n"), line...)
 	}
-	r.emit(s, types.LogEvent{
-		Type: "log", AppID: s.appID, CommandID: commandID, Stream: "system",
-		Text: text, Ts: time.Now().UnixMilli(),
-	})
-}
-
-func stringsHasNL(s string) bool {
-	return len(s) > 0 && s[len(s)-1] == '\n'
+	s.outMu.Unlock()
+	r.emitOutput(s, commandID, line)
 }
 
 func (r *Runner) noteReadyURL(s *session, commandID int64, line string) {
@@ -200,65 +214,6 @@ func (r *Runner) startIdleWatcher(s *session) {
 	}()
 }
 
-var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07`)
-
-func stripANSI(s string) string {
-	return ansiRe.ReplaceAllString(s, "")
-}
-
-func (r *Runner) emitLogLine(s *session, commandID int64, kind, text string) {
-	if !stringsHasNL(text) {
-		text += "\n"
-	}
-	s.lastLogAt.Store(time.Now().UnixNano())
-	r.emit(s, types.LogEvent{
-		Type: "log", AppID: s.appID, CommandID: commandID, Stream: kind,
-		Text: text, Ts: time.Now().UnixMilli(),
-	})
-	r.noteReadyURL(s, commandID, text)
-}
-
-func (r *Runner) pipeStream(s *session, commandID int64, reader io.Reader, kind string) {
-	buf := bufio.NewReader(reader)
-	var pending string
-	for {
-		chunk, err := buf.ReadString('\n')
-		pending += chunk
-		for {
-			i := indexNL(pending)
-			if i < 0 {
-				break
-			}
-			line := stripANSI(trimCR(pending[:i]))
-			pending = pending[i+1:]
-			r.emitLogLine(s, commandID, kind, line)
-		}
-		if err != nil {
-			rest := stripANSI(trimCR(pending))
-			if rest != "" {
-				r.emitLogLine(s, commandID, kind, rest)
-			}
-			return
-		}
-	}
-}
-
-func indexNL(s string) int {
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			return i
-		}
-	}
-	return -1
-}
-
-func trimCR(s string) string {
-	if len(s) > 0 && s[len(s)-1] == '\r' {
-		return s[:len(s)-1]
-	}
-	return s
-}
-
 func (r *Runner) spawnCommand(s *session, cmd types.RunCommand, cwd string, env []string) int {
 	var processState *types.ProcessState
 	for i := range s.processes {
@@ -284,34 +239,33 @@ func (r *Runner) spawnCommand(s *session, cmd types.RunCommand, cwd string, env 
 	r.emit(s, r.statusEvent(s, ""))
 	r.systemLog(s, cmd.ID, "$ "+cmd.Command)
 
-	child, err := native.SpawnShell(cmd.Command, cwd, env)
+	r.mu.Lock()
+	cols, rows := r.cols, r.rows
+	r.mu.Unlock()
+	proc, err := native.StartPty(cmd.Command, cwd, env, cols, rows)
 	if err != nil {
 		return fail(err)
 	}
-	stdout, err := child.StdoutPipe()
-	if err != nil {
-		return fail(err)
-	}
-	stderr, err := child.StderrPipe()
-	if err != nil {
-		return fail(err)
-	}
-	if err := child.Start(); err != nil {
-		return fail(err)
-	}
-	pid := int64(child.Process.Pid)
+	pid := int64(proc.Pid())
 	processState.PID = &pid
 	r.mu.Lock()
-	s.children[cmd.ID] = &childProc{cmd: child}
+	s.children[cmd.ID] = &childProc{pty: proc}
 	r.mu.Unlock()
 	r.emit(s, r.statusEvent(s, ""))
 
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() { defer wg.Done(); r.pipeStream(s, cmd.ID, stdout, "stdout") }()
-	go func() { defer wg.Done(); r.pipeStream(s, cmd.ID, stderr, "stderr") }()
-	waitErr := child.Wait()
-	wg.Wait()
+	// The commands' output is only watched, never answered: the UI shows it
+	// read-only, so nothing is ever written to the terminal's input.
+	tap := &lineTap{}
+	exitCode, waitErr := proc.Stream(func(p []byte) {
+		s.lastLogAt.Store(time.Now().UnixNano())
+		r.emitOutput(s, cmd.ID, p)
+		for _, line := range tap.feed(p) {
+			r.noteReadyURL(s, cmd.ID, line)
+		}
+	})
+	for _, line := range tap.flush() {
+		r.noteReadyURL(s, cmd.ID, line)
+	}
 
 	r.mu.Lock()
 	delete(s.children, cmd.ID)
@@ -321,13 +275,8 @@ func (r *Runner) spawnCommand(s *session, cmd types.RunCommand, cwd string, env 
 		r.emit(s, r.statusEvent(s, ""))
 		return 1
 	}
-	exitCode := 0
-	if waitErr != nil {
-		if ee, ok := waitErr.(*exec.ExitError); ok {
-			exitCode = ee.ExitCode()
-		} else {
-			exitCode = 1
-		}
+	if waitErr != nil && exitCode == 0 {
+		exitCode = 1
 	}
 	code64 := int64(exitCode)
 	processState.ExitCode = &code64
@@ -380,7 +329,7 @@ func (r *Runner) runSession(s *session) {
 		return
 	}
 	envMap, _ := r.db.EnvToRecord(ctx, set.ID)
-	env := native.MergeSpawnEnv(envMap)
+	env := native.MergeTerminalEnv(envMap)
 	config, err := r.db.GetRunConfigByConfigSetT(ctx, set.ID)
 	if err != nil {
 		s.running = false
@@ -463,6 +412,7 @@ func (r *Runner) createSession(ctx context.Context, appID int64) (*session, erro
 		children:  map[int64]*childProc{},
 		running:   true,
 		idleDone:  make(chan struct{}),
+		outputs:   map[int64]*termBuffer{},
 	}, nil
 }
 
@@ -476,19 +426,43 @@ func (r *Runner) GetStatus(appID int64) types.StatusEvent {
 	return r.statusEvent(s, "")
 }
 
-func (r *Runner) GetSnapshot(appID int64) types.RunnerLogsSnapshot {
+// GetOutput returns the recent terminal output of one command of the app's
+// current session.
+func (r *Runner) GetOutput(appID, commandID int64) types.RunnerOutput {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	s := r.sessions[appID]
+	r.mu.Unlock()
 	if s == nil {
-		return types.RunnerLogsSnapshot{
-			Status: types.StatusEvent{Type: "status", AppID: appID, Processes: []types.ProcessState{}, Ts: time.Now().UnixMilli()},
-			Logs:   []types.LogEvent{},
-		}
+		return types.RunnerOutput{}
 	}
-	logs := make([]types.LogEvent, len(s.logBuffer))
-	copy(logs, s.logBuffer)
-	return types.RunnerLogsSnapshot{Status: r.statusEvent(s, ""), Logs: logs}
+	s.outMu.Lock()
+	defer s.outMu.Unlock()
+	buf := s.outputs[commandID]
+	if buf == nil {
+		return types.RunnerOutput{SessionID: s.id}
+	}
+	return types.RunnerOutput{
+		SessionID: s.id,
+		Data:      base64.StdEncoding.EncodeToString(buf.snapshot()),
+		End:       buf.total,
+	}
+}
+
+// Resize sets the terminal size of a command; later commands start at that size too.
+func (r *Runner) Resize(appID, commandID int64, cols, rows int) {
+	if cols <= 0 || rows <= 0 {
+		return
+	}
+	r.mu.Lock()
+	r.cols, r.rows = cols, rows
+	var child *childProc
+	if s := r.sessions[appID]; s != nil {
+		child = s.children[commandID]
+	}
+	r.mu.Unlock()
+	if child != nil {
+		_ = child.pty.Resize(cols, rows)
+	}
 }
 
 func (r *Runner) Start(ctx context.Context, appID int64) (types.StatusEvent, error) {
@@ -541,8 +515,8 @@ func (r *Runner) Stop(ctx context.Context, appID int64) (types.StatusEvent, erro
 
 	r.emit(s, r.statusEvent(s, ""))
 	for _, c := range children {
-		if c.cmd != nil && c.cmd.Process != nil {
-			_ = native.KillPid(c.cmd.Process.Pid)
+		if c.pty != nil {
+			_ = native.KillPid(c.pty.Pid())
 		}
 	}
 	if !s.restored {

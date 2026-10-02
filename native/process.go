@@ -3,7 +3,6 @@ package native
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -76,7 +75,9 @@ func KillPid(pid int) error {
 	return killUnixTree(pid)
 }
 
-func MergeSpawnEnv(appEnv map[string]string) []string {
+// MergeTerminalEnv returns the process environment plus appEnv, set up for a
+// terminal: colors stay on and TERM tells programs what they can render.
+func MergeTerminalEnv(appEnv map[string]string) []string {
 	env := os.Environ()
 	seen := map[string]int{}
 	for i, kv := range env {
@@ -98,28 +99,10 @@ func MergeSpawnEnv(appEnv map[string]string) []string {
 		set(k, v)
 	}
 	set("PYTHONUNBUFFERED", "1")
-	if _, ok := appEnv["FORCE_COLOR"]; !ok {
-		if os.Getenv("FORCE_COLOR") == "" {
-			set("FORCE_COLOR", "0")
-		}
-	}
-	if _, ok := appEnv["NO_COLOR"]; !ok {
-		if os.Getenv("NO_COLOR") == "" {
-			set("NO_COLOR", "1")
+	for key, value := range map[string]string{"TERM": "xterm-256color", "COLORTERM": "truecolor"} {
+		if _, ok := appEnv[key]; !ok {
+			set(key, value)
 		}
 	}
 	return env
-}
-
-func SpawnShell(command, cwd string, env []string) (*exec.Cmd, error) {
-	var c *exec.Cmd
-	if isWindows() {
-		c = exec.Command("cmd", "/c", command)
-	} else {
-		c = exec.Command("sh", "-c", command)
-	}
-	c.Dir = cwd
-	c.Env = env
-	hideWindow(c)
-	return c, nil
 }

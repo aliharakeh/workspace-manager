@@ -1,22 +1,15 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type RefObject,
-} from "react"
+import { useEffect, useMemo, useState } from "react"
 import { ExternalLinkIcon } from "lucide-react"
-import type { LogLine } from "@/hooks/use-runner-logs"
-import { handleReadyUrlClick } from "@/lib/api"
-import type { ProcessState, StatusEvent } from "@/lib/types"
+import { api, handleReadyUrlClick, onRunnerEvent } from "@/lib/api"
+import { decodeTerminalData } from "@/lib/terminal"
+import type { LogEvent, ProcessState, StatusEvent } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { Terminal, type TerminalHandle } from "@/components/terminal"
 import { cn } from "@/lib/utils"
 
 type LogsPanelProps = {
+  appId: number
   status: StatusEvent | null
-  logs: LogLine[]
-  connected?: boolean
 }
 
 function statusVariant(
@@ -35,61 +28,91 @@ function statusVariant(
   }
 }
 
-function LogStreamView({
-  label,
-  empty,
-  lines,
-  tone,
-  bottomRef,
+/**
+ * The output of one run command in a read-only terminal. It loads what the
+ * command printed so far, then follows the live chunks; offsets keep the two
+ * from overlapping or leaving a gap.
+ */
+function RunnerTerminal({
+  appId,
+  commandId,
 }: {
-  label: string
-  empty: string
-  lines: LogLine[]
-  tone?: "destructive"
-  bottomRef?: RefObject<HTMLDivElement | null>
+  appId: number
+  commandId: number
 }) {
+  const [handle, setHandle] = useState<TerminalHandle | null>(null)
+
+  useEffect(() => {
+    if (!handle) return
+    let cancelled = false
+    // Bytes of the command shown so far; -1 until the snapshot has arrived.
+    let end = -1
+    const queued: LogEvent[] = []
+
+    const apply = (event: LogEvent) => {
+      const bytes = decodeTerminalData(event.data)
+      const eventEnd = event.offset + bytes.length
+      if (eventEnd <= end) return
+      handle.write(
+        event.offset < end ? bytes.subarray(end - event.offset) : bytes
+      )
+      end = eventEnd
+    }
+    const flush = () => queued.splice(0).forEach(apply)
+
+    const unsubscribe = onRunnerEvent((eventAppId, event) => {
+      if (
+        cancelled ||
+        eventAppId !== appId ||
+        event.type !== "log" ||
+        event.commandId !== commandId
+      ) {
+        return
+      }
+      if (end < 0) queued.push(event)
+      else apply(event)
+    }, appId)
+
+    api.runner
+      .output(appId, commandId)
+      .then((snapshot) => {
+        if (cancelled) return
+        const bytes = decodeTerminalData(snapshot.data)
+        if (bytes.length > 0) handle.write(bytes)
+        end = snapshot.end
+        flush()
+      })
+      .catch(() => {
+        if (cancelled) return
+        end = 0
+        flush()
+      })
+
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [handle, appId, commandId])
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-muted-foreground">{label}</span>
-        <span className="text-xs text-muted-foreground/70">{lines.length}</span>
-      </div>
-      <ScrollArea className="h-56 rounded-lg border bg-muted/30">
-        <pre
-          className={cn(
-            "p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap",
-            tone === "destructive" && "text-destructive"
-          )}
-        >
-          {lines.length === 0
-            ? empty
-            : lines.map((line) => (
-                <span
-                  key={line.id}
-                  className={cn(
-                    "block",
-                    line.stream === "system" && "text-muted-foreground"
-                  )}
-                >
-                  {line.text}
-                </span>
-              ))}
-          {bottomRef ? <div ref={bottomRef} /> : null}
-        </pre>
-      </ScrollArea>
-    </div>
+    <Terminal
+      readOnly
+      className="h-80"
+      onHandle={setHandle}
+      onResize={(cols, rows) => {
+        void api.runner.resize(appId, commandId, cols, rows)
+      }}
+    />
   )
 }
 
-export function LogsPanel({ status, logs, connected }: LogsPanelProps) {
-  const processes = status?.processes ?? []
+export function LogsPanel({ appId, status }: LogsPanelProps) {
+  const processes = useMemo(() => status?.processes ?? [], [status?.processes])
   const readyUrls = useMemo(() => {
     if (!status?.running) return []
     return [...new Set(processes.flatMap((p) => p.urls ?? []))]
   }, [status?.running, processes])
   const [active, setActive] = useState<string | null>(null)
-  const stdoutBottomRef = useRef<HTMLDivElement>(null)
-  const stderrBottomRef = useRef<HTMLDivElement>(null)
 
   const activeId = useMemo(() => {
     if (active && processes.some((p) => String(p.commandId) === active)) {
@@ -98,40 +121,10 @@ export function LogsPanel({ status, logs, connected }: LogsPanelProps) {
     return processes[0] ? String(processes[0].commandId) : null
   }, [processes, active])
 
-  const visibleLogs = useMemo(() => {
-    if (!activeId) return []
-    const commandId = Number(activeId)
-    return logs.filter((l) => l.commandId === commandId)
-  }, [logs, activeId])
-
-  const stdoutLogs = useMemo(
-    () => visibleLogs.filter((l) => l.stream !== "stderr"),
-    [visibleLogs]
-  )
-  const stderrLogs = useMemo(
-    () => visibleLogs.filter((l) => l.stream === "stderr"),
-    [visibleLogs]
-  )
-
-  useEffect(() => {
-    stdoutBottomRef.current?.scrollIntoView({ behavior: "smooth" })
-    stderrBottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [stdoutLogs.length, stderrLogs.length, activeId])
-
-  if (processes.length === 0 && logs.length === 0) {
+  if (processes.length === 0 || activeId === null) {
     return (
       <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "size-2 rounded-full",
-              connected ? "bg-emerald-500" : "bg-muted-foreground/40"
-            )}
-          />
-          {connected
-            ? "SSE connected — run the app to stream process logs."
-            : "Connecting to log stream…"}
-        </div>
+        Run the app to see its output here.
         {status?.error ? (
           <p className="mt-2 text-destructive">{status.error}</p>
         ) : null}
@@ -141,37 +134,29 @@ export function LogsPanel({ status, logs, connected }: LogsPanelProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span
-          className={cn(
-            "size-2 rounded-full",
-            connected ? "bg-emerald-500" : "bg-muted-foreground/40"
-          )}
-        />
-        {connected ? "Streaming via SSE" : "Reconnecting…"}
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span>Read-only terminal output</span>
         {status?.running ? <Badge variant="default">Live</Badge> : null}
       </div>
 
-      {processes.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
-          {processes.map((p) => (
-            <button
-              key={p.commandId}
-              type="button"
-              className={cn(
-                "inline-flex items-center gap-2 rounded-md px-2.5 py-1 text-sm",
-                activeId === String(p.commandId)
-                  ? "bg-muted font-medium"
-                  : "hover:bg-muted/60"
-              )}
-              onClick={() => setActive(String(p.commandId))}
-            >
-              <span className="max-w-40 truncate">{p.label}</span>
-              <Badge variant={statusVariant(p.status)}>{p.status}</Badge>
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <div className="flex flex-wrap gap-1">
+        {processes.map((p) => (
+          <button
+            key={p.commandId}
+            type="button"
+            className={cn(
+              "inline-flex items-center gap-2 rounded-md px-2.5 py-1 text-sm",
+              activeId === String(p.commandId)
+                ? "bg-muted font-medium"
+                : "hover:bg-muted/60"
+            )}
+            onClick={() => setActive(String(p.commandId))}
+          >
+            <span className="max-w-40 truncate">{p.label}</span>
+            <Badge variant={statusVariant(p.status)}>{p.status}</Badge>
+          </button>
+        ))}
+      </div>
 
       {readyUrls.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
@@ -192,21 +177,12 @@ export function LogsPanel({ status, logs, connected }: LogsPanelProps) {
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-3 lg:flex-row">
-        <LogStreamView
-          label="stdout"
-          empty="No stdout yet."
-          lines={stdoutLogs}
-          bottomRef={stdoutBottomRef}
-        />
-        <LogStreamView
-          label="stderr"
-          empty="No stderr yet."
-          lines={stderrLogs}
-          tone="destructive"
-          bottomRef={stderrBottomRef}
-        />
-      </div>
+      {/* A new run (session) or another command starts a fresh terminal. */}
+      <RunnerTerminal
+        key={`${status?.sessionId ?? ""}:${activeId}`}
+        appId={appId}
+        commandId={Number(activeId)}
+      />
     </div>
   )
 }

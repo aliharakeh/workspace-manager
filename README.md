@@ -14,7 +14,7 @@ The database file lives in the OS user-data directory: Windows `%LOCALAPPDATA%\w
 - **Apps** — name + local project folder, picked with a native folder dialog
 - **Live status** — running / idle indicators, plus Run / Stop / Reload on the app and workspace views
 - **Open in editor** — opens the app’s project path in your local editor (`$VISUAL` / `$EDITOR`, or the OS file manager)
-- **Blueprints** — reusable recipes for new apps, managed under **Settings → Blueprints** and usable in any workspace: a list of shell commands (with `{{app_name}}`, `{{folder_name}}`, `{{app_dir}}`). **From blueprint** next to **Add app** asks for a parent folder and the app name, then runs the commands either inside a new app folder or in the parent (your choice), streams the output, runs `git init` unless a repo exists, and adds the app
+- **Blueprints** — reusable recipes for new apps, managed under **Settings → Blueprints** and usable in any workspace: a list of shell commands (with `{{app_name}}`, `{{folder_name}}`, `{{app_dir}}`). **From blueprint** next to **Add app** asks for a parent folder and the app name, then runs the commands either inside a new app folder or in the parent (your choice), shows the commands in an interactive terminal (so prompts can be answered, including passwords and menus), runs `git init` unless a repo exists, and adds the app
 
 ### Config sets
 
@@ -48,11 +48,11 @@ Handlebars templates written over project files when you hit **Run**. Originals 
 
 ### Live logs
 
-Stdout and stderr stream as they arrive over Wails events. ANSI codes are stripped. stdout and stderr are split per process tab, with system lines (commands, exits, template apply/restore) inline.
+Each run command runs in a real pseudo-terminal (ConPTY on Windows) and its output streams over Wails events into a read-only terminal (xterm.js) per process tab, so colors, progress bars and cursor control render as in a normal shell. stdout and stderr are merged, as in any terminal. The app's own lines (commands, exits, template apply/restore) are shown dimmed inline. The terminal has scrollback, search (Ctrl+F), clickable links and copy; it never sends input to the command.
 
 ### Ready URLs
 
-Log lines are matched against configurable regex patterns (named `url` / `port` groups) so Vite, Next.js, Spring Boot, .NET, Django, and similar servers show up as clickable links on the app, workspace, and logs. Defaults are seeded; you can add or edit patterns under Settings → Log URL patterns.
+Output lines (with terminal escape codes removed) are matched against configurable regex patterns (named `url` / `port` groups) so Vite, Next.js, Spring Boot, .NET, Django, and similar servers show up as clickable links on the app, workspace, and logs. Defaults are seeded; you can add or edit patterns under Settings → Log URL patterns.
 
 ### Settings and UX
 

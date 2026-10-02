@@ -119,13 +119,23 @@ export type StatusEvent = {
     ts?: number
 }
 
+/** A chunk of terminal output of one run command. `data` is base64 of the raw
+ * bytes (escape sequences included); `offset` is how many bytes the command had
+ * produced before this chunk. */
 export type LogEvent = {
     type: 'log'
     appId?: number
     commandId: number
-    stream: 'stdout' | 'stderr' | 'system'
-    text: string
+    offset: number
+    data: string
     ts: number
+}
+
+/** Recent terminal output of one run command (base64), up to `end` bytes. */
+export type RunnerOutput = {
+    sessionId: string
+    data: string
+    end: number
 }
 
 /** OS process holding a listening TCP user port (1024–49151). */
@@ -149,11 +159,6 @@ export type ReadyUrlPattern = {
 }
 
 export type RunnerEvent = LogEvent | (StatusEvent & { type: 'status' })
-
-export type RunnerLogsSnapshot = {
-    status: StatusEvent
-    logs: LogEvent[]
-}
 
 /** One saved AI connection (save payload). Each connection has a user-chosen
  * name (its key) plus the provider it talks to, so several connections can
@@ -229,8 +234,10 @@ export type BlueprintRunResult = {
 
 export type BlueprintLogEvent = {
     runId: string
-    /** `failed` is a command failure waiting for a skip/abort answer. */
-    stream: 'stdout' | 'stderr' | 'system' | 'failed'
+    /** `data` is terminal output (base64 bytes in `data`); `failed` is a command
+     * failure (message in `text`) waiting for a skip/abort answer. */
+    stream: 'data' | 'failed'
     text: string
+    data: string
     ts: number
 }

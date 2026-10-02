@@ -123,18 +123,25 @@ type StatusEvent struct {
 	Ts        int64          `json:"ts"`
 }
 
+// LogEvent is a chunk of terminal output of one run command. Data is the raw
+// bytes (escape sequences included) base64-encoded; Offset is the number of
+// bytes the command had produced before this chunk, so a UI that also loaded
+// RunnerOutput can drop what it already has.
 type LogEvent struct {
 	Type      string `json:"type"`
 	AppID     int64  `json:"appId,omitempty"`
 	CommandID int64  `json:"commandId"`
-	Stream    string `json:"stream"`
-	Text      string `json:"text"`
+	Offset    int64  `json:"offset"`
+	Data      string `json:"data"`
 	Ts        int64  `json:"ts"`
 }
 
-type RunnerLogsSnapshot struct {
-	Status StatusEvent `json:"status"`
-	Logs   []LogEvent  `json:"logs"`
+// RunnerOutput is the recent terminal output of one run command (base64), up
+// to End, the total number of bytes produced so far.
+type RunnerOutput struct {
+	SessionID string `json:"sessionId"`
+	Data      string `json:"data"`
+	End       int64  `json:"end"`
 }
 
 type ListeningProcess struct {
@@ -463,9 +470,13 @@ type BlueprintRunResult struct {
 	Warning string `json:"warning,omitempty"`
 }
 
+// BlueprintLogEvent is either terminal output (Stream "data", Data holds the
+// base64 bytes) or a failed command waiting for an answer (Stream "failed",
+// Text holds the message).
 type BlueprintLogEvent struct {
 	RunID  string `json:"runId"`
 	Stream string `json:"stream"`
 	Text   string `json:"text"`
+	Data   string `json:"data"`
 	Ts     int64  `json:"ts"`
 }

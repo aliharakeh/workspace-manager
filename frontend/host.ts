@@ -10,7 +10,7 @@ import type {
 } from '@/lib/types'
 import * as Go from './wailsjs/go/main/App'
 import { types } from './wailsjs/go/models'
-import { EventsOn } from './wailsjs/runtime/runtime'
+import { EventsOn, OnFileDrop, OnFileDropOff } from './wailsjs/runtime/runtime'
 
 type RunnerEventHandler = (appId: number, event: RunnerEvent) => void
 
@@ -33,6 +33,14 @@ export function onBlueprintLog(handler: (event: BlueprintLogEvent) => void) {
     return EventsOn('blueprintEvent', (event: BlueprintLogEvent) => {
         if (event) handler(event)
     })
+}
+
+/** Calls `handler` with the absolute paths of files/folders dropped on the window. */
+export function onFileDrop(handler: (paths: string[]) => void) {
+    OnFileDrop((_x, _y, paths) => {
+        if (paths?.length) handler(paths)
+    }, false)
+    return () => OnFileDropOff()
 }
 
 class ApiError extends Error {
@@ -82,6 +90,9 @@ export const api = {
         createApp: (body: BlueprintRunInput) => call(() => Go.BlueprintsCreateApp(body)),
         resolve: (runId: string, action: 'skip' | 'abort') =>
             call(() => Go.BlueprintsResolve(runId, action)),
+        sendInput: (runId: string, data: string) => call(() => Go.BlueprintsSendInput(runId, data)),
+        resize: (runId: string, cols: number, rows: number) =>
+            call(() => Go.BlueprintsResize(runId, cols, rows)),
         cancel: (runId: string) => call(() => Go.BlueprintsCancel(runId)),
     },
 
@@ -141,7 +152,9 @@ export const api = {
     runner: {
         status: (appId: number) => call(() => Go.RunnerStatus(appId)),
         workspaceStatus: (workspaceId: number) => call(() => Go.RunnerWorkspaceStatus(workspaceId)),
-        logs: (appId: number) => call(() => Go.RunnerLogs(appId)),
+        output: (appId: number, commandId: number) => call(() => Go.RunnerOutput(appId, commandId)),
+        resize: (appId: number, commandId: number, cols: number, rows: number) =>
+            call(() => Go.RunnerResize(appId, commandId, cols, rows)),
         run: (appId: number) => call(() => Go.RunnerRun(appId)),
         stop: (appId: number) => call(() => Go.RunnerStop(appId)),
         reload: (appId: number) => call(() => Go.RunnerReload(appId)),
