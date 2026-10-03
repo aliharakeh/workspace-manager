@@ -46,8 +46,8 @@ export function AppsList(arg1) {
   return window['go']['main']['App']['AppsList'](arg1);
 }
 
-export function AppsOpenInEditor(arg1) {
-  return window['go']['main']['App']['AppsOpenInEditor'](arg1);
+export function AppsOpenFolder(arg1) {
+  return window['go']['main']['App']['AppsOpenFolder'](arg1);
 }
 
 export function AppsUpdate(arg1, arg2) {

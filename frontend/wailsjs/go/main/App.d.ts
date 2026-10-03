@@ -24,7 +24,7 @@ export function AppsGet(arg1:number):Promise<types.App>;
 
 export function AppsList(arg1:number):Promise<Array<types.App>>;
 
-export function AppsOpenInEditor(arg1:number):Promise<types.Ok>;
+export function AppsOpenFolder(arg1:number):Promise<types.Ok>;
 
 export function AppsUpdate(arg1:number,arg2:types.AppUpdateInput):Promise<types.App>;
 

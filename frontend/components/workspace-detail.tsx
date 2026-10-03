@@ -9,6 +9,7 @@ import type { App, StatusEvent, Workspace } from "@/lib/types"
 import { AppRunControls, AppStatusDot } from "@/components/app-run-controls"
 import { appStateLabel } from "@/lib/app-state"
 import { ConfigSetPicker } from "@/components/config-set-picker"
+import { OpenFolderButton } from "@/components/open-folder-button"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -155,6 +156,7 @@ export function WorkspaceDetail({
                       onAppChange={onAppChange}
                       stopPropagation
                     />
+                    <OpenFolderButton appId={app.id} iconOnly />
                     <AppRunControls
                       appId={app.id}
                       running={running}

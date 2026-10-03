@@ -110,7 +110,7 @@ func (a *App) AppsDelete(id int64) (types.Ok, error) {
 	return types.Ok{Ok: true}, nil
 }
 
-func (a *App) AppsOpenInEditor(id int64) (types.Ok, error) {
+func (a *App) AppsOpenFolder(id int64) (types.Ok, error) {
 	app, err := a.db.GetAppT(a.ctx, id)
 	if err != nil {
 		return types.Ok{}, err
@@ -119,7 +119,7 @@ func (a *App) AppsOpenInEditor(id int64) (types.Ok, error) {
 	if !ok {
 		return types.Ok{}, fmt.Errorf("%s", errMsg)
 	}
-	if err := native.OpenInEditor(resolved); err != nil {
+	if err := native.OpenFolder(resolved); err != nil {
 		return types.Ok{}, err
 	}
 	return types.Ok{Ok: true}, nil
