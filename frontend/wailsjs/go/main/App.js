@@ -38,6 +38,10 @@ export function AppsDelete(arg1) {
   return window['go']['main']['App']['AppsDelete'](arg1);
 }
 
+export function AppsEditors() {
+  return window['go']['main']['App']['AppsEditors']();
+}
+
 export function AppsGet(arg1) {
   return window['go']['main']['App']['AppsGet'](arg1);
 }
@@ -48,6 +52,10 @@ export function AppsList(arg1) {
 
 export function AppsOpenFolder(arg1) {
   return window['go']['main']['App']['AppsOpenFolder'](arg1);
+}
+
+export function AppsOpenInEditor(arg1, arg2) {
+  return window['go']['main']['App']['AppsOpenInEditor'](arg1, arg2);
 }
 
 export function AppsUpdate(arg1, arg2) {

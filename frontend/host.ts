@@ -80,6 +80,8 @@ export const api = {
             call(() => Go.AppsUpdate(id, body)),
         delete: (id: number) => call(() => Go.AppsDelete(id)),
         openFolder: (id: number) => call(() => Go.AppsOpenFolder(id)),
+        editors: () => call(() => Go.AppsEditors()),
+        openInEditor: (id: number, editor: string) => call(() => Go.AppsOpenInEditor(id, editor)),
     },
 
     blueprints: {

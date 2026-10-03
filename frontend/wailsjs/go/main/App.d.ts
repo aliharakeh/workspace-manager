@@ -20,11 +20,15 @@ export function AppsCreate(arg1:number,arg2:types.AppCreateInput):Promise<types.
 
 export function AppsDelete(arg1:number):Promise<types.Ok>;
 
+export function AppsEditors():Promise<Array<types.Editor>>;
+
 export function AppsGet(arg1:number):Promise<types.App>;
 
 export function AppsList(arg1:number):Promise<Array<types.App>>;
 
 export function AppsOpenFolder(arg1:number):Promise<types.Ok>;
+
+export function AppsOpenInEditor(arg1:number,arg2:string):Promise<types.Ok>;
 
 export function AppsUpdate(arg1:number,arg2:types.AppUpdateInput):Promise<types.App>;
 

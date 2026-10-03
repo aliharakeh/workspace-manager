@@ -4,6 +4,7 @@ import { handleReadyUrlClick } from "@/lib/api"
 import type { App, StatusEvent } from "@/lib/types"
 import type { AppTab } from "@/lib/routes"
 import { AppRunControls } from "@/components/app-run-controls"
+import { OpenEditorButton } from "@/components/open-editor-button"
 import { OpenFolderButton } from "@/components/open-folder-button"
 import { appStateLabel } from "@/lib/app-state"
 import { ConfigSetSwitcher } from "@/components/config-set-switcher"
@@ -85,6 +86,7 @@ export function AppDetail({
         </div>
         <div className="flex flex-wrap gap-2">
           <OpenFolderButton appId={app.id} />
+          <OpenEditorButton appId={app.id} />
           <Button variant="outline" size="sm" onClick={onEdit}>
             <PencilIcon data-icon="inline-start" />
             Edit

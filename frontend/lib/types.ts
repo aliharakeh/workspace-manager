@@ -6,6 +6,11 @@ export type Workspace = {
     updated_at: string
 }
 
+export type Editor = {
+    id: string
+    name: string
+}
+
 export type App = {
     id: number
     workspace_id: number

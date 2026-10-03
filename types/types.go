@@ -163,6 +163,12 @@ type ListeningProcess struct {
 	Name string `json:"name"`
 }
 
+// Editor is a code editor installed on this machine.
+type Editor struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 type Ok struct {
 	Ok bool `json:"ok"`
 }

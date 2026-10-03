@@ -125,6 +125,29 @@ func (a *App) AppsOpenFolder(id int64) (types.Ok, error) {
 	return types.Ok{Ok: true}, nil
 }
 
+func (a *App) AppsEditors() []types.Editor {
+	out := []types.Editor{}
+	for _, e := range native.Editors() {
+		out = append(out, types.Editor{ID: e.ID, Name: e.Name})
+	}
+	return out
+}
+
+func (a *App) AppsOpenInEditor(id int64, editor string) (types.Ok, error) {
+	app, err := a.db.GetAppT(a.ctx, id)
+	if err != nil {
+		return types.Ok{}, err
+	}
+	ok, resolved, errMsg := lib.ValidateProjectPath(app.ProjectPath)
+	if !ok {
+		return types.Ok{}, fmt.Errorf("%s", errMsg)
+	}
+	if err := native.OpenInEditor(editor, resolved); err != nil {
+		return types.Ok{}, err
+	}
+	return types.Ok{Ok: true}, nil
+}
+
 func (a *App) ConfigSetsList(appID int64) ([]types.ConfigSet, error) {
 	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
 		return nil, err
