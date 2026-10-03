@@ -195,20 +195,22 @@ func (q *Queries) CreateRunCommand(ctx context.Context, arg CreateRunCommandPara
 }
 
 const createRunConfig = `-- name: CreateRunConfig :one
-INSERT INTO run_configs (config_set_id, mode) VALUES (?, ?) RETURNING id, config_set_id, mode, created_at, updated_at
+INSERT INTO run_configs (config_set_id, kind, mode) VALUES (?, ?, ?) RETURNING id, config_set_id, kind, mode, created_at, updated_at
 `
 
 type CreateRunConfigParams struct {
 	ConfigSetID int64  `json:"config_set_id"`
+	Kind        string `json:"kind"`
 	Mode        string `json:"mode"`
 }
 
 func (q *Queries) CreateRunConfig(ctx context.Context, arg CreateRunConfigParams) (RunConfig, error) {
-	row := q.db.QueryRowContext(ctx, createRunConfig, arg.ConfigSetID, arg.Mode)
+	row := q.db.QueryRowContext(ctx, createRunConfig, arg.ConfigSetID, arg.Kind, arg.Mode)
 	var i RunConfig
 	err := row.Scan(
 		&i.ID,
 		&i.ConfigSetID,
+		&i.Kind,
 		&i.Mode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -520,16 +522,22 @@ func (q *Queries) GetReadyUrlPattern(ctx context.Context, id int64) (ReadyUrlPat
 }
 
 const getRunConfigByConfigSet = `-- name: GetRunConfigByConfigSet :one
-SELECT id, config_set_id, mode, created_at, updated_at FROM run_configs WHERE config_set_id = ?
+SELECT id, config_set_id, kind, mode, created_at, updated_at FROM run_configs WHERE config_set_id = ? AND kind = ?
 `
 
+type GetRunConfigByConfigSetParams struct {
+	ConfigSetID int64  `json:"config_set_id"`
+	Kind        string `json:"kind"`
+}
+
 // run_configs (db/run-configs.ts)
-func (q *Queries) GetRunConfigByConfigSet(ctx context.Context, configSetID int64) (RunConfig, error) {
-	row := q.db.QueryRowContext(ctx, getRunConfigByConfigSet, configSetID)
+func (q *Queries) GetRunConfigByConfigSet(ctx context.Context, arg GetRunConfigByConfigSetParams) (RunConfig, error) {
+	row := q.db.QueryRowContext(ctx, getRunConfigByConfigSet, arg.ConfigSetID, arg.Kind)
 	var i RunConfig
 	err := row.Scan(
 		&i.ID,
 		&i.ConfigSetID,
+		&i.Kind,
 		&i.Mode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -981,7 +989,7 @@ const touchRunConfig = `-- name: TouchRunConfig :one
 UPDATE run_configs
 SET updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, config_set_id, mode, created_at, updated_at
+RETURNING id, config_set_id, kind, mode, created_at, updated_at
 `
 
 func (q *Queries) TouchRunConfig(ctx context.Context, id int64) (RunConfig, error) {
@@ -990,6 +998,7 @@ func (q *Queries) TouchRunConfig(ctx context.Context, id int64) (RunConfig, erro
 	err := row.Scan(
 		&i.ID,
 		&i.ConfigSetID,
+		&i.Kind,
 		&i.Mode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -1187,7 +1196,7 @@ const updateRunConfigMode = `-- name: UpdateRunConfigMode :one
 UPDATE run_configs
 SET mode = ?, updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, config_set_id, mode, created_at, updated_at
+RETURNING id, config_set_id, kind, mode, created_at, updated_at
 `
 
 type UpdateRunConfigModeParams struct {
@@ -1201,6 +1210,7 @@ func (q *Queries) UpdateRunConfigMode(ctx context.Context, arg UpdateRunConfigMo
 	err := row.Scan(
 		&i.ID,
 		&i.ConfigSetID,
+		&i.Kind,
 		&i.Mode,
 		&i.CreatedAt,
 		&i.UpdatedAt,

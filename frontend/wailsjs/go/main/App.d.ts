@@ -98,9 +98,11 @@ export function ReadyUrlPatternsList():Promise<Array<types.ReadyUrlPattern>>;
 
 export function ReadyUrlPatternsUpdate(arg1:number,arg2:types.ReadyUrlPatternUpdateInput):Promise<types.ReadyUrlPattern>;
 
-export function RunConfigGet(arg1:number):Promise<types.RunConfig>;
+export function RunConfigGet(arg1:number,arg2:string):Promise<types.RunConfig>;
 
-export function RunConfigSave(arg1:number,arg2:types.RunConfigSaveInput):Promise<types.RunConfig>;
+export function RunConfigSave(arg1:number,arg2:string,arg3:types.RunConfigSaveInput):Promise<types.RunConfig>;
+
+export function RunnerBuild(arg1:number):Promise<types.StatusEvent>;
 
 export function RunnerOutput(arg1:number,arg2:number):Promise<types.RunnerOutput>;
 

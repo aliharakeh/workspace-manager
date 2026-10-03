@@ -75,7 +75,7 @@ func (d *DB) withCommands(ctx context.Context, cfg RunConfig) (types.RunConfig, 
 		return types.RunConfig{}, err
 	}
 	out := types.RunConfig{
-		ID: cfg.ID, ConfigSetID: cfg.ConfigSetID, Mode: cfg.Mode,
+		ID: cfg.ID, ConfigSetID: cfg.ConfigSetID, Kind: cfg.Kind, Mode: cfg.Mode,
 		CreatedAt: cfg.CreatedAt, UpdatedAt: cfg.UpdatedAt,
 		Commands: make([]types.RunCommand, 0, len(cmds)),
 	}
@@ -177,8 +177,10 @@ func (d *DB) CreateAppT(ctx context.Context, workspaceID int64, name, projectPat
 	if err != nil {
 		return types.App{}, err
 	}
-	if _, err := q.CreateRunConfig(ctx, CreateRunConfigParams{ConfigSetID: set.ID, Mode: "parallel"}); err != nil {
-		return types.App{}, err
+	for _, kind := range []string{types.KindRun, types.KindBuild} {
+		if _, err := q.CreateRunConfig(ctx, CreateRunConfigParams{ConfigSetID: set.ID, Kind: kind, Mode: DefaultMode(kind)}); err != nil {
+			return types.App{}, err
+		}
 	}
 	if _, err := q.SetActiveConfigSet(ctx, SetActiveConfigSetParams{ActiveConfigSetID: &set.ID, ID: app.ID}); err != nil {
 		return types.App{}, err
@@ -248,8 +250,10 @@ func (d *DB) CreateConfigSetT(ctx context.Context, appID int64, name string) (ty
 	if err != nil {
 		return types.ConfigSet{}, UniqueErr(err, "A config set with this name already exists")
 	}
-	if _, err := d.GetOrCreateRunConfig(ctx, row.ID); err != nil {
-		return types.ConfigSet{}, err
+	for _, kind := range []string{types.KindRun, types.KindBuild} {
+		if _, err := d.GetOrCreateRunConfig(ctx, row.ID, kind); err != nil {
+			return types.ConfigSet{}, err
+		}
 	}
 	return configSetFrom(row), nil
 }
@@ -295,23 +299,32 @@ func (d *DB) ResolveActive(ctx context.Context, appID int64) (types.ConfigSet, e
 	return created, nil
 }
 
-func (d *DB) GetOrCreateRunConfig(ctx context.Context, configSetID int64) (types.RunConfig, error) {
-	cfg, err := d.GetRunConfigByConfigSet(ctx, configSetID)
+// DefaultMode is the execution mode a new config of the kind starts with: a
+// run starts its processes together, a build runs its steps in order.
+func DefaultMode(kind string) string {
+	if kind == types.KindBuild {
+		return "sequential"
+	}
+	return "parallel"
+}
+
+func (d *DB) GetOrCreateRunConfig(ctx context.Context, configSetID int64, kind string) (types.RunConfig, error) {
+	cfg, err := d.GetRunConfigByConfigSet(ctx, GetRunConfigByConfigSetParams{ConfigSetID: configSetID, Kind: kind})
 	if err == nil {
 		return d.withCommands(ctx, cfg)
 	}
 	if err != sql.ErrNoRows {
 		return types.RunConfig{}, err
 	}
-	created, err := d.CreateRunConfig(ctx, CreateRunConfigParams{ConfigSetID: configSetID, Mode: "parallel"})
+	created, err := d.CreateRunConfig(ctx, CreateRunConfigParams{ConfigSetID: configSetID, Kind: kind, Mode: DefaultMode(kind)})
 	if err != nil {
 		return types.RunConfig{}, err
 	}
 	return d.withCommands(ctx, created)
 }
 
-func (d *DB) GetRunConfigByConfigSetT(ctx context.Context, configSetID int64) (*types.RunConfig, error) {
-	cfg, err := d.GetRunConfigByConfigSet(ctx, configSetID)
+func (d *DB) GetRunConfigByConfigSetT(ctx context.Context, configSetID int64, kind string) (*types.RunConfig, error) {
+	cfg, err := d.GetRunConfigByConfigSet(ctx, GetRunConfigByConfigSetParams{ConfigSetID: configSetID, Kind: kind})
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -325,17 +338,17 @@ func (d *DB) GetRunConfigByConfigSetT(ctx context.Context, configSetID int64) (*
 	return &out, nil
 }
 
-func (d *DB) UpsertRunConfig(ctx context.Context, configSetID int64, mode *string, commands []types.RunCommandInput) (types.RunConfig, error) {
-	cfg, err := d.GetRunConfigByConfigSet(ctx, configSetID)
+func (d *DB) UpsertRunConfig(ctx context.Context, configSetID int64, kind string, mode *string, commands []types.RunCommandInput) (types.RunConfig, error) {
+	cfg, err := d.GetRunConfigByConfigSet(ctx, GetRunConfigByConfigSetParams{ConfigSetID: configSetID, Kind: kind})
 	if err != nil && err != sql.ErrNoRows {
 		return types.RunConfig{}, err
 	}
 	if err == sql.ErrNoRows {
-		m := "parallel"
+		m := DefaultMode(kind)
 		if mode != nil && *mode != "" {
 			m = *mode
 		}
-		cfg, err = d.CreateRunConfig(ctx, CreateRunConfigParams{ConfigSetID: configSetID, Mode: m})
+		cfg, err = d.CreateRunConfig(ctx, CreateRunConfigParams{ConfigSetID: configSetID, Kind: kind, Mode: m})
 		if err != nil {
 			return types.RunConfig{}, err
 		}
@@ -362,6 +375,28 @@ func (d *DB) UpsertRunConfig(ctx context.Context, configSetID int64, mode *strin
 		}
 	}
 	return d.withCommands(ctx, cfg)
+}
+
+// ConfigSetDetailT loads a config set with its env vars, templates, and its
+// run and build configs (nil where none was ever created).
+func (d *DB) ConfigSetDetailT(ctx context.Context, set types.ConfigSet) (types.ConfigSetDetail, error) {
+	envVars, err := d.ListEnvVarsT(ctx, set.ID)
+	if err != nil {
+		return types.ConfigSetDetail{}, err
+	}
+	templates, err := d.ListTemplatesT(ctx, set.ID)
+	if err != nil {
+		return types.ConfigSetDetail{}, err
+	}
+	runCfg, err := d.GetRunConfigByConfigSetT(ctx, set.ID, types.KindRun)
+	if err != nil {
+		return types.ConfigSetDetail{}, err
+	}
+	buildCfg, err := d.GetRunConfigByConfigSetT(ctx, set.ID, types.KindBuild)
+	if err != nil {
+		return types.ConfigSetDetail{}, err
+	}
+	return types.ConfigSetDetail{ConfigSet: set, EnvVars: envVars, Templates: templates, RunConfig: runCfg, BuildConfig: buildCfg}, nil
 }
 
 func (d *DB) ListEnvVarsT(ctx context.Context, configSetID int64) ([]types.EnvVar, error) {
@@ -454,7 +489,7 @@ func HasAnyPart(parts *types.CopyParts) bool {
 	if parts == nil {
 		return true
 	}
-	return isPartEnabled(parts.Env) || isPartEnabled(parts.Templates) || isPartEnabled(parts.Run)
+	return isPartEnabled(parts.Env) || isPartEnabled(parts.Templates) || isPartEnabled(parts.Run) || isPartEnabled(parts.Build)
 }
 
 func stringList(v any) (all bool, items []string, skip bool) {
@@ -548,13 +583,21 @@ func (d *DB) CopyFrom(ctx context.Context, sourceID, targetID int64, parts *type
 	}
 	envAll, envItems, envSkip := stringList(nil)
 	tplAll, tplItems, tplSkip := stringList(nil)
-	runAll, runIDs, runSkip := intList(nil)
+	// What to copy of the run and the build command list, by kind (nil: all).
+	cmdParts := map[string]any{}
 	if parts != nil {
 		envAll, envItems, envSkip = stringList(parts.Env)
 		tplAll, tplItems, tplSkip = stringList(parts.Templates)
-		runAll, runIDs, runSkip = intList(parts.Run)
+		cmdParts[types.KindRun], cmdParts[types.KindBuild] = parts.Run, parts.Build
 	}
-	if envSkip && tplSkip && runSkip {
+	cmdKinds := []string{types.KindRun, types.KindBuild}
+	cmdSkip := true
+	for _, kind := range cmdKinds {
+		if _, _, skip := intList(cmdParts[kind]); !skip {
+			cmdSkip = false
+		}
+	}
+	if envSkip && tplSkip && cmdSkip {
 		return fmt.Errorf("Select at least one part to copy")
 	}
 
@@ -592,23 +635,28 @@ func (d *DB) CopyFrom(ctx context.Context, sourceID, targetID int64, parts *type
 			}
 		}
 	}
-	if !runSkip {
-		sourceRun, err := d.GetRunConfigByConfigSetT(ctx, sourceID)
+	for _, kind := range cmdKinds {
+		all, ids, skip := intList(cmdParts[kind])
+		if skip {
+			continue
+		}
+		source, err := d.GetRunConfigByConfigSetT(ctx, sourceID, kind)
 		if err != nil {
 			return err
 		}
 		var cmds []types.RunCommandInput
-		mode := "parallel"
-		if sourceRun != nil {
-			mode = sourceRun.Mode
-			for _, c := range sourceRun.Commands {
-				if runAll || containsInt(runIDs, c.ID) {
+		mode := DefaultMode(kind)
+		if source != nil {
+			mode = source.Mode
+			for _, c := range source.Commands {
+				if all || containsInt(ids, c.ID) {
 					cmds = append(cmds, types.RunCommandInput{Label: c.Label, Command: c.Command})
 				}
 			}
 		}
-		_, err = d.UpsertRunConfig(ctx, targetID, &mode, cmds)
-		return err
+		if _, err := d.UpsertRunConfig(ctx, targetID, kind, &mode, cmds); err != nil {
+			return err
+		}
 	}
 	return nil
 }

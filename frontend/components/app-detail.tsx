@@ -4,11 +4,12 @@ import { handleReadyUrlClick } from "@/lib/api"
 import type { App, StatusEvent } from "@/lib/types"
 import type { AppTab } from "@/lib/routes"
 import { AppRunControls } from "@/components/app-run-controls"
+import { appStateLabel } from "@/lib/app-state"
 import { ConfigSetSwitcher } from "@/components/config-set-switcher"
 import { AppAIPanel } from "@/components/app-ai-panel"
 import { EnvVarsPanel } from "@/components/env-vars-panel"
 import { TemplatesPanel } from "@/components/templates-panel"
-import { RunConfigPanel } from "@/components/run-config-panel"
+import { CommandConfigPanel } from "@/components/command-config-panel"
 import { LogsPanel } from "@/components/logs-panel"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -38,6 +39,7 @@ export function AppDetail({
   onAppChange,
 }: AppDetailProps) {
   const running = !!status?.running
+  const building = running && status?.kind === "build"
   const [panelEpoch, setPanelEpoch] = useState(0)
   const readyUrls = useMemo(() => {
     if (!running) return []
@@ -67,7 +69,7 @@ export function AppDetail({
               {app.name}
             </h1>
             <Badge variant={running ? "default" : "outline"}>
-              {running ? "Running" : "Idle"}
+              {appStateLabel(running, building)}
             </Badge>
           </div>
           <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
@@ -93,6 +95,7 @@ export function AppDetail({
           <AppRunControls
             appId={app.id}
             running={running}
+            building={building}
             onStatus={handleStatus}
           />
           {readyUrls.map((url) => (
@@ -126,6 +129,7 @@ export function AppDetail({
           <TabsTrigger value="env">Env</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="run">Run</TabsTrigger>
+          <TabsTrigger value="build">Build</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
         </TabsList>
@@ -136,7 +140,10 @@ export function AppDetail({
           <TemplatesPanel key={panelKey} appId={app.id} />
         </TabsContent>
         <TabsContent value="run" className="mt-4 min-h-0 overflow-y-auto">
-          <RunConfigPanel key={panelKey} appId={app.id} />
+          <CommandConfigPanel key={panelKey} appId={app.id} kind="run" />
+        </TabsContent>
+        <TabsContent value="build" className="mt-4 min-h-0 overflow-y-auto">
+          <CommandConfigPanel key={panelKey} appId={app.id} kind="build" />
         </TabsContent>
         <TabsContent value="ai" className="flex min-h-0 flex-1 flex-col overflow-hidden pt-4" keepMounted>
           <AppAIPanel

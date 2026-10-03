@@ -137,19 +137,7 @@ func (a *App) ConfigSetsGetDetail(id int64) (types.ConfigSetDetail, error) {
 	if err != nil {
 		return types.ConfigSetDetail{}, err
 	}
-	envVars, err := a.db.ListEnvVarsT(a.ctx, id)
-	if err != nil {
-		return types.ConfigSetDetail{}, err
-	}
-	templates, err := a.db.ListTemplatesT(a.ctx, id)
-	if err != nil {
-		return types.ConfigSetDetail{}, err
-	}
-	runCfg, err := a.db.GetRunConfigByConfigSetT(a.ctx, id)
-	if err != nil {
-		return types.ConfigSetDetail{}, err
-	}
-	return types.ConfigSetDetail{ConfigSet: set, EnvVars: envVars, Templates: templates, RunConfig: runCfg}, nil
+	return a.db.ConfigSetDetailT(a.ctx, set)
 }
 
 func (a *App) ConfigSetsCreate(appID int64, body types.ConfigSetCreateInput) (types.ConfigSet, error) {
@@ -457,7 +445,20 @@ func (a *App) PackageScriptsList(appID int64) (types.PackageScripts, error) {
 	return lib.ReadPackageScripts(app.ProjectPath), nil
 }
 
-func (a *App) RunConfigGet(appID int64) (types.RunConfig, error) {
+// checkConfigKind rejects anything but the two kinds of command list.
+func checkConfigKind(kind string) error {
+	if kind != types.KindRun && kind != types.KindBuild {
+		return fmt.Errorf("kind must be %s or %s", types.KindRun, types.KindBuild)
+	}
+	return nil
+}
+
+// RunConfigGet returns the active config set's command list of a kind: "run"
+// (starts the app) or "build" (builds it).
+func (a *App) RunConfigGet(appID int64, kind string) (types.RunConfig, error) {
+	if err := checkConfigKind(kind); err != nil {
+		return types.RunConfig{}, err
+	}
 	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
 		return types.RunConfig{}, err
 	}
@@ -465,10 +466,13 @@ func (a *App) RunConfigGet(appID int64) (types.RunConfig, error) {
 	if err != nil {
 		return types.RunConfig{}, err
 	}
-	return a.db.GetOrCreateRunConfig(a.ctx, set.ID)
+	return a.db.GetOrCreateRunConfig(a.ctx, set.ID, kind)
 }
 
-func (a *App) RunConfigSave(appID int64, body types.RunConfigSaveInput) (types.RunConfig, error) {
+func (a *App) RunConfigSave(appID int64, kind string, body types.RunConfigSaveInput) (types.RunConfig, error) {
+	if err := checkConfigKind(kind); err != nil {
+		return types.RunConfig{}, err
+	}
 	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
 		return types.RunConfig{}, err
 	}
@@ -489,7 +493,7 @@ func (a *App) RunConfigSave(appID int64, body types.RunConfigSaveInput) (types.R
 	if err != nil {
 		return types.RunConfig{}, err
 	}
-	return a.db.UpsertRunConfig(a.ctx, set.ID, body.Mode, cmds)
+	return a.db.UpsertRunConfig(a.ctx, set.ID, kind, body.Mode, cmds)
 }
 
 func (a *App) RunnerStatus(appID int64) types.StatusEvent {
@@ -524,7 +528,17 @@ func (a *App) RunnerRun(appID int64) (types.StatusEvent, error) {
 	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
 		return types.StatusEvent{}, err
 	}
-	return a.runner.Start(a.ctx, appID)
+	return a.runner.Start(a.ctx, appID, types.KindRun)
+}
+
+// RunnerBuild runs the active config set's build commands. It shares the app's
+// session with RunnerRun: it fails while the app is running or building, and
+// RunnerStop stops it.
+func (a *App) RunnerBuild(appID int64) (types.StatusEvent, error) {
+	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
+		return types.StatusEvent{}, err
+	}
+	return a.runner.Start(a.ctx, appID, types.KindBuild)
 }
 
 func (a *App) RunnerStop(appID int64) (types.StatusEvent, error) {

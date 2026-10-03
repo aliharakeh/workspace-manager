@@ -164,6 +164,8 @@ export function AppSidebar({
                         <SidebarMenuSub>
                           {apps.map((app) => {
                             const running = !!statusByAppId[app.id]?.running
+                            const building =
+                              running && statusByAppId[app.id]?.kind === "build"
                             return (
                               <SidebarMenuSubItem key={app.id}>
                                 <div className="flex w-full min-w-0 items-center justify-between gap-1">
@@ -174,13 +176,17 @@ export function AppSidebar({
                                       onSelectApp(workspace.id, app.id)
                                     }
                                   >
-                                    <AppStatusDot running={running} />
+                                    <AppStatusDot
+                                      running={running}
+                                      building={building}
+                                    />
                                     <span className="truncate">{app.name}</span>
                                   </SidebarMenuSubButton>
                                   <AppRunControls
                                     className="shrink-0"
                                     appId={app.id}
                                     running={running}
+                                    building={building}
                                     onStatus={onStatus}
                                     variant="compact"
                                   />

@@ -42,7 +42,7 @@ export function normalizeNewlines(text: string): string {
 export function langForPath(path: string): string {
   const name = path.replace(/\\/g, "/").split("/").pop() ?? path
   if (name === "env" || name === ".env" || name.endsWith(".env")) return "ini"
-  if (name === "run") return "txt"
+  if (name === "run" || name === "build") return "txt"
   const ext = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1) : "txt"
   const map: Record<string, string> = {
     ts: "typescript",
@@ -109,17 +109,20 @@ export function buildAppAIDiff(
     })
   }
 
-  if (patch.run) {
-    const modeFrom = current.run_config?.mode ?? "parallel"
-    const modeTo = patch.run.mode ?? modeFrom
-    const from = (current.run_config?.commands ?? []).map(cmdKey)
-    const to = (patch.run.commands ?? current.run_config?.commands ?? []).map(
-      cmdKey
-    )
+  const commandLists = [
+    { path: "run", patch: patch.run, current: current.run_config, defaultMode: "parallel" },
+    { path: "build", patch: patch.build, current: current.build_config, defaultMode: "sequential" },
+  ] as const
+  for (const list of commandLists) {
+    if (!list.patch) continue
+    const modeFrom: RunMode = list.current?.mode ?? list.defaultMode
+    const modeTo = list.patch.mode ?? modeFrom
+    const from = (list.current?.commands ?? []).map(cmdKey)
+    const to = (list.patch.commands ?? list.current?.commands ?? []).map(cmdKey)
     const oldText = dumpRun(modeFrom, from)
     const newText = dumpRun(modeTo, to)
     if (oldText !== newText) {
-      files.push({ path: "run", oldText, newText })
+      files.push({ path: list.path, oldText, newText })
     }
   }
 

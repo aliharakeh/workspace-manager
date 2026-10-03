@@ -21,6 +21,7 @@ type session struct {
 	id              string
 	appID           int64
 	appName         string
+	kind            string
 	mode            string
 	processes       []types.ProcessState
 	children        map[int64]*childProc
@@ -42,6 +43,14 @@ type session struct {
 	// opens after the command started.
 	outMu   sync.Mutex
 	outputs map[int64]*termBuffer
+}
+
+// subject names what the session executes, for notifications.
+func (s *session) subject() string {
+	if s.kind == types.KindBuild {
+		return s.appName + " build"
+	}
+	return s.appName
 }
 
 type Runner struct {
@@ -96,7 +105,7 @@ func (r *Runner) statusEvent(s *session, errMsg string) types.StatusEvent {
 		}
 	}
 	ev := types.StatusEvent{
-		Type: "status", SessionID: s.id, AppID: s.appID,
+		Type: "status", SessionID: s.id, AppID: s.appID, Kind: s.kind,
 		Running: s.running, Processes: procs, Ts: time.Now().UnixMilli(),
 	}
 	if errMsg != "" {
@@ -118,7 +127,7 @@ func (r *Runner) systemLog(s *session, commandID int64, text string) {
 }
 
 func (r *Runner) noteReadyURL(s *session, commandID int64, line string) {
-	if !s.running {
+	if !s.running || s.kind == types.KindBuild {
 		return
 	}
 	match := MatchReadyURL(context.Background(), r.db, line)
@@ -231,7 +240,7 @@ func (r *Runner) spawnCommand(s *session, cmd types.RunCommand, cwd string, env 
 		processState.ExitCode = &code
 		s.hadError = true
 		r.systemLog(s, cmd.ID, "Failed to start: "+err.Error())
-		r.maybeNotify(s, NotifyError, s.appName+" failed to start", err.Error())
+		r.maybeNotify(s, NotifyError, s.subject()+" failed to start", err.Error())
 		r.emit(s, r.statusEvent(s, ""))
 		return 1
 	}
@@ -287,7 +296,7 @@ func (r *Runner) spawnCommand(s *session, cmd types.RunCommand, cwd string, env 
 		processState.Status = "error"
 		s.hadError = true
 		r.systemLog(s, cmd.ID, fmt.Sprintf("Process failed with code %d", exitCode))
-		r.maybeNotify(s, NotifyError, s.appName+" failed",
+		r.maybeNotify(s, NotifyError, s.subject()+" failed",
 			fmt.Sprintf("%s exited with code %d", processState.Label, exitCode))
 	}
 	r.emit(s, r.statusEvent(s, ""))
@@ -312,7 +321,7 @@ func (r *Runner) runSession(s *session) {
 			cmdID = s.processes[0].CommandID
 		}
 		r.systemLog(s, cmdID, "Template apply failed: "+msg)
-		r.maybeNotify(s, NotifyError, s.appName+" failed to start", msg)
+		r.maybeNotify(s, NotifyError, s.subject()+" failed to start", msg)
 		r.emit(s, r.statusEvent(s, "Template apply failed: "+msg))
 		return
 	}
@@ -330,7 +339,7 @@ func (r *Runner) runSession(s *session) {
 	}
 	envMap, _ := r.db.EnvToRecord(ctx, set.ID)
 	env := native.MergeTerminalEnv(envMap)
-	config, err := r.db.GetRunConfigByConfigSetT(ctx, set.ID)
+	config, err := r.db.GetRunConfigByConfigSetT(ctx, set.ID, s.kind)
 	if err != nil {
 		s.running = false
 		r.emit(s, r.statusEvent(s, err.Error()))
@@ -341,7 +350,10 @@ func (r *Runner) runSession(s *session) {
 		commands = config.Commands
 	}
 
-	r.startIdleWatcher(s)
+	// Only a run is waited on to come up; a build just ends.
+	if s.kind == types.KindRun {
+		r.startIdleWatcher(s)
+	}
 
 	func() {
 		defer func() {
@@ -354,7 +366,7 @@ func (r *Runner) runSession(s *session) {
 				r.systemLog(s, cmdID, "Original files restored")
 			}
 			if !s.userStopped && !s.hadError {
-				r.maybeNotify(s, NotifyFinished, s.appName+" finished", "")
+				r.maybeNotify(s, NotifyFinished, s.subject()+" finished", "")
 			}
 			r.emit(s, r.statusEvent(s, ""))
 		}()
@@ -374,24 +386,24 @@ func (r *Runner) runSession(s *session) {
 			}
 			code := r.spawnCommand(s, c, app.ProjectPath, env)
 			if code != 0 {
-				r.systemLog(s, c.ID, "Sequential run stopped due to non-zero exit")
+				r.systemLog(s, c.ID, "Sequential "+s.kind+" stopped due to non-zero exit")
 				break
 			}
 		}
 	}()
 }
 
-func (r *Runner) createSession(ctx context.Context, appID int64) (*session, error) {
+func (r *Runner) createSession(ctx context.Context, appID int64, kind string) (*session, error) {
 	set, err := r.db.ResolveActive(ctx, appID)
 	if err != nil {
 		return nil, err
 	}
-	config, err := r.db.GetOrCreateRunConfig(ctx, set.ID)
+	config, err := r.db.GetOrCreateRunConfig(ctx, set.ID, kind)
 	if err != nil {
 		return nil, err
 	}
 	if len(config.Commands) == 0 {
-		return nil, fmt.Errorf("No run commands configured")
+		return nil, fmt.Errorf("No %s commands configured", kind)
 	}
 	procs := make([]types.ProcessState, 0, len(config.Commands))
 	for _, cmd := range config.Commands {
@@ -407,6 +419,7 @@ func (r *Runner) createSession(ctx context.Context, appID int64) (*session, erro
 	return &session{
 		id:        fmt.Sprintf("%d-%d", appID, time.Now().UnixMilli()),
 		appID:     appID,
+		kind:      kind,
 		mode:      config.Mode,
 		processes: procs,
 		children:  map[int64]*childProc{},
@@ -465,19 +478,26 @@ func (r *Runner) Resize(appID, commandID int64, cols, rows int) {
 	}
 }
 
-func (r *Runner) Start(ctx context.Context, appID int64) (types.StatusEvent, error) {
+// Start runs the app's run commands or build commands, by kind. An app has one
+// session at a time because both apply and restore the templates, so Start
+// fails while either kind is still going.
+func (r *Runner) Start(ctx context.Context, appID int64, kind string) (types.StatusEvent, error) {
 	if _, err := r.db.GetAppT(ctx, appID); err != nil {
 		return types.StatusEvent{}, err
 	}
 	r.mu.Lock()
 	existing := r.sessions[appID]
 	if existing != nil && existing.running {
+		building := existing.kind == types.KindBuild
 		r.mu.Unlock()
+		if building {
+			return types.StatusEvent{}, fmt.Errorf("App is already building")
+		}
 		return types.StatusEvent{}, fmt.Errorf("App is already running")
 	}
 	r.mu.Unlock()
 
-	s, err := r.createSession(ctx, appID)
+	s, err := r.createSession(ctx, appID, kind)
 	if err != nil {
 		return types.StatusEvent{}, err
 	}
@@ -542,7 +562,7 @@ func (r *Runner) Reload(ctx context.Context, appID int64) (types.StatusEvent, er
 			return types.StatusEvent{}, err
 		}
 	}
-	return r.Start(ctx, appID)
+	return r.Start(ctx, appID, types.KindRun)
 }
 
 func (r *Runner) StopAll(ctx context.Context) {

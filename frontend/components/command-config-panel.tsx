@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/input-group'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { api } from '@/lib/api'
-import type { PackageScript, RunMode } from '@/lib/types'
+import type { CommandKind, PackageScript, RunMode } from '@/lib/types'
 import {
     ChevronDownIcon,
     PlusIcon,
@@ -74,11 +74,20 @@ function ScriptMenuItems({
     )
 }
 
-type RunConfigPanelProps = {
-    appId: number
+const KIND_COPY: Record<CommandKind, { noun: string; placeholder: string }> = {
+    run: { noun: 'run', placeholder: 'npm run dev' },
+    build: { noun: 'build', placeholder: 'npm run build' },
 }
 
-export function RunConfigPanel({ appId }: RunConfigPanelProps) {
+type CommandConfigPanelProps = {
+    appId: number
+    /** Which command list to edit: the run config or the build config. */
+    kind: CommandKind
+}
+
+/** Editor for an app's run or build config: an execution mode and its commands. */
+export function CommandConfigPanel({ appId, kind }: CommandConfigPanelProps) {
+    const { noun, placeholder } = KIND_COPY[kind]
     const [mode, setMode] = useState<RunMode>('parallel')
     const [commands, setCommands] = useState<DraftCommand[]>([])
     const [packageScripts, setPackageScripts] = useState<PackageScript[]>([])
@@ -102,7 +111,7 @@ export function RunConfigPanel({ appId }: RunConfigPanelProps) {
         ;(async () => {
             setLoading(true)
             try {
-                const config = await api.runConfig.get(appId)
+                const config = await api.runConfig.get(appId, kind)
                 if (cancelled) return
                 setMode(config.mode)
                 setCommands(
@@ -113,7 +122,7 @@ export function RunConfigPanel({ appId }: RunConfigPanelProps) {
                     })),
                 )
             } catch (err) {
-                toast.error(err instanceof Error ? err.message : 'Failed to load run config')
+                toast.error(err instanceof Error ? err.message : `Failed to load ${noun} config`)
             } finally {
                 if (!cancelled) setLoading(false)
             }
@@ -121,7 +130,7 @@ export function RunConfigPanel({ appId }: RunConfigPanelProps) {
         return () => {
             cancelled = true
         }
-    }, [appId])
+    }, [appId, kind])
 
     useEffect(() => {
         let cancelled = false
@@ -164,7 +173,7 @@ export function RunConfigPanel({ appId }: RunConfigPanelProps) {
         }
         setSaving(true)
         try {
-            const saved = await api.runConfig.save(appId, {
+            const saved = await api.runConfig.save(appId, kind, {
                 mode,
                 commands: commands.map(c => ({
                     label: c.label.trim() || null,
@@ -179,7 +188,7 @@ export function RunConfigPanel({ appId }: RunConfigPanelProps) {
                     command: c.command,
                 })),
             )
-            toast.success('Run config saved')
+            toast.success(`${noun[0]!.toUpperCase()}${noun.slice(1)} config saved`)
         } catch (err) {
             toast.error(err instanceof Error ? err.message : 'Failed to save')
         } finally {
@@ -270,7 +279,7 @@ export function RunConfigPanel({ appId }: RunConfigPanelProps) {
                             />
                             <Input
                                 className="flex-1 font-mono"
-                                placeholder="npm run dev"
+                                placeholder={placeholder}
                                 value={cmd.command}
                                 onChange={e =>
                                     setCommands(prev =>
@@ -337,7 +346,7 @@ export function RunConfigPanel({ appId }: RunConfigPanelProps) {
                     </DropdownMenu>
                 ) : null}
                 <Button disabled={saving} onClick={() => void handleSave()}>
-                    {saving ? 'Saving…' : 'Save run config'}
+                    {saving ? 'Saving…' : `Save ${noun} config`}
                 </Button>
             </div>
 
@@ -352,8 +361,8 @@ export function RunConfigPanel({ appId }: RunConfigPanelProps) {
                         <AlertDialogTitle>Remove command?</AlertDialogTitle>
                         <AlertDialogDescription>
                             {pendingName
-                                ? `This removes “${pendingName}” from the run config. Save to keep the change.`
-                                : 'This removes the command from the run config. Save to keep the change.'}
+                                ? `This removes “${pendingName}” from the ${noun} config. Save to keep the change.`
+                                : `This removes the command from the ${noun} config. Save to keep the change.`}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

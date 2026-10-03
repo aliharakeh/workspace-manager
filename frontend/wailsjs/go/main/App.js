@@ -194,12 +194,16 @@ export function ReadyUrlPatternsUpdate(arg1, arg2) {
   return window['go']['main']['App']['ReadyUrlPatternsUpdate'](arg1, arg2);
 }
 
-export function RunConfigGet(arg1) {
-  return window['go']['main']['App']['RunConfigGet'](arg1);
+export function RunConfigGet(arg1, arg2) {
+  return window['go']['main']['App']['RunConfigGet'](arg1, arg2);
 }
 
-export function RunConfigSave(arg1, arg2) {
-  return window['go']['main']['App']['RunConfigSave'](arg1, arg2);
+export function RunConfigSave(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RunConfigSave'](arg1, arg2, arg3);
+}
+
+export function RunnerBuild(arg1) {
+  return window['go']['main']['App']['RunnerBuild'](arg1);
 }
 
 export function RunnerOutput(arg1, arg2) {

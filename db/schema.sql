@@ -60,16 +60,19 @@ CREATE TABLE IF NOT EXISTS templates (
 CREATE INDEX IF NOT EXISTS idx_templates_config_set_id ON templates (config_set_id);
 CREATE UNIQUE INDEX IF NOT EXISTS templates_config_set_id_file_path_unique ON templates (config_set_id, file_path);
 
+-- A config set has one command list per kind: 'run' starts the app, 'build'
+-- builds it. Both are stored here and in run_commands.
 CREATE TABLE IF NOT EXISTS run_configs (
   id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
   config_set_id integer NOT NULL,
+  kind text DEFAULT 'run' NOT NULL,
   mode text DEFAULT 'parallel' NOT NULL,
   created_at text DEFAULT (datetime('now')) NOT NULL,
   updated_at text DEFAULT (datetime('now')) NOT NULL,
   FOREIGN KEY (config_set_id) REFERENCES config_sets (id) ON DELETE cascade
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS run_configs_config_set_id_unique ON run_configs (config_set_id);
+CREATE UNIQUE INDEX IF NOT EXISTS run_configs_config_set_id_kind_unique ON run_configs (config_set_id, kind);
 
 CREATE TABLE IF NOT EXISTS run_commands (
   id integer PRIMARY KEY AUTOINCREMENT NOT NULL,

@@ -67,6 +67,7 @@ type CopySel = {
   env: CategorySel
   templates: CategorySel
   run: CategorySel
+  build: CategorySel
 }
 
 function blankCategory(): CategorySel {
@@ -78,6 +79,7 @@ function blankSel(): CopySel {
     env: blankCategory(),
     templates: blankCategory(),
     run: blankCategory(),
+    build: blankCategory(),
   }
 }
 
@@ -96,6 +98,7 @@ function selToParts(sel: CopySel): CopyParts {
     env: categoryToPart(sel.env),
     templates: categoryToPart(sel.templates),
     run: runToPart(sel.run),
+    build: runToPart(sel.build),
   }
 }
 
@@ -108,7 +111,8 @@ function partsEnabled(parts: CopyParts): boolean {
   return (
     isPartEnabled(parts.env) ||
     isPartEnabled(parts.templates) ||
-    isPartEnabled(parts.run)
+    isPartEnabled(parts.run) ||
+    isPartEnabled(parts.build)
   )
 }
 
@@ -277,6 +281,9 @@ function PartsPicker({
         <TabsTrigger value="run" className="flex-1">
           Run config
         </TabsTrigger>
+        <TabsTrigger value="build" className="flex-1">
+          Build config
+        </TabsTrigger>
       </TabsList>
       <TabsContent value="env" className="mt-3">
         <CategoryPicker
@@ -312,6 +319,19 @@ function PartsPicker({
           }))}
           sel={sel.run}
           onChange={(run) => onChange({ ...sel, run })}
+          query={query}
+          onQueryChange={setQuery}
+        />
+      </TabsContent>
+      <TabsContent value="build" className="mt-3">
+        <CategoryPicker
+          items={(detail.build_config?.commands ?? []).map((c) => ({
+            id: String(c.id),
+            title: c.label ?? c.command,
+            sub: c.label ? c.command : undefined,
+          }))}
+          sel={sel.build}
+          onChange={(build) => onChange({ ...sel, build })}
           query={query}
           onQueryChange={setQuery}
         />
@@ -585,7 +605,7 @@ export function ConfigSetSwitcher({
           </DropdownMenu>
         </div>
         <p className="text-xs text-muted-foreground">
-          Each set bundles its own env vars, templates, and run commands — use
+          Each set bundles its own env vars, templates, run and build commands — use
           one per environment (e.g. dev, staging, prod). Switch the active set,
           or copy selected items between sets.
         </p>
@@ -596,7 +616,8 @@ export function ConfigSetSwitcher({
           <DialogHeader>
             <DialogTitle>New config set</DialogTitle>
             <DialogDescription>
-              Each set has its own env vars, templates, and run config.
+              Each set has its own env vars, templates, run config, and build
+              config.
               Optionally copy selected parts from an existing set.
             </DialogDescription>
           </DialogHeader>
@@ -774,7 +795,7 @@ export function ConfigSetSwitcher({
             <AlertDialogTitle>Delete config set?</AlertDialogTitle>
             <AlertDialogDescription>
               This permanently deletes “{active?.name}” and all of its env vars,
-              templates, and run config.
+              templates, run config, and build config.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

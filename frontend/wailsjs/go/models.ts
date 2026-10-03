@@ -380,6 +380,7 @@ export namespace types {
 	    env?: AppAIEnvPatch;
 	    templates?: AppAITemplatePatch[];
 	    run?: AppAIRunPatch;
+	    build?: AppAIRunPatch;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppAIPatch(source);
@@ -391,6 +392,7 @@ export namespace types {
 	        this.env = this.convertValues(source["env"], AppAIEnvPatch);
 	        this.templates = this.convertValues(source["templates"], AppAITemplatePatch);
 	        this.run = this.convertValues(source["run"], AppAIRunPatch);
+	        this.build = this.convertValues(source["build"], AppAIRunPatch);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -761,6 +763,7 @@ export namespace types {
 	    env?: any;
 	    templates?: any;
 	    run?: any;
+	    build?: any;
 	
 	    static createFrom(source: any = {}) {
 	        return new CopyParts(source);
@@ -771,6 +774,7 @@ export namespace types {
 	        this.env = source["env"];
 	        this.templates = source["templates"];
 	        this.run = source["run"];
+	        this.build = source["build"];
 	    }
 	}
 	export class ConfigSetCreateInput {
@@ -836,6 +840,7 @@ export namespace types {
 	export class RunConfig {
 	    id: number;
 	    config_set_id: number;
+	    kind: string;
 	    mode: string;
 	    created_at: string;
 	    updated_at: string;
@@ -849,6 +854,7 @@ export namespace types {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.config_set_id = source["config_set_id"];
+	        this.kind = source["kind"];
 	        this.mode = source["mode"];
 	        this.created_at = source["created_at"];
 	        this.updated_at = source["updated_at"];
@@ -928,6 +934,7 @@ export namespace types {
 	    env_vars: EnvVar[];
 	    templates: Template[];
 	    run_config?: RunConfig;
+	    build_config?: RunConfig;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConfigSetDetail(source);
@@ -943,6 +950,7 @@ export namespace types {
 	        this.env_vars = this.convertValues(source["env_vars"], EnvVar);
 	        this.templates = this.convertValues(source["templates"], Template);
 	        this.run_config = this.convertValues(source["run_config"], RunConfig);
+	        this.build_config = this.convertValues(source["build_config"], RunConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1416,6 +1424,7 @@ export namespace types {
 	    type: string;
 	    sessionId: string;
 	    appId: number;
+	    kind: string;
 	    running: boolean;
 	    processes: ProcessState[];
 	    error?: string;
@@ -1430,6 +1439,7 @@ export namespace types {
 	        this.type = source["type"];
 	        this.sessionId = source["sessionId"];
 	        this.appId = source["appId"];
+	        this.kind = source["kind"];
 	        this.running = source["running"];
 	        this.processes = this.convertValues(source["processes"], ProcessState);
 	        this.error = source["error"];

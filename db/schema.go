@@ -16,6 +16,9 @@ func applySchema(sqlDB *sql.DB) error {
 	if err := detachBlueprints(sqlDB); err != nil {
 		return err
 	}
+	if err := addRunConfigKind(sqlDB); err != nil {
+		return err
+	}
 	if _, err := sqlDB.Exec(schemaSQL); err != nil {
 		return err
 	}
@@ -23,6 +26,25 @@ func applySchema(sqlDB *sql.DB) error {
 		return err
 	}
 	return addBlueprintSampleName(sqlDB)
+}
+
+// addRunConfigKind upgrades a run_configs table created before build configs
+// existed: its rows become kind 'run' and the one-per-config-set unique index
+// is dropped, since schemaSQL now makes it one per config set and kind. It runs
+// before schemaSQL, which would otherwise index a column the old table lacks.
+func addRunConfigKind(sqlDB *sql.DB) error {
+	cols, err := tableColumns(sqlDB, "run_configs")
+	if err != nil || len(cols) == 0 {
+		return err // fresh database: schemaSQL creates the table with kind
+	}
+	has, err := hasColumn(sqlDB, "run_configs", "kind")
+	if err != nil || has {
+		return err
+	}
+	_, err = sqlDB.Exec(`
+		ALTER TABLE run_configs ADD COLUMN kind text DEFAULT 'run' NOT NULL;
+		DROP INDEX IF EXISTS run_configs_config_set_id_unique;`)
+	return err
 }
 
 // addBlueprintSampleName upgrades a blueprints table created before the

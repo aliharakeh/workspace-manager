@@ -7,6 +7,7 @@ import {
 import { handleReadyUrlClick } from "@/lib/api"
 import type { App, StatusEvent, Workspace } from "@/lib/types"
 import { AppRunControls, AppStatusDot } from "@/components/app-run-controls"
+import { appStateLabel } from "@/lib/app-state"
 import { ConfigSetPicker } from "@/components/config-set-picker"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -40,9 +41,12 @@ export function WorkspaceDetail({
   onStatus,
   onAppChange,
 }: WorkspaceDetailProps) {
-  const runningCount = apps.filter(
-    (app) => statusByAppId[app.id]?.running
-  ).length
+  const buildingCount = apps.filter((app) => {
+    const status = statusByAppId[app.id]
+    return status?.running && status.kind === "build"
+  }).length
+  const runningCount =
+    apps.filter((app) => statusByAppId[app.id]?.running).length - buildingCount
 
   if (apps.length === 0) {
     return (
@@ -86,6 +90,9 @@ export function WorkspaceDetail({
           <Badge variant={runningCount > 0 ? "default" : "outline"}>
             {runningCount} running
           </Badge>
+          {buildingCount > 0 ? (
+            <Badge variant="default">{buildingCount} building</Badge>
+          ) : null}
         </div>
         <p className="text-sm text-muted-foreground">
           Overview of apps in this workspace. Open an app for env, templates,
@@ -97,6 +104,7 @@ export function WorkspaceDetail({
         {apps.map((app) => {
           const status = statusByAppId[app.id]
           const running = !!status?.running
+          const building = running && status?.kind === "build"
           const processCount = status?.processes.length ?? 0
           const activeProcesses = status?.processes.filter(
             (process) => process.status === "running"
@@ -119,10 +127,10 @@ export function WorkspaceDetail({
                     onClick={() => onSelectApp(app.id)}
                   >
                     <div className="flex items-center gap-2">
-                      <AppStatusDot running={running} />
+                      <AppStatusDot running={running} building={building} />
                       <span className="truncate font-medium">{app.name}</span>
                       <Badge variant={running ? "default" : "outline"}>
-                        {running ? "Running" : "Idle"}
+                        {appStateLabel(running, building)}
                       </Badge>
                     </div>
                     <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
@@ -132,6 +140,7 @@ export function WorkspaceDetail({
                       <p className="mt-1 text-xs text-muted-foreground">
                         {activeProcesses}/{processCount} process
                         {processCount === 1 ? "" : "es"} active
+                        {building ? " (build)" : ""}
                       </p>
                     ) : null}
                     {status?.error ? (
@@ -149,6 +158,7 @@ export function WorkspaceDetail({
                     <AppRunControls
                       appId={app.id}
                       running={running}
+                      building={building}
                       onStatus={onStatus}
                     />
                   </div>

@@ -18,7 +18,8 @@ You edit ONLY the currently selected config set of the current app.
 Use tools to inspect and change this set:
 - env vars: list_vars, get_var, update_var, delete_var
 - templates: list_templates, get_template, update_template (Handlebars {{VAR_NAME}} for env placeholders)
-- run config: get_run_config, update_run_config
+- run config (commands that start the app): get_run_config, update_run_config
+- build config (commands that build it, run on demand): get_build_config, update_build_config
 - project files: search_files (glob; gitignored omitted), read_file (relative path)
 
 You must NOT:
@@ -27,7 +28,7 @@ You must NOT:
 - reformat template files unless the user asked
 - get, update, or delete env vars that list_vars returns without a value (AI-excluded)
 
-When updating run commands, send the full command list.
+When updating run or build commands, send the full command list.
 Edits are staged for the user to review. Reply in short markdown (lists, inline code). No JSON. No headings.`
 
 type emptyIn struct{}
@@ -78,6 +79,13 @@ type runCmd struct {
 	Command string  `json:"command"`
 }
 
+// commandList is the editable mode and command list of a run or build config.
+type commandList struct {
+	mode     string
+	commands []runCmd
+	dirty    bool
+}
+
 type appAIState struct {
 	projectPath string
 	env         map[string]string
@@ -86,9 +94,8 @@ type appAIState struct {
 	hiddenEnv   map[string]bool
 	templates   map[string]string
 	origTmpl    map[string]string
-	runMode     string
-	runCommands []runCmd
-	runDirty    bool
+	run         commandList
+	build       commandList
 	calls       []types.AppAIToolCall
 	emit        func(types.AppAIStreamEvent)
 }
@@ -112,7 +119,8 @@ func newAppAIState(detail types.ConfigSetDetail, projectPath string) *appAIState
 		hiddenEnv:   map[string]bool{},
 		templates:   map[string]string{},
 		origTmpl:    map[string]string{},
-		runMode:     "parallel",
+		run:         commandList{mode: "parallel"},
+		build:       commandList{mode: "sequential"},
 	}
 	for _, v := range detail.EnvVars {
 		if !v.IncludeInAI {
@@ -127,13 +135,31 @@ func newAppAIState(detail types.ConfigSetDetail, projectPath string) *appAIState
 		s.origTmpl[t.FilePath] = t.Content
 	}
 	if detail.RunConfig != nil {
-		s.runMode = detail.RunConfig.Mode
+		s.run.mode = detail.RunConfig.Mode
 		for _, c := range detail.RunConfig.Commands {
-			label := c.Label
-			s.runCommands = append(s.runCommands, runCmd{Label: label, Command: c.Command})
+			s.run.commands = append(s.run.commands, runCmd{Label: c.Label, Command: c.Command})
+		}
+	}
+	if detail.BuildConfig != nil {
+		s.build.mode = detail.BuildConfig.Mode
+		for _, c := range detail.BuildConfig.Commands {
+			s.build.commands = append(s.build.commands, runCmd{Label: c.Label, Command: c.Command})
 		}
 	}
 	return s
+}
+
+// patch returns the staged change of the list, or nil when it was not edited.
+func (l commandList) patch() *types.AppAIRunPatch {
+	if !l.dirty {
+		return nil
+	}
+	cmds := make([]types.AppAIRunCommand, 0, len(l.commands))
+	for _, c := range l.commands {
+		cmds = append(cmds, types.AppAIRunCommand{Label: c.Label, Command: c.Command})
+	}
+	mode := l.mode
+	return &types.AppAIRunPatch{Mode: &mode, Commands: cmds}
 }
 
 func (s *appAIState) patch() types.AppAIPatch {
@@ -158,14 +184,8 @@ func (s *appAIState) patch() types.AppAIPatch {
 			p.Templates = append(p.Templates, types.AppAITemplatePatch{FilePath: path, Content: content})
 		}
 	}
-	if s.runDirty {
-		cmds := make([]types.AppAIRunCommand, 0, len(s.runCommands))
-		for _, c := range s.runCommands {
-			cmds = append(cmds, types.AppAIRunCommand{Label: c.Label, Command: c.Command})
-		}
-		mode := s.runMode
-		p.Run = &types.AppAIRunPatch{Mode: &mode, Commands: cmds}
-	}
+	p.Run = s.run.patch()
+	p.Build = s.build.patch()
 	return p
 }
 
@@ -261,18 +281,18 @@ func (s *appAIState) updateTemplate(filePath, content string) map[string]any {
 	return map[string]any{"ok": true, "file_path": p}
 }
 
-func (s *appAIState) getRun() map[string]any {
-	return map[string]any{"mode": s.runMode, "commands": s.runCommands}
+func (l *commandList) get() map[string]any {
+	return map[string]any{"mode": l.mode, "commands": l.commands}
 }
 
-func (s *appAIState) updateRun(in updateRunIn) map[string]any {
+func (l *commandList) update(in updateRunIn) map[string]any {
 	if in.Mode != nil && *in.Mode != "" {
 		m := *in.Mode
 		if m != "parallel" && m != "sequential" {
 			return map[string]any{"error": `mode must be "parallel" or "sequential"`}
 		}
-		s.runMode = m
-		s.runDirty = true
+		l.mode = m
+		l.dirty = true
 	}
 	if in.Commands != nil {
 		cmds := make([]runCmd, 0, len(in.Commands))
@@ -283,20 +303,27 @@ func (s *appAIState) updateRun(in updateRunIn) map[string]any {
 			}
 			var label *string
 			if c.Label != nil {
-				l := strings.TrimSpace(*c.Label)
-				if l != "" {
-					label = &l
+				lbl := strings.TrimSpace(*c.Label)
+				if lbl != "" {
+					label = &lbl
 				}
 			}
 			cmds = append(cmds, runCmd{Label: label, Command: command})
 		}
-		s.runCommands = cmds
-		s.runDirty = true
+		l.commands = cmds
+		l.dirty = true
 	}
-	if !s.runDirty {
+	if !l.dirty {
 		return map[string]any{"error": "provide mode and/or commands"}
 	}
-	return map[string]any{"ok": true, "mode": s.runMode, "commands": s.runCommands}
+	return map[string]any{"ok": true, "mode": l.mode, "commands": l.commands}
+}
+
+func (s *appAIState) getRun() map[string]any                  { return s.run.get() }
+func (s *appAIState) updateRun(in updateRunIn) map[string]any { return s.run.update(in) }
+func (s *appAIState) getBuild() map[string]any                { return s.build.get() }
+func (s *appAIState) updateBuild(in updateRunIn) map[string]any {
+	return s.build.update(in)
 }
 
 func (s *appAIState) searchFiles(pattern string) map[string]any {
@@ -353,7 +380,15 @@ func (s *appAIState) tools() []ai.ToolRef {
 			func(_ *ai.ToolContext, in updateRunIn) (any, error) {
 				return s.record("update_run_config", in, s.updateRun(in)), nil
 			}),
-		ai.NewTool("search_files", "Glob search under the app project directory. Respects .gitignore. Returns matching relative paths.",
+		ai.NewTool("get_build_config", "Get build mode and commands for the active config set.",
+			func(_ *ai.ToolContext, in emptyIn) (any, error) {
+				return s.record("get_build_config", in, s.getBuild()), nil
+			}),
+		ai.NewTool("update_build_config", "Update build mode and/or replace the full build command list for this config set.",
+			func(_ *ai.ToolContext, in updateRunIn) (any, error) {
+				return s.record("update_build_config", in, s.updateBuild(in)), nil
+			}),
+		ai.NewTool("search_files","Glob search under the app project directory. Respects .gitignore. Returns matching relative paths.",
 			func(_ *ai.ToolContext, in searchIn) (any, error) {
 				return s.record("search_files", in, s.searchFiles(in.Pattern)), nil
 			}),
@@ -366,7 +401,7 @@ func (s *appAIState) tools() []ai.ToolRef {
 
 func buildAppAIAgentContext(appName, projectPath, setName string, setID int64) string {
 	return fmt.Sprintf(
-		"App: %s\nProject path: %s\n\nActive config set (ONLY edit this one):\nid: %d\nname: %s\n\nUse tools to read or edit env vars, templates, and run config. Use search_files and read_file when you need project files.",
+		"App: %s\nProject path: %s\n\nActive config set (ONLY edit this one):\nid: %d\nname: %s\n\nUse tools to read or edit env vars, templates, run config, and build config. Use search_files and read_file when you need project files.",
 		appName, projectPath, setID, setName,
 	)
 }
@@ -414,7 +449,7 @@ func patchHasEdits(p types.AppAIPatch) bool {
 	if len(p.Templates) > 0 {
 		return true
 	}
-	return p.Run != nil
+	return p.Run != nil || p.Build != nil
 }
 
 // AppChatAI runs the config-set agent with tools. Updates are staged in the
@@ -435,7 +470,7 @@ func AppChatAI(ctx context.Context, d *db.DB, appID, setID int64, history []type
 	if set.AppID != app.ID {
 		return types.AppAIChatResult{}, fmt.Errorf("Config set not found")
 	}
-	detail, err := loadConfigSetDetail(ctx, d, set)
+	detail, err := d.ConfigSetDetailT(ctx, set)
 	if err != nil {
 		return types.AppAIChatResult{}, err
 	}
@@ -479,18 +514,3 @@ func AppChatAI(ctx context.Context, d *db.DB, appID, setID int64, history []type
 	return types.AppAIChatResult{Text: text, Patch: patch, ToolCalls: state.calls}, nil
 }
 
-func loadConfigSetDetail(ctx context.Context, d *db.DB, set types.ConfigSet) (types.ConfigSetDetail, error) {
-	envVars, err := d.ListEnvVarsT(ctx, set.ID)
-	if err != nil {
-		return types.ConfigSetDetail{}, err
-	}
-	templates, err := d.ListTemplatesT(ctx, set.ID)
-	if err != nil {
-		return types.ConfigSetDetail{}, err
-	}
-	runCfg, err := d.GetRunConfigByConfigSetT(ctx, set.ID)
-	if err != nil {
-		return types.ConfigSetDetail{}, err
-	}
-	return types.ConfigSetDetail{ConfigSet: set, EnvVars: envVars, Templates: templates, RunConfig: runCfg}, nil
-}

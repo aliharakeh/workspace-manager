@@ -56,9 +56,18 @@ type RunCommand struct {
 	UpdatedAt   string  `json:"updated_at"`
 }
 
+// Kinds of command list: a config set has one RunConfig of each. A run starts
+// the app; a build builds it. They share the app's single runner session.
+const (
+	KindRun   = "run"
+	KindBuild = "build"
+)
+
+// RunConfig is the command list of one kind (Kind) of a config set.
 type RunConfig struct {
 	ID          int64        `json:"id"`
 	ConfigSetID int64        `json:"config_set_id"`
+	Kind        string       `json:"kind"`
 	Mode        string       `json:"mode"`
 	CreatedAt   string       `json:"created_at"`
 	UpdatedAt   string       `json:"updated_at"`
@@ -67,9 +76,10 @@ type RunConfig struct {
 
 type ConfigSetDetail struct {
 	ConfigSet
-	EnvVars   []EnvVar   `json:"env_vars"`
-	Templates []Template `json:"templates"`
-	RunConfig *RunConfig `json:"run_config"`
+	EnvVars     []EnvVar   `json:"env_vars"`
+	Templates   []Template `json:"templates"`
+	RunConfig   *RunConfig `json:"run_config"`
+	BuildConfig *RunConfig `json:"build_config"`
 }
 
 type PackageScript struct {
@@ -90,6 +100,7 @@ type CopyParts struct {
 	Env       any `json:"env,omitempty"`
 	Templates any `json:"templates,omitempty"`
 	Run       any `json:"run,omitempty"`
+	Build     any `json:"build,omitempty"`
 }
 
 type ReadyUrlPattern struct {
@@ -114,9 +125,11 @@ type ProcessState struct {
 }
 
 type StatusEvent struct {
-	Type      string         `json:"type"`
-	SessionID string         `json:"sessionId"`
-	AppID     int64          `json:"appId"`
+	Type      string `json:"type"`
+	SessionID string `json:"sessionId"`
+	AppID     int64  `json:"appId"`
+	// Kind is what the session executes: "run" or "build" (empty before any).
+	Kind      string         `json:"kind"`
 	Running   bool           `json:"running"`
 	Processes []ProcessState `json:"processes"`
 	Error     string         `json:"error,omitempty"`
@@ -273,7 +286,6 @@ type RunConfigSaveInput struct {
 	Mode     *string           `json:"mode"`
 	Commands []RunCommandInput `json:"commands"`
 }
-
 type ReadyUrlPatternCreateInput struct {
 	Label   string  `json:"label"`
 	Pattern string  `json:"pattern"`
@@ -393,6 +405,7 @@ type AppAIPatch struct {
 	Env       *AppAIEnvPatch       `json:"env,omitempty"`
 	Templates []AppAITemplatePatch `json:"templates,omitempty"`
 	Run       *AppAIRunPatch       `json:"run,omitempty"`
+	Build     *AppAIRunPatch       `json:"build,omitempty"`
 }
 
 type AppAIChatInput struct {

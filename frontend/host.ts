@@ -5,6 +5,7 @@ import type {
     BlueprintInput,
     BlueprintLogEvent,
     BlueprintRunInput,
+    CommandKind,
     CopyParts,
     RunMode,
     RunnerEvent,
@@ -141,15 +142,17 @@ export const api = {
         list: (appId: number) => call(() => Go.PackageScriptsList(appId)),
     },
 
+    /** The active config set's run or build command list, by `kind`. */
     runConfig: {
-        get: (appId: number) => call(() => Go.RunConfigGet(appId)),
+        get: (appId: number, kind: CommandKind) => call(() => Go.RunConfigGet(appId, kind)),
         save: (
             appId: number,
+            kind: CommandKind,
             body: {
                 mode?: RunMode
                 commands?: Array<{ label?: string | null; command: string }>
             },
-        ) => call(() => Go.RunConfigSave(appId, body)),
+        ) => call(() => Go.RunConfigSave(appId, kind, body)),
     },
 
     runner: {
@@ -159,6 +162,7 @@ export const api = {
         resize: (appId: number, commandId: number, cols: number, rows: number) =>
             call(() => Go.RunnerResize(appId, commandId, cols, rows)),
         run: (appId: number) => call(() => Go.RunnerRun(appId)),
+        build: (appId: number) => call(() => Go.RunnerBuild(appId)),
         stop: (appId: number) => call(() => Go.RunnerStop(appId)),
         reload: (appId: number) => call(() => Go.RunnerReload(appId)),
     },

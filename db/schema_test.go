@@ -70,6 +70,44 @@ func TestApplySchemaMakesBlueprintsGlobal(t *testing.T) {
 	}
 }
 
+func TestApplySchemaAddsRunConfigKind(t *testing.T) {
+	sqlDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+	sqlDB.SetMaxOpenConns(1)
+	// Shape of run_configs before build configs existed.
+	if _, err := sqlDB.Exec(`
+		CREATE TABLE run_configs (
+		  id integer PRIMARY KEY AUTOINCREMENT NOT NULL, config_set_id integer NOT NULL,
+		  mode text DEFAULT 'parallel' NOT NULL, created_at text DEFAULT (datetime('now')) NOT NULL,
+		  updated_at text DEFAULT (datetime('now')) NOT NULL);
+		CREATE UNIQUE INDEX run_configs_config_set_id_unique ON run_configs (config_set_id);
+		INSERT INTO run_configs (config_set_id, mode) VALUES (1, 'sequential');`); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := applySchema(sqlDB); err != nil {
+			t.Fatalf("apply #%d: %v", i+1, err)
+		}
+	}
+	var kind, mode string
+	if err := sqlDB.QueryRow(`SELECT kind, mode FROM run_configs`).Scan(&kind, &mode); err != nil {
+		t.Fatal(err)
+	}
+	if kind != "run" || mode != "sequential" {
+		t.Fatalf("row not preserved: %q %q", kind, mode)
+	}
+	// A config set can now hold a build config next to its run config, but only one of each.
+	if _, err := sqlDB.Exec(`INSERT INTO run_configs (config_set_id, kind) VALUES (1, 'build')`); err != nil {
+		t.Fatalf("build config next to run config: %v", err)
+	}
+	if _, err := sqlDB.Exec(`INSERT INTO run_configs (config_set_id, kind) VALUES (1, 'build')`); err == nil {
+		t.Fatal("a second build config for one config set should be rejected")
+	}
+}
+
 func TestApplySchemaAddsBlueprintSampleName(t *testing.T) {
 	sqlDB, err := sql.Open("sqlite", ":memory:")
 	if err != nil {

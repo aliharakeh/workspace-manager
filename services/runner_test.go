@@ -35,7 +35,7 @@ func TestRunnerStreamsTerminalOutput(t *testing.T) {
 		command = `echo "  Local:   http://localhost:5173/"; echo second line`
 	}
 	mode := "sequential"
-	if _, err := d.UpsertRunConfig(ctx, set.ID, &mode, []types.RunCommandInput{{Command: command}}); err != nil {
+	if _, err := d.UpsertRunConfig(ctx, set.ID, types.KindRun, &mode, []types.RunCommandInput{{Command: command}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -48,9 +48,12 @@ func TestRunnerStreamsTerminalOutput(t *testing.T) {
 			mu.Unlock()
 		}
 	}, nil)
-	status, err := runner.Start(ctx, app.ID)
+	status, err := runner.Start(ctx, app.ID, types.KindRun)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if status.Kind != types.KindRun {
+		t.Fatalf("kind=%q", status.Kind)
 	}
 	commandID := status.Processes[0].CommandID
 	deadline := time.Now().Add(20 * time.Second)
@@ -92,5 +95,73 @@ func TestRunnerStreamsTerminalOutput(t *testing.T) {
 	}
 	if string(rebuilt) != text {
 		t.Fatalf("events and snapshot differ:\n%q\n%q", rebuilt, text)
+	}
+}
+
+func TestRunnerBuildRunsBuildCommands(t *testing.T) {
+	ctx := context.Background()
+	d := newBlueprintTestDB(t)
+	if err := d.EnsureReadyURLPatternsSeeded(ctx); err != nil {
+		t.Fatal(err)
+	}
+	InvalidateReadyURLPatternsCache()
+	t.Cleanup(InvalidateReadyURLPatternsCache)
+
+	ws, _ := d.CreateWorkspaceT(ctx, "ws", nil)
+	app, err := d.CreateAppT(ctx, ws.ID, "demo", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	set, err := d.ResolveActive(ctx, app.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := NewRunner(d, nil, nil)
+
+	if _, err := runner.Start(ctx, app.ID, types.KindBuild); err == nil || !strings.Contains(err.Error(), "No build commands configured") {
+		t.Fatalf("expected a missing build commands error, got %v", err)
+	}
+
+	// The run command must not be what a build executes.
+	if _, err := d.UpsertRunConfig(ctx, set.ID, types.KindRun, nil, []types.RunCommandInput{{Command: "echo run-only"}}); err != nil {
+		t.Fatal(err)
+	}
+	command := `echo   built   http://localhost:5173/`
+	if runtime.GOOS != "windows" {
+		command = `echo "built http://localhost:5173/"`
+	}
+	if _, err := d.UpsertRunConfig(ctx, set.ID, types.KindBuild, nil, []types.RunCommandInput{{Command: command}}); err != nil {
+		t.Fatal(err)
+	}
+
+	status, err := runner.Start(ctx, app.ID, types.KindBuild)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Kind != types.KindBuild || len(status.Processes) != 1 || status.Processes[0].Command != command {
+		t.Fatalf("status: %+v", status)
+	}
+	if _, err := runner.Start(ctx, app.ID, types.KindRun); err == nil || !strings.Contains(err.Error(), "already building") {
+		t.Fatalf("expected a run to be refused during a build, got %v", err)
+	}
+	commandID := status.Processes[0].CommandID
+	deadline := time.Now().Add(20 * time.Second)
+	for runner.GetStatus(app.ID).Running {
+		if time.Now().After(deadline) {
+			t.Fatal("build did not finish")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	raw, err := base64.StdEncoding.DecodeString(runner.GetOutput(app.ID, commandID).Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	if !strings.Contains(text, "built") || !strings.Contains(text, "Process exited with code 0") {
+		t.Fatalf("unexpected build output:\n%q", text)
+	}
+	if strings.Contains(text, "Detected URL") || strings.Contains(text, "run-only") {
+		t.Fatalf("a build must not detect URLs or run the run commands:\n%q", text)
 	}
 }

@@ -3,7 +3,7 @@ import type { ConfigSetDetail, RunMode } from "./types"
 export const APP_AI_SYSTEM_PROMPT = `You are a configuration assistant for Workspace Manager.
 You edit ONLY the currently selected config set of the current app.
 
-Use tools to inspect and change this set. Do not expect env vars, templates, or run config in the user message.
+Use tools to inspect and change this set. Do not expect env vars, templates, run config, or build config in the user message.
 
 You must NOT:
 - create, rename, delete, or edit any other config set
@@ -62,10 +62,14 @@ export type AppAIPatch = {
     delete?: string[]
   }
   templates?: { file_path: string; content: string }[]
-  run?: {
-    mode?: RunMode
-    commands?: { label?: string | null; command: string }[]
-  }
+  run?: AppAICommandPatch
+  build?: AppAICommandPatch
+}
+
+/** A staged change to a run or build config. */
+export type AppAICommandPatch = {
+  mode?: RunMode
+  commands?: { label?: string | null; command: string }[]
 }
 
 export function buildAppAIPrompt({
@@ -90,7 +94,7 @@ Active config set (ONLY edit this one):
 id: ${configSet.id}
 name: ${configSet.name}
 
-Use tools to read or edit env vars, templates, and run config. Use search_files and read_file when you need project files.
+Use tools to read or edit env vars, templates, run config, and build config. Use search_files and read_file when you need project files.
 
 User instruction:
 ${instruction.trim()}`
@@ -162,7 +166,7 @@ function parseTemplates(raw: unknown): AppAIPatch["templates"] | undefined {
   return out.length ? out : undefined
 }
 
-function parseRun(raw: unknown): AppAIPatch["run"] | undefined {
+function parseCommandPatch(raw: unknown): AppAICommandPatch | undefined {
   if (!raw || typeof raw !== "object") return undefined
   const obj = raw as Record<string, unknown>
   const modeRaw = asString(obj.mode)
@@ -200,7 +204,8 @@ export function parseAppAIResponse(raw: string): AppAIPatch {
       message,
       env: parseEnv(obj.env),
       templates: parseTemplates(obj.templates),
-      run: parseRun(obj.run),
+      run: parseCommandPatch(obj.run),
+      build: parseCommandPatch(obj.build),
     }
   } catch {
     return { message: text || "Done." }
@@ -212,6 +217,7 @@ export function patchHasEdits(patch: AppAIPatch): boolean {
     patch.env?.upsert?.length ||
     patch.env?.delete?.length ||
     patch.templates?.length ||
-    patch.run
+    patch.run ||
+    patch.build
   )
 }

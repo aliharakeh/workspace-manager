@@ -73,6 +73,7 @@ type RunCommand struct {
 type RunConfig struct {
 	ID          int64  `json:"id"`
 	ConfigSetID int64  `json:"config_set_id"`
+	Kind        string `json:"kind"`
 	Mode        string `json:"mode"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`

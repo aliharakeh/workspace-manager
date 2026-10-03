@@ -128,10 +128,10 @@ DELETE FROM templates WHERE config_set_id = ?;
 
 -- run_configs (db/run-configs.ts)
 -- name: GetRunConfigByConfigSet :one
-SELECT * FROM run_configs WHERE config_set_id = ?;
+SELECT * FROM run_configs WHERE config_set_id = ? AND kind = ?;
 
 -- name: CreateRunConfig :one
-INSERT INTO run_configs (config_set_id, mode) VALUES (?, ?) RETURNING *;
+INSERT INTO run_configs (config_set_id, kind, mode) VALUES (?, ?, ?) RETURNING *;
 
 -- name: UpdateRunConfigMode :one
 UPDATE run_configs

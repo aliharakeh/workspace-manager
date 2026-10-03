@@ -1,7 +1,8 @@
 import { useState } from "react"
 import { toast } from "sonner"
-import { PlayIcon, RefreshCwIcon, SquareIcon } from "lucide-react"
+import { HammerIcon, PlayIcon, RefreshCwIcon, SquareIcon } from "lucide-react"
 import { api } from "@/lib/api"
+import { appStateLabel } from "@/lib/app-state"
 import type { StatusEvent } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,7 +14,10 @@ import { cn } from "@/lib/utils"
 
 type AppRunControlsProps = {
   appId: number
+  /** True while the app is running or building: both hold the app's one session. */
   running: boolean
+  /** True while that session is a build; Stop ends it, Reload is unavailable. */
+  building?: boolean
   onStatus: (status: StatusEvent) => void
   variant?: "default" | "compact"
   className?: string
@@ -22,6 +26,7 @@ type AppRunControlsProps = {
 export function AppRunControls({
   appId,
   running,
+  building = false,
   onStatus,
   variant = "default",
   className,
@@ -30,7 +35,7 @@ export function AppRunControls({
   const compact = variant === "compact"
 
   async function runAction(
-    action: "run" | "stop" | "reload",
+    action: "run" | "build" | "stop" | "reload",
     success: string,
     failure: string
   ) {
@@ -54,6 +59,25 @@ export function AppRunControls({
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
       >
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                disabled={busy || running}
+                onClick={() =>
+                  void runAction("build", "Build started", "Failed to build")
+                }
+              />
+            }
+          >
+            <HammerIcon />
+            <span className="sr-only">Build</span>
+          </TooltipTrigger>
+          <TooltipContent>Build</TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger
             render={
@@ -91,6 +115,15 @@ export function AppRunControls({
       </Button>
       <Button
         size="sm"
+        variant="outline"
+        disabled={busy || running}
+        onClick={() => void runAction("build", "Build started", "Failed to build")}
+      >
+        <HammerIcon data-icon="inline-start" />
+        Build
+      </Button>
+      <Button
+        size="sm"
         variant="secondary"
         disabled={busy || !running}
         onClick={() => void runAction("stop", "Stopped", "Failed to stop")}
@@ -101,7 +134,7 @@ export function AppRunControls({
       <Button
         size="sm"
         variant="outline"
-        disabled={busy}
+        disabled={busy || building}
         onClick={() => void runAction("reload", "Reloaded", "Failed to reload")}
       >
         <RefreshCwIcon data-icon="inline-start" />
@@ -113,20 +146,27 @@ export function AppRunControls({
 
 export function AppStatusDot({
   running,
+  building = false,
   className,
 }: {
   running: boolean
+  building?: boolean
   className?: string
 }) {
+  const label = appStateLabel(running, building)
   return (
     <span
       className={cn(
         "size-2 shrink-0 rounded-full",
-        running ? "bg-emerald-500" : "bg-muted-foreground/35",
+        !running
+          ? "bg-muted-foreground/35"
+          : building
+            ? "bg-amber-500"
+            : "bg-emerald-500",
         className
       )}
-      title={running ? "Running" : "Idle"}
-      aria-label={running ? "Running" : "Idle"}
+      title={label}
+      aria-label={label}
     />
   )
 }

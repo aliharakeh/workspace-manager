@@ -296,7 +296,18 @@ async function applyAppAIPatch(
         label: c.label,
         command: c.command,
       }))
-    await api.runConfig.save(appId, { mode, commands })
+    await api.runConfig.save(appId, "run", { mode, commands })
+  }
+
+  if (patch.build) {
+    const mode = patch.build.mode ?? current.build_config?.mode ?? "sequential"
+    const commands =
+      patch.build.commands ??
+      (current.build_config?.commands ?? []).map((c) => ({
+        label: c.label,
+        command: c.command,
+      }))
+    await api.runConfig.save(appId, "build", { mode, commands })
   }
 }
 
