@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="build/appicon.png" width="128" alt="Workspace Manager icon" />
+<img src="build/icon.ico" width="128" alt="Workspace Manager icon" />
 
 # Workspace Manager
 
