@@ -10,6 +10,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 type OpenEditorButtonProps = {
   appId: number
@@ -42,22 +47,32 @@ export function OpenEditorButton({ appId, iconOnly }: OpenEditorButtonProps) {
 
   if (editors.length === 0) return null
 
+  const button = (
+    <Button
+      variant="outline"
+      size={iconOnly ? "icon-sm" : "sm"}
+      aria-label="Open in editor"
+      onClick={(event) => event.stopPropagation()}
+    />
+  )
+
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="outline"
-            size={iconOnly ? "icon-sm" : "sm"}
-            title="Open in editor"
-            aria-label="Open in editor"
-            onClick={(event) => event.stopPropagation()}
-          />
-        }
-      >
-        <CodeIcon data-icon={iconOnly ? undefined : "inline-start"} />
-        {iconOnly ? null : "Open in editor"}
-      </DropdownMenuTrigger>
+      {iconOnly ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={<DropdownMenuTrigger render={button} />}
+          >
+            <CodeIcon />
+          </TooltipTrigger>
+          <TooltipContent>Open the project in an editor</TooltipContent>
+        </Tooltip>
+      ) : (
+        <DropdownMenuTrigger render={button}>
+          <CodeIcon data-icon="inline-start" />
+          Open in editor
+        </DropdownMenuTrigger>
+      )}
       <DropdownMenuContent align="end">
         {editors.map((editor) => (
           <DropdownMenuItem

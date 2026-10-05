@@ -162,6 +162,43 @@ func (d *DB) ListAppsByWorkspaceT(ctx context.Context, workspaceID int64) ([]typ
 	return out, nil
 }
 
+// ReorderAppsT stores the order of a workspace's apps: ids lists every app in
+// the workspace, first to last.
+func (d *DB) ReorderAppsT(ctx context.Context, workspaceID int64, ids []int64) error {
+	current, err := d.ListAppsByWorkspace(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	if len(ids) != len(current) {
+		return fmt.Errorf("order must list every app in the workspace")
+	}
+	known := make(map[int64]bool, len(current))
+	for _, a := range current {
+		known[a.ID] = true
+	}
+	for _, id := range ids {
+		if !known[id] {
+			return fmt.Errorf("App %d is not in this workspace", id)
+		}
+		delete(known, id)
+	}
+	if len(known) > 0 {
+		return fmt.Errorf("order lists an app twice")
+	}
+	tx, err := d.SQL.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := d.WithTx(tx)
+	for i, id := range ids {
+		if err := q.SetAppSortOrder(ctx, SetAppSortOrderParams{SortOrder: int64(i), ID: id, WorkspaceID: workspaceID}); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 func (d *DB) CreateAppT(ctx context.Context, workspaceID int64, name, projectPath string) (types.App, error) {
 	tx, err := d.SQL.BeginTx(ctx, nil)
 	if err != nil {

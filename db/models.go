@@ -10,6 +10,7 @@ type App struct {
 	Name              string `json:"name"`
 	ProjectPath       string `json:"project_path"`
 	ActiveConfigSetID *int64 `json:"active_config_set_id"`
+	SortOrder         int64  `json:"sort_order"`
 	CreatedAt         string `json:"created_at"`
 	UpdatedAt         string `json:"updated_at"`
 }

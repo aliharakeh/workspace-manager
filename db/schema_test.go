@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"testing"
 )
@@ -161,5 +162,115 @@ func TestApplySchemaIsIdempotent(t *testing.T) {
 	}
 	if n != 9 {
 		t.Fatalf("expected 9 tables, got %d", n)
+	}
+}
+
+func TestApplySchemaAddsAppSortOrder(t *testing.T) {
+	sqlDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+	sqlDB.SetMaxOpenConns(1)
+	// Shape of apps before they could be reordered, when they were listed by name.
+	if _, err := sqlDB.Exec(`
+		CREATE TABLE apps (
+		  id integer PRIMARY KEY AUTOINCREMENT NOT NULL, workspace_id integer NOT NULL, name text NOT NULL,
+		  project_path text NOT NULL, active_config_set_id integer,
+		  created_at text DEFAULT (datetime('now')) NOT NULL, updated_at text DEFAULT (datetime('now')) NOT NULL);
+		INSERT INTO apps (workspace_id, name, project_path) VALUES
+		  (1, 'web', '.'), (1, 'Api', '.'), (2, 'zeta', '.'), (1, 'docs', '.'), (2, 'alpha', '.');`); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := applySchema(sqlDB); err != nil {
+			t.Fatalf("apply #%d: %v", i+1, err)
+		}
+	}
+	rows, err := sqlDB.Query(`SELECT workspace_id, name FROM apps ORDER BY workspace_id, sort_order`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var got []string
+	for rows.Next() {
+		var ws int
+		var name string
+		if err := rows.Scan(&ws, &name); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, string(rune('0'+ws))+":"+name)
+	}
+	want := []string{"1:Api", "1:docs", "1:web", "2:alpha", "2:zeta"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	}
+}
+
+func TestReorderApps(t *testing.T) {
+	sqlDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+	sqlDB.SetMaxOpenConns(1)
+	if err := applySchema(sqlDB); err != nil {
+		t.Fatal(err)
+	}
+	d := &DB{SQL: sqlDB, Queries: New(sqlDB)}
+	ctx := context.Background()
+	ws, err := d.CreateWorkspaceT(ctx, "w", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := d.CreateWorkspaceT(ctx, "other", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []int64
+	for _, name := range []string{"b", "c", "a"} {
+		app, err := d.CreateAppT(ctx, ws.ID, name, ".")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, app.ID)
+	}
+	foreign, err := d.CreateAppT(ctx, other.ID, "x", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := func() string {
+		apps, err := d.ListAppsByWorkspaceT(ctx, ws.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := ""
+		for _, a := range apps {
+			s += a.Name
+		}
+		return s
+	}
+	// New apps go to the end, not into name order.
+	if got := names(); got != "bca" {
+		t.Fatalf("created order: %s", got)
+	}
+	if err := d.ReorderAppsT(ctx, ws.ID, []int64{ids[2], ids[0], ids[1]}); err != nil {
+		t.Fatal(err)
+	}
+	if got := names(); got != "abc" {
+		t.Fatalf("reordered: %s", got)
+	}
+	for _, bad := range [][]int64{{ids[0]}, {ids[0], ids[0], ids[1]}, {ids[0], ids[1], foreign.ID}} {
+		if err := d.ReorderAppsT(ctx, ws.ID, bad); err == nil {
+			t.Fatalf("order %v should be rejected", bad)
+		}
+	}
+	if got := names(); got != "abc" {
+		t.Fatalf("a rejected order changed the list: %s", got)
 	}
 }

@@ -19,7 +19,8 @@ type AppRunControlsProps = {
   /** True while that session is a build; Stop ends it, Reload is unavailable. */
   building?: boolean
   onStatus: (status: StatusEvent) => void
-  variant?: "default" | "compact"
+  /** "icon" is the full set of actions as icon buttons with tooltips. */
+  variant?: "default" | "compact" | "icon"
   className?: string
 }
 
@@ -99,6 +100,69 @@ export function AppRunControls({
           </TooltipTrigger>
           <TooltipContent>{label}</TooltipContent>
         </Tooltip>
+      </div>
+    )
+  }
+
+  if (variant === "icon") {
+    const actions = [
+      {
+        label: "Run",
+        hint: "Run the app",
+        icon: <PlayIcon />,
+        variant: "default",
+        disabled: busy || running,
+        onClick: () => runAction("run", "Started", "Failed to run"),
+      },
+      {
+        label: "Build",
+        hint: "Build the app",
+        icon: <HammerIcon />,
+        variant: "outline",
+        disabled: busy || running,
+        onClick: () => runAction("build", "Build started", "Failed to build"),
+      },
+      {
+        label: "Stop",
+        hint: building ? "Stop the build" : "Stop the app",
+        icon: <SquareIcon />,
+        variant: "secondary",
+        disabled: busy || !running,
+        onClick: () => runAction("stop", "Stopped", "Failed to stop"),
+      },
+      {
+        label: "Reload",
+        hint: "Restart the app (stop, then run again)",
+        icon: <RefreshCwIcon />,
+        variant: "outline",
+        disabled: busy || building,
+        onClick: () => runAction("reload", "Reloaded", "Failed to reload"),
+      },
+    ] as const
+    return (
+      <div className={cn("flex items-center gap-2", className)}>
+        {actions.map((action) => (
+          <Tooltip key={action.label}>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant={action.variant}
+                  aria-label={action.label}
+                  disabled={action.disabled}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    void action.onClick()
+                  }}
+                />
+              }
+            >
+              {action.icon}
+            </TooltipTrigger>
+            <TooltipContent>{action.hint}</TooltipContent>
+          </Tooltip>
+        ))}
       </div>
     )
   }

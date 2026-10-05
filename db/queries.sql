@@ -26,7 +26,7 @@ SELECT
 FROM apps a
 LEFT JOIN config_sets cs ON cs.id = a.active_config_set_id
 WHERE a.workspace_id = ?
-ORDER BY a.name COLLATE NOCASE ASC;
+ORDER BY a.sort_order ASC, a.id ASC;
 
 -- name: GetApp :one
 SELECT
@@ -38,9 +38,15 @@ LEFT JOIN config_sets cs ON cs.id = a.active_config_set_id
 WHERE a.id = ?;
 
 -- name: CreateApp :one
-INSERT INTO apps (workspace_id, name, project_path)
-VALUES (?, ?, ?)
+INSERT INTO apps (workspace_id, name, project_path, sort_order)
+VALUES (
+  sqlc.arg(workspace_id), sqlc.arg(name), sqlc.arg(project_path),
+  (SELECT COALESCE(max(sort_order), -1) + 1 FROM apps WHERE workspace_id = sqlc.arg(workspace_id))
+)
 RETURNING *;
+
+-- name: SetAppSortOrder :exec
+UPDATE apps SET sort_order = ? WHERE id = ? AND workspace_id = ?;
 
 -- name: UpdateApp :one
 UPDATE apps

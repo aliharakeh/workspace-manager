@@ -78,6 +78,8 @@ export const api = {
             call(() => Go.AppsCreate(workspaceId, body)),
         update: (id: number, body: { name?: string; project_path?: string }) =>
             call(() => Go.AppsUpdate(id, body)),
+        reorder: (workspaceId: number, ids: number[]) =>
+            call(() => Go.AppsReorder(workspaceId, ids)),
         delete: (id: number) => call(() => Go.AppsDelete(id)),
         openFolder: (id: number) => call(() => Go.AppsOpenFolder(id)),
         editors: () => call(() => Go.AppsEditors()),

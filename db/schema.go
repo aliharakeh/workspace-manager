@@ -19,6 +19,9 @@ func applySchema(sqlDB *sql.DB) error {
 	if err := addRunConfigKind(sqlDB); err != nil {
 		return err
 	}
+	if err := addAppSortOrder(sqlDB); err != nil {
+		return err
+	}
 	if _, err := sqlDB.Exec(schemaSQL); err != nil {
 		return err
 	}
@@ -44,6 +47,30 @@ func addRunConfigKind(sqlDB *sql.DB) error {
 	_, err = sqlDB.Exec(`
 		ALTER TABLE run_configs ADD COLUMN kind text DEFAULT 'run' NOT NULL;
 		DROP INDEX IF EXISTS run_configs_config_set_id_unique;`)
+	return err
+}
+
+// addAppSortOrder upgrades an apps table created before apps could be
+// reordered. Apps used to be listed by name, so each workspace's apps are
+// numbered in that order to keep the list looking the same. A fresh table
+// already has the column from schemaSQL.
+func addAppSortOrder(sqlDB *sql.DB) error {
+	cols, err := tableColumns(sqlDB, "apps")
+	if err != nil || len(cols) == 0 {
+		return err // fresh database: schemaSQL creates the table with sort_order
+	}
+	has, err := hasColumn(sqlDB, "apps", "sort_order")
+	if err != nil || has {
+		return err
+	}
+	_, err = sqlDB.Exec(`
+		ALTER TABLE apps ADD COLUMN sort_order integer DEFAULT 0 NOT NULL;
+		UPDATE apps SET sort_order = (
+		  SELECT count(*) FROM apps b
+		  WHERE b.workspace_id = apps.workspace_id
+		    AND (b.name COLLATE NOCASE < apps.name COLLATE NOCASE
+		         OR (b.name COLLATE NOCASE = apps.name COLLATE NOCASE AND b.id < apps.id))
+		);`)
 	return err
 }
 

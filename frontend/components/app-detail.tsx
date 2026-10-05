@@ -17,6 +17,11 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 type AppDetailProps = {
@@ -80,45 +85,72 @@ export function AppDetail({
           <div className="mt-3">
             <ConfigSetSwitcher app={app} onAppChange={handleAppChange} />
           </div>
+          {readyUrls.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {readyUrls.map((url) => (
+                <a
+                  key={url}
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(event) => handleReadyUrlClick(event, url)}
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "sm" }),
+                    "max-w-64"
+                  )}
+                  title={url}
+                >
+                  <ExternalLinkIcon data-icon="inline-start" />
+                  <span className="truncate font-mono text-xs">{url}</span>
+                </a>
+              ))}
+            </div>
+          ) : null}
           {status?.error ? (
             <p className="mt-2 text-sm text-destructive">{status.error}</p>
           ) : null}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <OpenFolderButton appId={app.id} />
-          <OpenEditorButton appId={app.id} />
-          <Button variant="outline" size="sm" onClick={onEdit}>
-            <PencilIcon data-icon="inline-start" />
-            Edit
-          </Button>
-          <Button variant="outline" size="sm" onClick={onDelete}>
-            <Trash2Icon data-icon="inline-start" />
-            Delete
-          </Button>
-          <Separator orientation="vertical" className="hidden h-8 sm:block" />
+        <div className="flex shrink-0 items-center gap-2">
           <AppRunControls
             appId={app.id}
             running={running}
             building={building}
             onStatus={handleStatus}
+            variant="icon"
           />
-          {readyUrls.map((url) => (
-            <a
-              key={url}
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(event) => handleReadyUrlClick(event, url)}
-              className={cn(
-                buttonVariants({ variant: "outline", size: "sm" }),
-                "max-w-64"
-              )}
-              title={url}
+          <Separator orientation="vertical" className="hidden h-8 sm:block" />
+          <OpenFolderButton appId={app.id} iconOnly />
+          <OpenEditorButton appId={app.id} iconOnly />
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label="Edit app"
+                  onClick={onEdit}
+                />
+              }
             >
-              <ExternalLinkIcon data-icon="inline-start" />
-              <span className="truncate font-mono text-xs">{url}</span>
-            </a>
-          ))}
+              <PencilIcon />
+            </TooltipTrigger>
+            <TooltipContent>Edit the app's name and project path</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label="Delete app"
+                  onClick={onDelete}
+                />
+              }
+            >
+              <Trash2Icon />
+            </TooltipTrigger>
+            <TooltipContent>Delete this app</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 

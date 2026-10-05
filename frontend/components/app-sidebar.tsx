@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react"
 import {
   AppWindowIcon,
+  ChevronRightIcon,
   FolderIcon,
   MoonIcon,
   MoreHorizontalIcon,
@@ -10,6 +12,7 @@ import {
 import type { App, StatusEvent, Workspace } from "@/lib/types"
 import { AppRunControls, AppStatusDot } from "@/components/app-run-controls"
 import { useTheme } from "@/components/theme-provider"
+import { cn } from "@/lib/utils"
 import {
   Sidebar,
   SidebarContent,
@@ -52,6 +55,19 @@ type AppSidebarProps = {
   onStatus: (status: StatusEvent) => void
 }
 
+const COLLAPSED_STORAGE_KEY = "workspace-manager.sidebar.collapsed"
+
+// Workspaces the user has collapsed; every other workspace shows its apps.
+function loadCollapsed(): Set<number> {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_STORAGE_KEY)
+    const ids: unknown = raw ? JSON.parse(raw) : []
+    return new Set(Array.isArray(ids) ? ids.filter(Number.isInteger) : [])
+  } catch {
+    return new Set()
+  }
+}
+
 export function AppSidebar({
   workspaces,
   appsByWorkspace,
@@ -70,6 +86,38 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const { resolvedTheme, toggleTheme } = useTheme()
   const dark = resolvedTheme === "dark"
+
+  const [collapsed, setCollapsed] = useState(loadCollapsed)
+  const [seenWorkspaceId, setSeenWorkspaceId] = useState(selectedWorkspaceId)
+
+  // Opening a workspace (from the palette, a link or a click) expands it.
+  if (seenWorkspaceId !== selectedWorkspaceId) {
+    setSeenWorkspaceId(selectedWorkspaceId)
+    if (selectedWorkspaceId != null && collapsed.has(selectedWorkspaceId)) {
+      const next = new Set(collapsed)
+      next.delete(selectedWorkspaceId)
+      setCollapsed(next)
+    }
+  }
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        COLLAPSED_STORAGE_KEY,
+        JSON.stringify([...collapsed])
+      )
+    } catch {
+      // Storage can be unavailable; the sidebar still works without it.
+    }
+  }, [collapsed])
+
+  function toggleWorkspace(id: number) {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
+  }
 
   return (
     <Sidebar collapsible="icon">
@@ -108,6 +156,7 @@ export function AppSidebar({
                 workspaces.map((workspace) => {
                   const apps = appsByWorkspace[workspace.id] ?? []
                   const isActive = selectedWorkspaceId === workspace.id
+                  const expanded = !collapsed.has(workspace.id)
                   const runningInWorkspace = apps.filter(
                     (app) => statusByAppId[app.id]?.running
                   ).length
@@ -116,6 +165,7 @@ export function AppSidebar({
                       <SidebarMenuButton
                         isActive={isActive && !selectedAppId}
                         tooltip={workspace.name}
+                        className="group-has-data-[sidebar=menu-action]/menu-item:pr-14"
                         onClick={() => onSelectWorkspace(workspace.id)}
                       >
                         <FolderIcon />
@@ -123,10 +173,30 @@ export function AppSidebar({
                         {runningInWorkspace > 0 ? (
                           <AppStatusDot
                             running
-                            className="ml-auto group-data-[collapsible=icon]:hidden"
+                            className="group-data-[collapsible=icon]:hidden"
                           />
                         ) : null}
                       </SidebarMenuButton>
+                      <SidebarMenuAction
+                        className="right-7"
+                        title={
+                          expanded
+                            ? `Collapse ${workspace.name}`
+                            : `Expand ${workspace.name}`
+                        }
+                        aria-expanded={expanded}
+                        onClick={() => toggleWorkspace(workspace.id)}
+                      >
+                        <ChevronRightIcon
+                          className={cn(
+                            "transition-transform",
+                            expanded && "rotate-90"
+                          )}
+                        />
+                        <span className="sr-only">
+                          {expanded ? "Collapse" : "Expand"} {workspace.name}
+                        </span>
+                      </SidebarMenuAction>
                       <DropdownMenu>
                         <DropdownMenuTrigger
                           render={<SidebarMenuAction showOnHover />}
@@ -160,7 +230,7 @@ export function AppSidebar({
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                      {isActive && apps.length > 0 ? (
+                      {expanded && apps.length > 0 ? (
                         <SidebarMenuSub>
                           {apps.map((app) => {
                             const running = !!statusByAppId[app.id]?.running
@@ -196,7 +266,7 @@ export function AppSidebar({
                           })}
                         </SidebarMenuSub>
                       ) : null}
-                      {isActive && apps.length === 0 ? (
+                      {expanded && apps.length === 0 ? (
                         <SidebarMenuSub>
                           <SidebarMenuSubItem>
                             <SidebarMenuSubButton

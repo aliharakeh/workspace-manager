@@ -30,6 +30,8 @@ export function AppsOpenFolder(arg1:number):Promise<types.Ok>;
 
 export function AppsOpenInEditor(arg1:number,arg2:string):Promise<types.Ok>;
 
+export function AppsReorder(arg1:number,arg2:Array<number>):Promise<types.Ok>;
+
 export function AppsUpdate(arg1:number,arg2:types.AppUpdateInput):Promise<types.App>;
 
 export function BlueprintsAIPropose(arg1:types.BlueprintAIInput):Promise<types.BlueprintAIResult>;

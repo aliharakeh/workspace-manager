@@ -58,6 +58,10 @@ export function AppsOpenInEditor(arg1, arg2) {
   return window['go']['main']['App']['AppsOpenInEditor'](arg1, arg2);
 }
 
+export function AppsReorder(arg1, arg2) {
+  return window['go']['main']['App']['AppsReorder'](arg1, arg2);
+}
+
 export function AppsUpdate(arg1, arg2) {
   return window['go']['main']['App']['AppsUpdate'](arg1, arg2);
 }

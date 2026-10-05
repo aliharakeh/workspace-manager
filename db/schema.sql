@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS apps (
   name text NOT NULL,
   project_path text NOT NULL,
   active_config_set_id integer,
+  sort_order integer DEFAULT 0 NOT NULL,
   created_at text DEFAULT (datetime('now')) NOT NULL,
   updated_at text DEFAULT (datetime('now')) NOT NULL,
   FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE cascade

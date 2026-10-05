@@ -99,6 +99,14 @@ func (a *App) AppsUpdate(id int64, body types.AppUpdateInput) (types.App, error)
 	return a.db.UpdateAppT(a.ctx, id, name, projectPath)
 }
 
+// AppsReorder saves the order of a workspace's apps; ids lists all of them.
+func (a *App) AppsReorder(workspaceID int64, ids []int64) (types.Ok, error) {
+	if err := a.db.ReorderAppsT(a.ctx, workspaceID, ids); err != nil {
+		return types.Ok{}, err
+	}
+	return types.Ok{Ok: true}, nil
+}
+
 func (a *App) AppsDelete(id int64) (types.Ok, error) {
 	n, err := a.db.DeleteApp(a.ctx, id)
 	if err != nil {

@@ -10,9 +10,12 @@ import (
 )
 
 const createApp = `-- name: CreateApp :one
-INSERT INTO apps (workspace_id, name, project_path)
-VALUES (?, ?, ?)
-RETURNING id, workspace_id, name, project_path, active_config_set_id, created_at, updated_at
+INSERT INTO apps (workspace_id, name, project_path, sort_order)
+VALUES (
+  ?1, ?2, ?3,
+  (SELECT COALESCE(max(sort_order), -1) + 1 FROM apps WHERE workspace_id = ?1)
+)
+RETURNING id, workspace_id, name, project_path, active_config_set_id, sort_order, created_at, updated_at
 `
 
 type CreateAppParams struct {
@@ -30,6 +33,7 @@ func (q *Queries) CreateApp(ctx context.Context, arg CreateAppParams) (App, erro
 		&i.Name,
 		&i.ProjectPath,
 		&i.ActiveConfigSetID,
+		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -622,7 +626,7 @@ SELECT
 FROM apps a
 LEFT JOIN config_sets cs ON cs.id = a.active_config_set_id
 WHERE a.workspace_id = ?
-ORDER BY a.name COLLATE NOCASE ASC
+ORDER BY a.sort_order ASC, a.id ASC
 `
 
 type ListAppsByWorkspaceRow struct {
@@ -962,7 +966,7 @@ const setActiveConfigSet = `-- name: SetActiveConfigSet :one
 UPDATE apps
 SET active_config_set_id = ?, updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, workspace_id, name, project_path, active_config_set_id, created_at, updated_at
+RETURNING id, workspace_id, name, project_path, active_config_set_id, sort_order, created_at, updated_at
 `
 
 type SetActiveConfigSetParams struct {
@@ -979,10 +983,26 @@ func (q *Queries) SetActiveConfigSet(ctx context.Context, arg SetActiveConfigSet
 		&i.Name,
 		&i.ProjectPath,
 		&i.ActiveConfigSetID,
+		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const setAppSortOrder = `-- name: SetAppSortOrder :exec
+UPDATE apps SET sort_order = ? WHERE id = ? AND workspace_id = ?
+`
+
+type SetAppSortOrderParams struct {
+	SortOrder   int64 `json:"sort_order"`
+	ID          int64 `json:"id"`
+	WorkspaceID int64 `json:"workspace_id"`
+}
+
+func (q *Queries) SetAppSortOrder(ctx context.Context, arg SetAppSortOrderParams) error {
+	_, err := q.db.ExecContext(ctx, setAppSortOrder, arg.SortOrder, arg.ID, arg.WorkspaceID)
+	return err
 }
 
 const touchRunConfig = `-- name: TouchRunConfig :one
@@ -1010,7 +1030,7 @@ const updateApp = `-- name: UpdateApp :one
 UPDATE apps
 SET name = ?, project_path = ?, updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, workspace_id, name, project_path, active_config_set_id, created_at, updated_at
+RETURNING id, workspace_id, name, project_path, active_config_set_id, sort_order, created_at, updated_at
 `
 
 type UpdateAppParams struct {
@@ -1028,6 +1048,7 @@ func (q *Queries) UpdateApp(ctx context.Context, arg UpdateAppParams) (App, erro
 		&i.Name,
 		&i.ProjectPath,
 		&i.ActiveConfigSetID,
+		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

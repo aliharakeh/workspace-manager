@@ -152,13 +152,26 @@ function AppContent() {
             const list = prev[app.workspace_id] ?? []
             const exists = list.some(a => a.id === app.id)
             const next = exists ? list.map(a => (a.id === app.id ? app : a)) : [...list, app]
-            return {
-                ...prev,
-                [app.workspace_id]: next.sort((a, b) => a.name.localeCompare(b.name)),
-            }
+            return { ...prev, [app.workspace_id]: next }
         })
         const workspace = workspaces.find(w => w.id === app.workspace_id)
         if (workspace) handleGoApp(workspace, app)
+    }
+
+    // Apply a drag-and-drop order at once, then save it; on failure reload the
+    // saved order.
+    async function handleReorderApps(workspaceId: number, orderedIds: number[]) {
+        setAppsByWorkspace(prev => {
+            const byId = new Map((prev[workspaceId] ?? []).map(a => [a.id, a]))
+            const next = orderedIds.flatMap(id => byId.get(id) ?? [])
+            return { ...prev, [workspaceId]: next }
+        })
+        try {
+            await api.apps.reorder(workspaceId, orderedIds)
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to save the new order')
+            void loadApps(workspaceId)
+        }
     }
 
     // Dropped folders become apps in the open workspace, or in a new "Default"
@@ -207,9 +220,7 @@ function AppContent() {
                 last = app
                 setAppsByWorkspace(prev => ({
                     ...prev,
-                    [target.id]: [...(prev[target.id] ?? []), app].sort((a, b) =>
-                        a.name.localeCompare(b.name),
-                    ),
+                    [target.id]: [...(prev[target.id] ?? []), app],
                 }))
                 toast.success(`Added ${app.name} to ${target.name}`)
             } catch (err) {
@@ -559,6 +570,7 @@ function AppContent() {
                             }}
                             onStatus={handleStatus}
                             onAppChange={handleAppChange}
+                            onReorderApps={ids => void handleReorderApps(selectedWorkspace.id, ids)}
                         />
                     ) : (
                         <div className="flex flex-1 items-center justify-center p-6">
