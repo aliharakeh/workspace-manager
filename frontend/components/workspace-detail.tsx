@@ -12,7 +12,7 @@ import {
   arrayMove,
   sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
+  rectSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import {
@@ -151,11 +151,11 @@ export function WorkspaceDetail({
       >
         <SortableContext
           items={apps.map((app) => app.id)}
-          strategy={verticalListSortingStrategy}
+          strategy={rectSortingStrategy}
         >
-          <ul className="flex flex-col gap-2">
+          <ul className="grid grid-cols-2 gap-4">
             {apps.map((app) => (
-              <SortableAppRow
+              <SortableAppCard
                 key={app.id}
                 app={app}
                 status={statusByAppId[app.id]}
@@ -171,7 +171,7 @@ export function WorkspaceDetail({
   )
 }
 
-type SortableAppRowProps = {
+type SortableAppCardProps = {
   app: App
   status: StatusEvent | undefined
   onSelectApp: (appId: number) => void
@@ -179,13 +179,13 @@ type SortableAppRowProps = {
   onAppChange: (app: App) => void
 }
 
-function SortableAppRow({
+function SortableAppCard({
   app,
   status,
   onSelectApp,
   onStatus,
   onAppChange,
-}: SortableAppRowProps) {
+}: SortableAppCardProps) {
   const {
     attributes,
     listeners,
@@ -210,87 +210,70 @@ function SortableAppRow({
     <li
       ref={setNodeRef}
       style={{
-        // Rows only move vertically, so drop the horizontal offset and scaling.
-        transform: transform
-          ? CSS.Translate.toString({ ...transform, x: 0 })
-          : undefined,
+        transform: CSS.Translate.toString(transform),
         transition,
       }}
-      className={cn("relative", isDragging && "z-10")}
+      className={cn("relative min-w-0", isDragging && "z-10")}
     >
       <div
         className={cn(
-          "flex flex-col gap-3 rounded-xl bg-background px-4 py-3 ring-1 ring-foreground/10",
+          "flex h-full flex-col gap-3 rounded-xl bg-background p-4 ring-1 ring-foreground/10",
           isDragging && "shadow-lg ring-foreground/30"
         )}
       >
-        <div className="flex items-center gap-2">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  ref={setActivatorNodeRef}
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="-ml-2 shrink-0 cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
-                  aria-label={`Reorder ${app.name}`}
-                  {...attributes}
-                  {...listeners}
-                />
-              }
-            >
-              <GripVerticalIcon />
-            </TooltipTrigger>
-            <TooltipContent>Drag to reorder</TooltipContent>
-          </Tooltip>
-          <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <button
-              type="button"
-              className="min-w-0 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => onSelectApp(app.id)}
-            >
-              <div className="flex items-center gap-2">
-                <AppStatusDot running={running} building={building} />
-                <span className="truncate font-medium">{app.name}</span>
-                <Badge variant={running ? "default" : "outline"}>
-                  {appStateLabel(running, building)}
-                </Badge>
-              </div>
-              <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
-                {app.project_path}
-              </p>
-              {running && processCount > 0 ? (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {activeProcesses}/{processCount} process
-                  {processCount === 1 ? "" : "es"} active
-                  {building ? " (build)" : ""}
-                </p>
-              ) : null}
-              {status?.error ? (
-                <p className="mt-1 text-xs text-destructive">{status.error}</p>
-              ) : null}
-            </button>
-            <div className="flex flex-wrap items-center gap-2">
-              <ConfigSetPicker
-                app={app}
-                onAppChange={onAppChange}
-                stopPropagation
-              />
-              <OpenFolderButton appId={app.id} iconOnly />
-              <OpenEditorButton appId={app.id} iconOnly />
-              <AppRunControls
-                appId={app.id}
-                running={running}
-                building={building}
-                onStatus={onStatus}
-                variant="icon"
-              />
+        <div className="flex items-start gap-2">
+          <button
+            type="button"
+            className="min-w-0 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => onSelectApp(app.id)}
+          >
+            <div className="flex items-center gap-2">
+              <AppStatusDot running={running} building={building} />
+              <span className="truncate font-medium">{app.name}</span>
+              <Badge variant={running ? "default" : "outline"}>
+                {appStateLabel(running, building)}
+              </Badge>
             </div>
+            <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
+              {app.project_path}
+            </p>
+            {running && processCount > 0 ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {activeProcesses}/{processCount} process
+                {processCount === 1 ? "" : "es"} active
+                {building ? " (build)" : ""}
+              </p>
+            ) : null}
+            {status?.error ? (
+              <p className="mt-1 text-xs text-destructive">{status.error}</p>
+            ) : null}
+          </button>
+          <div className="-mt-1 -mr-2 flex shrink-0 items-center gap-1">
+            <OpenFolderButton appId={app.id} iconOnly />
+            <OpenEditorButton appId={app.id} iconOnly />
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    ref={setActivatorNodeRef}
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="shrink-0 cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
+                    aria-label={`Reorder ${app.name}`}
+                    {...attributes}
+                    {...listeners}
+                  />
+                }
+              >
+                <GripVerticalIcon />
+              </TooltipTrigger>
+              <TooltipContent>Drag to reorder</TooltipContent>
+            </Tooltip>
           </div>
         </div>
         {readyUrls.length > 0 ? (
-          <ul className="flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
+          <ul className="flex flex-wrap gap-1.5">
             {readyUrls.map((url) => (
               <li key={url} className="max-w-full min-w-0">
                 <Badge
@@ -313,6 +296,20 @@ function SortableAppRow({
             ))}
           </ul>
         ) : null}
+        <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
+          <ConfigSetPicker
+            app={app}
+            onAppChange={onAppChange}
+            stopPropagation
+          />
+          <AppRunControls
+            appId={app.id}
+            running={running}
+            building={building}
+            onStatus={onStatus}
+            variant="icon"
+          />
+        </div>
       </div>
     </li>
   )
