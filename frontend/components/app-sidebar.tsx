@@ -1,10 +1,12 @@
-import { useEffect, useState, type CSSProperties } from "react"
+import { useEffect, useMemo, useState, type CSSProperties } from "react"
 import {
   AppWindowIcon,
   ChevronRightIcon,
   FolderIcon,
   MoonIcon,
   MoreHorizontalIcon,
+  PinIcon,
+  PinOffIcon,
   PlusIcon,
   SettingsIcon,
   SunIcon,
@@ -57,11 +59,13 @@ type AppSidebarProps = {
 }
 
 const COLLAPSED_STORAGE_KEY = "workspace-manager.sidebar.collapsed"
+const PINNED_STORAGE_KEY = "workspace-manager.sidebar.pinned"
 
-// Workspaces the user has collapsed; every other workspace shows its apps.
-function loadCollapsed(): Set<number> {
+// Workspace ids stored under key: the collapsed set (every other workspace
+// shows its apps) and the pinned set (listed first).
+function loadIdSet(key: string): Set<number> {
   try {
-    const raw = localStorage.getItem(COLLAPSED_STORAGE_KEY)
+    const raw = localStorage.getItem(key)
     const ids: unknown = raw ? JSON.parse(raw) : []
     return new Set(Array.isArray(ids) ? ids.filter(Number.isInteger) : [])
   } catch {
@@ -88,7 +92,10 @@ export function AppSidebar({
   const { resolvedTheme, toggleTheme } = useTheme()
   const dark = resolvedTheme === "dark"
 
-  const [collapsed, setCollapsed] = useState(loadCollapsed)
+  const [collapsed, setCollapsed] = useState(() =>
+    loadIdSet(COLLAPSED_STORAGE_KEY)
+  )
+  const [pinned, setPinned] = useState(() => loadIdSet(PINNED_STORAGE_KEY))
   const [seenWorkspaceId, setSeenWorkspaceId] = useState(selectedWorkspaceId)
 
   // Opening a workspace (from the palette, a link or a click) expands it.
@@ -112,13 +119,33 @@ export function AppSidebar({
     }
   }, [collapsed])
 
-  function toggleWorkspace(id: number) {
-    setCollapsed((prev) => {
+  useEffect(() => {
+    try {
+      localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify([...pinned]))
+    } catch {
+      // Storage can be unavailable; the sidebar still works without it.
+    }
+  }, [pinned])
+
+  // Pinned workspaces first; each group keeps the incoming order.
+  const sortedWorkspaces = useMemo(
+    () => [
+      ...workspaces.filter((w) => pinned.has(w.id)),
+      ...workspaces.filter((w) => !pinned.has(w.id)),
+    ],
+    [workspaces, pinned]
+  )
+
+  function toggleIn(setter: typeof setCollapsed, id: number) {
+    setter((prev) => {
       const next = new Set(prev)
       if (!next.delete(id)) next.add(id)
       return next
     })
   }
+
+  const toggleWorkspace = (id: number) => toggleIn(setCollapsed, id)
+  const togglePinned = (id: number) => toggleIn(setPinned, id)
 
   return (
     <Sidebar collapsible="icon">
@@ -154,10 +181,11 @@ export function AppSidebar({
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ) : (
-                workspaces.map((workspace) => {
+                sortedWorkspaces.map((workspace) => {
                   const apps = appsByWorkspace[workspace.id] ?? []
                   const isActive = selectedWorkspaceId === workspace.id
                   const expanded = !collapsed.has(workspace.id)
+                  const isPinned = pinned.has(workspace.id)
                   const colorStyle = workspace.color
                     ? { color: workspace.color }
                     : undefined
@@ -199,6 +227,12 @@ export function AppSidebar({
                       >
                         <FolderIcon style={colorStyle} />
                         <span>{workspace.name}</span>
+                        {isPinned ? (
+                          <PinIcon
+                            className="size-2.5 shrink-0 opacity-60 group-data-[collapsible=icon]:hidden"
+                            aria-label="Pinned"
+                          />
+                        ) : null}
                         {runningInWorkspace > 0 ? (
                           <AppStatusDot
                             running
@@ -248,6 +282,12 @@ export function AppSidebar({
                             New app from blueprint
                           </DropdownMenuItem>
                           <DropdownMenuItem
+                            onClick={() => togglePinned(workspace.id)}
+                          >
+                            {isPinned ? <PinOffIcon /> : <PinIcon />}
+                            {isPinned ? "Unpin" : "Pin to top"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
                             onClick={() => onEditWorkspace(workspace)}
                           >
                             Edit
@@ -271,7 +311,12 @@ export function AppSidebar({
                                 <div className="flex w-full min-w-0 items-center justify-between gap-1">
                                   <SidebarMenuSubButton
                                     isActive={selectedAppId === app.id}
-                                    className="min-w-0 flex-1"
+                                    className={cn(
+                                      "min-w-0 flex-1",
+                                      // Same tint as the workspace row instead of the grey accent.
+                                      workspace.color &&
+                                        "hover:bg-(--ws-row-hover) active:bg-(--ws-row-active) data-active:bg-(--ws-row-active)"
+                                    )}
                                     onClick={() =>
                                       onSelectApp(workspace.id, app.id)
                                     }
