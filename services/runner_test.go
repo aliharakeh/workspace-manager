@@ -21,7 +21,7 @@ func TestRunnerStreamsTerminalOutput(t *testing.T) {
 	InvalidateReadyURLPatternsCache()
 	t.Cleanup(InvalidateReadyURLPatternsCache)
 
-	ws, _ := d.CreateWorkspaceT(ctx, "ws", nil)
+	ws, _ := d.CreateWorkspaceT(ctx, "ws", nil, nil)
 	app, err := d.CreateAppT(ctx, ws.ID, "demo", t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -107,7 +107,7 @@ func TestRunnerBuildRunsBuildCommands(t *testing.T) {
 	InvalidateReadyURLPatternsCache()
 	t.Cleanup(InvalidateReadyURLPatternsCache)
 
-	ws, _ := d.CreateWorkspaceT(ctx, "ws", nil)
+	ws, _ := d.CreateWorkspaceT(ctx, "ws", nil, nil)
 	app, err := d.CreateAppT(ctx, ws.ID, "demo", t.TempDir())
 	if err != nil {
 		t.Fatal(err)

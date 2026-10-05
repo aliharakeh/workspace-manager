@@ -19,6 +19,7 @@ import {
 type OpenEditorButtonProps = {
   appId: number
   iconOnly?: boolean
+  className?: string
 }
 
 // Installed editors don't change while the app runs: look them up once.
@@ -28,7 +29,11 @@ function loadEditors() {
   return editorsPromise
 }
 
-export function OpenEditorButton({ appId, iconOnly }: OpenEditorButtonProps) {
+export function OpenEditorButton({
+  appId,
+  iconOnly,
+  className,
+}: OpenEditorButtonProps) {
   const [editors, setEditors] = useState<Editor[]>([])
 
   useEffect(() => {
@@ -51,6 +56,7 @@ export function OpenEditorButton({ appId, iconOnly }: OpenEditorButtonProps) {
     <Button
       variant="outline"
       size={iconOnly ? "icon-sm" : "sm"}
+      className={className}
       aria-label="Open in editor"
       onClick={(event) => event.stopPropagation()}
     />

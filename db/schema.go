@@ -22,6 +22,9 @@ func applySchema(sqlDB *sql.DB) error {
 	if err := addAppSortOrder(sqlDB); err != nil {
 		return err
 	}
+	if err := addWorkspaceColor(sqlDB); err != nil {
+		return err
+	}
 	if _, err := sqlDB.Exec(schemaSQL); err != nil {
 		return err
 	}
@@ -71,6 +74,22 @@ func addAppSortOrder(sqlDB *sql.DB) error {
 		    AND (b.name COLLATE NOCASE < apps.name COLLATE NOCASE
 		         OR (b.name COLLATE NOCASE = apps.name COLLATE NOCASE AND b.id < apps.id))
 		);`)
+	return err
+}
+
+// addWorkspaceColor upgrades a workspaces table created before workspaces could
+// be colored. NULL means no color. A fresh table already has the column from
+// schemaSQL.
+func addWorkspaceColor(sqlDB *sql.DB) error {
+	cols, err := tableColumns(sqlDB, "workspaces")
+	if err != nil || len(cols) == 0 {
+		return err // fresh database: schemaSQL creates the table with color
+	}
+	has, err := hasColumn(sqlDB, "workspaces", "color")
+	if err != nil || has {
+		return err
+	}
+	_, err = sqlDB.Exec(`ALTER TABLE workspaces ADD COLUMN color text`)
 	return err
 }
 

@@ -4,6 +4,7 @@ type Workspace struct {
 	ID        int64   `json:"id"`
 	Name      string  `json:"name"`
 	Icon      *string `json:"icon"`
+	Color     *string `json:"color"`
 	CreatedAt string  `json:"created_at"`
 	UpdatedAt string  `json:"updated_at"`
 }
@@ -228,14 +229,17 @@ type RunCommandInput struct {
 	Command string  `json:"command"`
 }
 
+// Color is a "#rrggbb" hex string. On update, an empty string clears it.
 type WorkspaceCreateInput struct {
-	Name string  `json:"name"`
-	Icon *string `json:"icon"`
+	Name  string  `json:"name"`
+	Icon  *string `json:"icon"`
+	Color *string `json:"color"`
 }
 
 type WorkspaceUpdateInput struct {
-	Name *string `json:"name"`
-	Icon *string `json:"icon"`
+	Name  *string `json:"name"`
+	Icon  *string `json:"icon"`
+	Color *string `json:"color"`
 }
 
 type AppCreateInput struct {

@@ -11,9 +11,14 @@ import {
 type OpenFolderButtonProps = {
   appId: number
   iconOnly?: boolean
+  className?: string
 }
 
-export function OpenFolderButton({ appId, iconOnly }: OpenFolderButtonProps) {
+export function OpenFolderButton({
+  appId,
+  iconOnly,
+  className,
+}: OpenFolderButtonProps) {
   async function open() {
     try {
       await api.apps.openFolder(appId)
@@ -29,7 +34,12 @@ export function OpenFolderButton({ appId, iconOnly }: OpenFolderButtonProps) {
 
   if (!iconOnly) {
     return (
-      <Button variant="outline" size="sm" onClick={onClick}>
+      <Button
+        variant="outline"
+        size="sm"
+        className={className}
+        onClick={onClick}
+      >
         <FolderOpenIcon data-icon="inline-start" />
         Open folder
       </Button>
@@ -43,6 +53,7 @@ export function OpenFolderButton({ appId, iconOnly }: OpenFolderButtonProps) {
           <Button
             variant="outline"
             size="icon-sm"
+            className={className}
             aria-label="Open folder"
             onClick={onClick}
           />

@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
   id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
   name text NOT NULL,
   icon text,
+  color text,
   created_at text DEFAULT (datetime('now')) NOT NULL,
   updated_at text DEFAULT (datetime('now')) NOT NULL
 );

@@ -2,6 +2,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
 import type { Workspace } from "@/lib/types"
+import { WorkspaceColorPicker } from "@/components/workspace-color-picker"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -38,12 +39,19 @@ export function WorkspaceDialog({
   onSaved,
 }: WorkspaceDialogProps) {
   const [name, setName] = useState(workspace?.name ?? "")
+  const [color, setColor] = useState<string | null>(workspace?.color ?? null)
   const [saving, setSaving] = useState(false)
   const isEdit = !!workspace
 
-  function handleOpenChange(next: boolean) {
-    if (next) setName(workspace?.name ?? "")
-    onOpenChange(next)
+  // The dialog stays mounted, so the form is filled in each time it opens
+  // (the Dialog only reports changes the user makes, not the parent opening it).
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) {
+      setName(workspace?.name ?? "")
+      setColor(workspace?.color ?? null)
+    }
   }
 
   async function handleSave() {
@@ -54,8 +62,11 @@ export function WorkspaceDialog({
     setSaving(true)
     try {
       const saved = isEdit
-        ? await api.workspaces.update(workspace.id, { name: name.trim() })
-        : await api.workspaces.create({ name: name.trim() })
+        ? await api.workspaces.update(workspace.id, {
+            name: name.trim(),
+            color: color ?? "", // "" clears it
+          })
+        : await api.workspaces.create({ name: name.trim(), color })
       onSaved(saved)
       onOpenChange(false)
       toast.success(isEdit ? "Workspace updated" : "Workspace created")
@@ -67,7 +78,7 @@ export function WorkspaceDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit workspace" : "New workspace"}</DialogTitle>
@@ -88,6 +99,10 @@ export function WorkspaceDialog({
                 if (e.key === "Enter") void handleSave()
               }}
             />
+          </Field>
+          <Field>
+            <FieldLabel>Color</FieldLabel>
+            <WorkspaceColorPicker value={color} onChange={setColor} />
           </Field>
         </FieldGroup>
         <DialogFooter>

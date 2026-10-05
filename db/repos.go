@@ -12,7 +12,7 @@ import (
 
 func workspaceFrom(row Workspace) types.Workspace {
 	return types.Workspace{
-		ID: row.ID, Name: row.Name, Icon: row.Icon,
+		ID: row.ID, Name: row.Name, Icon: row.Icon, Color: row.Color,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
 }
@@ -108,15 +108,15 @@ func (d *DB) GetWorkspaceT(ctx context.Context, id int64) (types.Workspace, erro
 	return workspaceFrom(row), nil
 }
 
-func (d *DB) CreateWorkspaceT(ctx context.Context, name string, icon *string) (types.Workspace, error) {
-	row, err := d.CreateWorkspace(ctx, CreateWorkspaceParams{Name: name, Icon: icon})
+func (d *DB) CreateWorkspaceT(ctx context.Context, name string, icon, color *string) (types.Workspace, error) {
+	row, err := d.CreateWorkspace(ctx, CreateWorkspaceParams{Name: name, Icon: icon, Color: color})
 	if err != nil {
 		return types.Workspace{}, err
 	}
 	return workspaceFrom(row), nil
 }
 
-func (d *DB) UpdateWorkspaceT(ctx context.Context, id int64, name *string, icon *string, iconSet bool) (types.Workspace, error) {
+func (d *DB) UpdateWorkspaceT(ctx context.Context, id int64, name *string, icon *string, iconSet bool, color *string, colorSet bool) (types.Workspace, error) {
 	existing, err := d.GetWorkspace(ctx, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -132,7 +132,11 @@ func (d *DB) UpdateWorkspaceT(ctx context.Context, id int64, name *string, icon 
 	if iconSet {
 		nextIcon = icon
 	}
-	row, err := d.UpdateWorkspace(ctx, UpdateWorkspaceParams{Name: nextName, Icon: nextIcon, ID: id})
+	nextColor := existing.Color
+	if colorSet {
+		nextColor = color
+	}
+	row, err := d.UpdateWorkspace(ctx, UpdateWorkspaceParams{Name: nextName, Icon: nextIcon, Color: nextColor, ID: id})
 	if err != nil {
 		return types.Workspace{}, err
 	}

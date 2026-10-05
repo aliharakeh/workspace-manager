@@ -1527,6 +1527,7 @@ export namespace types {
 	    id: number;
 	    name: string;
 	    icon?: string;
+	    color?: string;
 	    created_at: string;
 	    updated_at: string;
 	
@@ -1539,6 +1540,7 @@ export namespace types {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.icon = source["icon"];
+	        this.color = source["color"];
 	        this.created_at = source["created_at"];
 	        this.updated_at = source["updated_at"];
 	    }
@@ -1546,6 +1548,7 @@ export namespace types {
 	export class WorkspaceCreateInput {
 	    name: string;
 	    icon?: string;
+	    color?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new WorkspaceCreateInput(source);
@@ -1555,11 +1558,13 @@ export namespace types {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.icon = source["icon"];
+	        this.color = source["color"];
 	    }
 	}
 	export class WorkspaceUpdateInput {
 	    name?: string;
 	    icon?: string;
+	    color?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new WorkspaceUpdateInput(source);
@@ -1569,6 +1574,7 @@ export namespace types {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.icon = source["icon"];
+	        this.color = source["color"];
 	    }
 	}
 

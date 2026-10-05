@@ -556,6 +556,11 @@ function AppContent() {
                     ) : selectedWorkspace ? (
                         <WorkspaceDetail
                             workspace={selectedWorkspace}
+                            onWorkspaceChange={workspace =>
+                                setWorkspaces(prev =>
+                                    prev.map(w => (w.id === workspace.id ? workspace : w)),
+                                )
+                            }
                             apps={selectedApps}
                             statusByAppId={statusByAppId}
                             onSelectApp={appId => handleSelectApp(selectedWorkspace.id, appId)}

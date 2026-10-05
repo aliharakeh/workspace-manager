@@ -64,9 +64,9 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
 export const api = {
     workspaces: {
         list: () => call(() => Go.WorkspacesList()),
-        create: (body: { name: string; icon?: string | null }) =>
+        create: (body: { name: string; icon?: string | null; color?: string | null }) =>
             call(() => Go.WorkspacesCreate(body)),
-        update: (id: number, body: { name?: string; icon?: string | null }) =>
+        update: (id: number, body: { name?: string; icon?: string | null; color?: string | null }) =>
             call(() => Go.WorkspacesUpdate(id, body)),
         delete: (id: number) => call(() => Go.WorkspacesDelete(id)),
     },

@@ -1,3 +1,4 @@
+import { useState } from "react"
 import {
   DndContext,
   KeyboardSensor,
@@ -22,13 +23,14 @@ import {
   LayoutTemplateIcon,
   PlusIcon,
 } from "lucide-react"
-import { handleReadyUrlClick } from "@/lib/api"
+import { toast } from "sonner"
+import { api, handleReadyUrlClick } from "@/lib/api"
 import type { App, StatusEvent, Workspace } from "@/lib/types"
-import { AppRunControls, AppStatusDot } from "@/components/app-run-controls"
-import { appStateLabel } from "@/lib/app-state"
+import { AppRunControls } from "@/components/app-run-controls"
 import { ConfigSetPicker } from "@/components/config-set-picker"
 import { OpenEditorButton } from "@/components/open-editor-button"
 import { OpenFolderButton } from "@/components/open-folder-button"
+import { WorkspaceColorPicker } from "@/components/workspace-color-picker"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -55,6 +57,8 @@ type WorkspaceDetailProps = {
   onCreateAppFromBlueprint: () => void
   onStatus: (status: StatusEvent) => void
   onAppChange: (app: App) => void
+  /** Called with the saved workspace after its color changes. */
+  onWorkspaceChange: (workspace: Workspace) => void
   /** Called with every app id in the new order after a drag. */
   onReorderApps: (orderedIds: number[]) => void
 }
@@ -68,8 +72,34 @@ export function WorkspaceDetail({
   onCreateAppFromBlueprint,
   onStatus,
   onAppChange,
+  onWorkspaceChange,
   onReorderApps,
 }: WorkspaceDetailProps) {
+  const [savingColor, setSavingColor] = useState(false)
+
+  async function handleColorChange(color: string | null) {
+    if (color === workspace.color) return
+    setSavingColor(true)
+    try {
+      onWorkspaceChange(
+        await api.workspaces.update(workspace.id, { color: color ?? "" }) // "" clears it
+      )
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save color")
+    } finally {
+      setSavingColor(false)
+    }
+  }
+
+  const colorPicker = (compact: boolean) => (
+    <WorkspaceColorPicker
+      value={workspace.color}
+      onChange={(color) => void handleColorChange(color)}
+      disabled={savingColor}
+      compact={compact}
+    />
+  )
+
   const sensors = useSensors(
     // A small drag distance keeps a plain click on the handle from starting a drag.
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -116,6 +146,7 @@ export function WorkspaceDetail({
               From blueprint
             </Button>
           </EmptyContent>
+          {colorPicker(false)}
         </Empty>
       </div>
     )
@@ -123,25 +154,28 @@ export function WorkspaceDetail({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 md:p-6">
-      <div className="flex flex-col gap-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="truncate text-xl font-medium tracking-tight">
-            {workspace.name}
-          </h1>
-          <Badge variant="outline">
-            {apps.length} app{apps.length === 1 ? "" : "s"}
-          </Badge>
-          <Badge variant={runningCount > 0 ? "default" : "outline"}>
-            {runningCount} running
-          </Badge>
-          {buildingCount > 0 ? (
-            <Badge variant="default">{buildingCount} building</Badge>
-          ) : null}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="truncate text-xl font-medium tracking-tight">
+              {workspace.name}
+            </h1>
+            <Badge variant="outline">
+              {apps.length} app{apps.length === 1 ? "" : "s"}
+            </Badge>
+            <Badge variant={runningCount > 0 ? "default" : "outline"}>
+              {runningCount} running
+            </Badge>
+            {buildingCount > 0 ? (
+              <Badge variant="default">{buildingCount} building</Badge>
+            ) : null}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Overview of apps in this workspace. Open an app for env, templates,
+            and logs. Drag an app by its handle to reorder it.
+          </p>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Overview of apps in this workspace. Open an app for env, templates,
-          and logs. Drag an app by its handle to reorder it.
-        </p>
+        <div className="shrink-0 pt-1.5">{colorPicker(true)}</div>
       </div>
 
       <DndContext
@@ -198,10 +232,6 @@ function SortableAppCard({
 
   const running = !!status?.running
   const building = running && status?.kind === "build"
-  const processCount = status?.processes.length ?? 0
-  const activeProcesses = status?.processes.filter(
-    (process) => process.status === "running"
-  ).length
   const readyUrls = running
     ? [...new Set((status?.processes ?? []).flatMap((p) => p.urls ?? []))]
     : []
@@ -217,8 +247,13 @@ function SortableAppCard({
     >
       <div
         className={cn(
-          "flex h-full flex-col gap-3 rounded-xl bg-background p-4 ring-1 ring-foreground/10",
-          isDragging && "shadow-lg ring-foreground/30"
+          "flex h-full flex-col gap-3 rounded-xl bg-background p-4",
+          !running
+            ? "ring-1 ring-foreground/10"
+            : building
+              ? "ring-2 ring-amber-500"
+              : "ring-2 ring-emerald-500",
+          isDragging && "shadow-lg"
         )}
       >
         <div className="flex items-start gap-2">
@@ -227,30 +262,27 @@ function SortableAppCard({
             className="min-w-0 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => onSelectApp(app.id)}
           >
-            <div className="flex items-center gap-2">
-              <AppStatusDot running={running} building={building} />
-              <span className="truncate font-medium">{app.name}</span>
-              <Badge variant={running ? "default" : "outline"}>
-                {appStateLabel(running, building)}
-              </Badge>
-            </div>
+            <span className="block truncate text-base font-semibold tracking-tight text-foreground">
+              {app.name}
+            </span>
             <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
               {app.project_path}
             </p>
-            {running && processCount > 0 ? (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {activeProcesses}/{processCount} process
-                {processCount === 1 ? "" : "es"} active
-                {building ? " (build)" : ""}
-              </p>
-            ) : null}
             {status?.error ? (
               <p className="mt-1 text-xs text-destructive">{status.error}</p>
             ) : null}
           </button>
           <div className="-mt-1 -mr-2 flex shrink-0 items-center gap-1">
-            <OpenFolderButton appId={app.id} iconOnly />
-            <OpenEditorButton appId={app.id} iconOnly />
+            <OpenFolderButton
+              appId={app.id}
+              iconOnly
+              className="border-yellow-200 bg-yellow-100 text-yellow-900 hover:bg-yellow-200 hover:text-yellow-900 dark:border-transparent dark:bg-yellow-500/20 dark:text-yellow-200 dark:hover:bg-yellow-500/30"
+            />
+            <OpenEditorButton
+              appId={app.id}
+              iconOnly
+              className="border-blue-200 bg-blue-100 text-blue-900 hover:bg-blue-200 hover:text-blue-900 aria-expanded:bg-blue-200 aria-expanded:text-blue-900 dark:border-transparent dark:bg-blue-500/20 dark:text-blue-200 dark:hover:bg-blue-500/30 dark:aria-expanded:bg-blue-500/30"
+            />
             <Tooltip>
               <TooltipTrigger
                 render={

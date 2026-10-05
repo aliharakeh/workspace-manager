@@ -224,11 +224,11 @@ func TestReorderApps(t *testing.T) {
 	}
 	d := &DB{SQL: sqlDB, Queries: New(sqlDB)}
 	ctx := context.Background()
-	ws, err := d.CreateWorkspaceT(ctx, "w", nil)
+	ws, err := d.CreateWorkspaceT(ctx, "w", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err := d.CreateWorkspaceT(ctx, "other", nil)
+	other, err := d.CreateWorkspaceT(ctx, "other", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,5 +272,33 @@ func TestReorderApps(t *testing.T) {
 	}
 	if got := names(); got != "abc" {
 		t.Fatalf("a rejected order changed the list: %s", got)
+	}
+}
+
+func TestApplySchemaAddsWorkspaceColor(t *testing.T) {
+	sqlDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+	sqlDB.SetMaxOpenConns(1)
+	// Shape of workspaces before they could be colored.
+	if _, err := sqlDB.Exec(`
+		CREATE TABLE workspaces (id integer PRIMARY KEY AUTOINCREMENT NOT NULL, name text NOT NULL, icon text,
+		  created_at text DEFAULT (datetime('now')) NOT NULL, updated_at text DEFAULT (datetime('now')) NOT NULL);
+		INSERT INTO workspaces (name) VALUES ('a');`); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := applySchema(sqlDB); err != nil {
+			t.Fatalf("apply #%d: %v", i+1, err)
+		}
+	}
+	var color sql.NullString
+	if err := sqlDB.QueryRow(`SELECT color FROM workspaces WHERE name = 'a'`).Scan(&color); err != nil {
+		t.Fatal(err)
+	}
+	if color.Valid {
+		t.Fatalf("existing workspace should have no color, got %q", color.String)
 	}
 }

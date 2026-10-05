@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -21,24 +22,48 @@ func (a *App) WorkspacesList() ([]types.Workspace, error) {
 	return a.db.ListWorkspacesT(a.ctx)
 }
 
+var workspaceColorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+// normalizeWorkspaceColor returns the color to store: nil (none) for nil or "",
+// otherwise a lower-case "#rrggbb". The UI puts it straight into CSS, so
+// anything else is rejected.
+func normalizeWorkspaceColor(color *string) (*string, error) {
+	if color == nil || *color == "" {
+		return nil, nil
+	}
+	if !workspaceColorRe.MatchString(*color) {
+		return nil, fmt.Errorf("color must be a hex value like #3b82f6")
+	}
+	c := strings.ToLower(*color)
+	return &c, nil
+}
+
 func (a *App) WorkspacesCreate(body types.WorkspaceCreateInput) (types.Workspace, error) {
 	name := strings.TrimSpace(body.Name)
 	if name == "" {
 		return types.Workspace{}, fmt.Errorf("name is required")
 	}
-	return a.db.CreateWorkspaceT(a.ctx, name, body.Icon)
+	color, err := normalizeWorkspaceColor(body.Color)
+	if err != nil {
+		return types.Workspace{}, err
+	}
+	return a.db.CreateWorkspaceT(a.ctx, name, body.Icon, color)
 }
 
 func (a *App) WorkspacesUpdate(id int64, body types.WorkspaceUpdateInput) (types.Workspace, error) {
 	if body.Name != nil && strings.TrimSpace(*body.Name) == "" {
 		return types.Workspace{}, fmt.Errorf("name cannot be empty")
 	}
+	color, err := normalizeWorkspaceColor(body.Color)
+	if err != nil {
+		return types.Workspace{}, err
+	}
 	var name *string
 	if body.Name != nil {
 		n := strings.TrimSpace(*body.Name)
 		name = &n
 	}
-	return a.db.UpdateWorkspaceT(a.ctx, id, name, body.Icon, body.Icon != nil)
+	return a.db.UpdateWorkspaceT(a.ctx, id, name, body.Icon, body.Icon != nil, color, body.Color != nil)
 }
 
 func (a *App) WorkspacesDelete(id int64) (types.Ok, error) {

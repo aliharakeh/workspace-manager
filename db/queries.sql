@@ -6,11 +6,11 @@ SELECT * FROM workspaces ORDER BY name COLLATE NOCASE ASC;
 SELECT * FROM workspaces WHERE id = ?;
 
 -- name: CreateWorkspace :one
-INSERT INTO workspaces (name, icon) VALUES (?, ?) RETURNING *;
+INSERT INTO workspaces (name, icon, color) VALUES (?, ?, ?) RETURNING *;
 
 -- name: UpdateWorkspace :one
 UPDATE workspaces
-SET name = ?, icon = ?, updated_at = datetime('now')
+SET name = ?, icon = ?, color = ?, updated_at = datetime('now')
 WHERE id = ?
 RETURNING *;
 

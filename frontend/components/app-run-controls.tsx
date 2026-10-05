@@ -95,7 +95,11 @@ export function AppRunControls({
               />
             }
           >
-            {running ? <SquareIcon /> : <PlayIcon />}
+            {running ? (
+              <SquareIcon className="text-red-600" />
+            ) : (
+              <PlayIcon className="text-emerald-600" />
+            )}
             <span className="sr-only">{label}</span>
           </TooltipTrigger>
           <TooltipContent>{label}</TooltipContent>
@@ -111,6 +115,9 @@ export function AppRunControls({
         hint: "Run the app",
         icon: <PlayIcon />,
         variant: "default",
+        className: running
+          ? ""
+          : "bg-emerald-600 text-white hover:bg-emerald-700",
         disabled: busy || running,
         onClick: () => runAction("run", "Started", "Failed to run"),
       },
@@ -127,6 +134,7 @@ export function AppRunControls({
         hint: building ? "Stop the build" : "Stop the app",
         icon: <SquareIcon />,
         variant: "secondary",
+        className: running ? "bg-red-600 text-white hover:bg-red-700" : "",
         disabled: busy || !running,
         onClick: () => runAction("stop", "Stopped", "Failed to stop"),
       },
@@ -135,6 +143,9 @@ export function AppRunControls({
         hint: "Restart the app (stop, then run again)",
         icon: <RefreshCwIcon />,
         variant: "outline",
+        className: running
+          ? "border-transparent bg-yellow-500 text-black hover:bg-yellow-600 hover:text-black dark:border-transparent dark:bg-yellow-500 dark:hover:bg-yellow-600"
+          : "",
         disabled: busy || building,
         onClick: () => runAction("reload", "Reloaded", "Failed to reload"),
       },
@@ -149,6 +160,7 @@ export function AppRunControls({
                   type="button"
                   size="icon-sm"
                   variant={action.variant}
+                  className={"className" in action ? action.className : undefined}
                   aria-label={action.label}
                   disabled={action.disabled}
                   onClick={(event) => {

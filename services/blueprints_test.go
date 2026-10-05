@@ -60,7 +60,7 @@ func newBlueprintTestDB(t *testing.T) *db.DB {
 func TestBlueprintRun(t *testing.T) {
 	ctx := context.Background()
 	d := newBlueprintTestDB(t)
-	ws, err := d.CreateWorkspaceT(ctx, "ws", nil)
+	ws, err := d.CreateWorkspaceT(ctx, "ws", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestBlueprintRun(t *testing.T) {
 	})
 
 	t.Run("one blueprint builds apps in different workspaces", func(t *testing.T) {
-		other, err := d.CreateWorkspaceT(ctx, "other", nil)
+		other, err := d.CreateWorkspaceT(ctx, "other", nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -201,7 +201,7 @@ func TestBlueprintRun(t *testing.T) {
 func TestBlueprintAskOnError(t *testing.T) {
 	ctx := context.Background()
 	d := newBlueprintTestDB(t)
-	ws, _ := d.CreateWorkspaceT(ctx, "ws", nil)
+	ws, _ := d.CreateWorkspaceT(ctx, "ws", nil, nil)
 	var runner *BlueprintRunner
 	answer := "skip"
 	prompts := 0
@@ -276,7 +276,7 @@ func decodeBlueprintData(t *testing.T, e types.BlueprintLogEvent) string {
 func TestBlueprintTerminal(t *testing.T) {
 	ctx := context.Background()
 	d := newBlueprintTestDB(t)
-	ws, _ := d.CreateWorkspaceT(ctx, "ws", nil)
+	ws, _ := d.CreateWorkspaceT(ctx, "ws", nil, nil)
 
 	// Prompts without a newline, reads a line, then writes what it got to got.txt.
 	command := `set /p ans=Your name: & call echo %^ans%> got.txt`
@@ -343,7 +343,7 @@ func TestBlueprintTerminal(t *testing.T) {
 func TestBlueprintCRUD(t *testing.T) {
 	ctx := context.Background()
 	d := newBlueprintTestDB(t)
-	ws, _ := d.CreateWorkspaceT(ctx, "ws", nil)
+	ws, _ := d.CreateWorkspaceT(ctx, "ws", nil, nil)
 	label := "  Install "
 	bp, err := d.CreateBlueprintT(ctx, types.BlueprintInput{
 		Name: " Vite ", SampleName: " my-vite-app ", CreateFolder: true,

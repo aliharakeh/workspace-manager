@@ -247,21 +247,23 @@ func (q *Queries) CreateTemplate(ctx context.Context, arg CreateTemplateParams) 
 }
 
 const createWorkspace = `-- name: CreateWorkspace :one
-INSERT INTO workspaces (name, icon) VALUES (?, ?) RETURNING id, name, icon, created_at, updated_at
+INSERT INTO workspaces (name, icon, color) VALUES (?, ?, ?) RETURNING id, name, icon, color, created_at, updated_at
 `
 
 type CreateWorkspaceParams struct {
-	Name string  `json:"name"`
-	Icon *string `json:"icon"`
+	Name  string  `json:"name"`
+	Icon  *string `json:"icon"`
+	Color *string `json:"color"`
 }
 
 func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error) {
-	row := q.db.QueryRowContext(ctx, createWorkspace, arg.Name, arg.Icon)
+	row := q.db.QueryRowContext(ctx, createWorkspace, arg.Name, arg.Icon, arg.Color)
 	var i Workspace
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Icon,
+		&i.Color,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -602,7 +604,7 @@ func (q *Queries) GetTemplateByPath(ctx context.Context, arg GetTemplateByPathPa
 }
 
 const getWorkspace = `-- name: GetWorkspace :one
-SELECT id, name, icon, created_at, updated_at FROM workspaces WHERE id = ?
+SELECT id, name, icon, color, created_at, updated_at FROM workspaces WHERE id = ?
 `
 
 func (q *Queries) GetWorkspace(ctx context.Context, id int64) (Workspace, error) {
@@ -612,6 +614,7 @@ func (q *Queries) GetWorkspace(ctx context.Context, id int64) (Workspace, error)
 		&i.ID,
 		&i.Name,
 		&i.Icon,
+		&i.Color,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -918,7 +921,7 @@ func (q *Queries) ListTemplatesByConfigSet(ctx context.Context, configSetID int6
 }
 
 const listWorkspaces = `-- name: ListWorkspaces :many
-SELECT id, name, icon, created_at, updated_at FROM workspaces ORDER BY name COLLATE NOCASE ASC
+SELECT id, name, icon, color, created_at, updated_at FROM workspaces ORDER BY name COLLATE NOCASE ASC
 `
 
 // workspaces (db/workspaces.ts)
@@ -935,6 +938,7 @@ func (q *Queries) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
 			&i.ID,
 			&i.Name,
 			&i.Icon,
+			&i.Color,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -1268,24 +1272,31 @@ func (q *Queries) UpdateTemplate(ctx context.Context, arg UpdateTemplateParams) 
 
 const updateWorkspace = `-- name: UpdateWorkspace :one
 UPDATE workspaces
-SET name = ?, icon = ?, updated_at = datetime('now')
+SET name = ?, icon = ?, color = ?, updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, name, icon, created_at, updated_at
+RETURNING id, name, icon, color, created_at, updated_at
 `
 
 type UpdateWorkspaceParams struct {
-	Name string  `json:"name"`
-	Icon *string `json:"icon"`
-	ID   int64   `json:"id"`
+	Name  string  `json:"name"`
+	Icon  *string `json:"icon"`
+	Color *string `json:"color"`
+	ID    int64   `json:"id"`
 }
 
 func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error) {
-	row := q.db.QueryRowContext(ctx, updateWorkspace, arg.Name, arg.Icon, arg.ID)
+	row := q.db.QueryRowContext(ctx, updateWorkspace,
+		arg.Name,
+		arg.Icon,
+		arg.Color,
+		arg.ID,
+	)
 	var i Workspace
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Icon,
+		&i.Color,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

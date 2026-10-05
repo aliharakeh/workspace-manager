@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, type CSSProperties } from "react"
 import {
   AppWindowIcon,
   ChevronRightIcon,
@@ -13,6 +13,7 @@ import type { App, StatusEvent, Workspace } from "@/lib/types"
 import { AppRunControls, AppStatusDot } from "@/components/app-run-controls"
 import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
+import { workspaceTint } from "@/lib/workspace-colors"
 import {
   Sidebar,
   SidebarContent,
@@ -157,18 +158,46 @@ export function AppSidebar({
                   const apps = appsByWorkspace[workspace.id] ?? []
                   const isActive = selectedWorkspaceId === workspace.id
                   const expanded = !collapsed.has(workspace.id)
+                  const colorStyle = workspace.color
+                    ? { color: workspace.color }
+                    : undefined
+                  const lineProps = workspace.color
+                    ? {
+                        className: "border-l-2",
+                        style: { borderColor: workspace.color },
+                      }
+                    : {}
                   const runningInWorkspace = apps.filter(
                     (app) => statusByAppId[app.id]?.running
                   ).length
                   return (
-                    <SidebarMenuItem key={workspace.id}>
+                    <SidebarMenuItem
+                      key={workspace.id}
+                      className={workspace.color ? "rounded-md" : undefined}
+                      style={
+                        workspace.color
+                          ? ({
+                              backgroundColor: workspaceTint(workspace.color, 5),
+                              "--ws-row": workspaceTint(workspace.color, 11),
+                              "--ws-row-hover": workspaceTint(workspace.color, 16),
+                              "--ws-row-active": workspaceTint(workspace.color, 22),
+                            } as CSSProperties)
+                          : undefined
+                      }
+                    >
                       <SidebarMenuButton
                         isActive={isActive && !selectedAppId}
                         tooltip={workspace.name}
-                        className="group-has-data-[sidebar=menu-action]/menu-item:pr-14"
+                        className={cn(
+                          "group-has-data-[sidebar=menu-action]/menu-item:pr-14",
+                          // The row's own fill, also for hover and the selected state, which
+                          // would otherwise paint the neutral sidebar-accent grey.
+                          workspace.color &&
+                            "bg-(--ws-row) hover:bg-(--ws-row-hover) active:bg-(--ws-row-active) data-active:bg-(--ws-row-active) data-open:hover:bg-(--ws-row-hover)"
+                        )}
                         onClick={() => onSelectWorkspace(workspace.id)}
                       >
-                        <FolderIcon />
+                        <FolderIcon style={colorStyle} />
                         <span>{workspace.name}</span>
                         {runningInWorkspace > 0 ? (
                           <AppStatusDot
@@ -179,6 +208,7 @@ export function AppSidebar({
                       </SidebarMenuButton>
                       <SidebarMenuAction
                         className="right-7"
+                        style={colorStyle}
                         title={
                           expanded
                             ? `Collapse ${workspace.name}`
@@ -199,7 +229,7 @@ export function AppSidebar({
                       </SidebarMenuAction>
                       <DropdownMenu>
                         <DropdownMenuTrigger
-                          render={<SidebarMenuAction showOnHover />}
+                          render={<SidebarMenuAction showOnHover style={colorStyle} />}
                         >
                           <MoreHorizontalIcon />
                           <span className="sr-only">Workspace menu</span>
@@ -231,7 +261,7 @@ export function AppSidebar({
                         </DropdownMenuContent>
                       </DropdownMenu>
                       {expanded && apps.length > 0 ? (
-                        <SidebarMenuSub>
+                        <SidebarMenuSub {...lineProps}>
                           {apps.map((app) => {
                             const running = !!statusByAppId[app.id]?.running
                             const building =
@@ -246,10 +276,6 @@ export function AppSidebar({
                                       onSelectApp(workspace.id, app.id)
                                     }
                                   >
-                                    <AppStatusDot
-                                      running={running}
-                                      building={building}
-                                    />
                                     <span className="truncate">{app.name}</span>
                                   </SidebarMenuSubButton>
                                   <AppRunControls
@@ -267,7 +293,7 @@ export function AppSidebar({
                         </SidebarMenuSub>
                       ) : null}
                       {expanded && apps.length === 0 ? (
-                        <SidebarMenuSub>
+                        <SidebarMenuSub {...lineProps}>
                           <SidebarMenuSubItem>
                             <SidebarMenuSubButton
                               onClick={() => onCreateApp(workspace.id)}
