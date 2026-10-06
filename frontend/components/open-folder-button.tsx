@@ -11,12 +11,14 @@ import {
 type OpenFolderButtonProps = {
   appId: number
   iconOnly?: boolean
+  variant?: React.ComponentProps<typeof Button>["variant"]
   className?: string
 }
 
 export function OpenFolderButton({
   appId,
   iconOnly,
+  variant = "outline",
   className,
 }: OpenFolderButtonProps) {
   async function open() {
@@ -35,7 +37,7 @@ export function OpenFolderButton({
   if (!iconOnly) {
     return (
       <Button
-        variant="outline"
+        variant={variant}
         size="sm"
         className={className}
         onClick={onClick}
@@ -51,7 +53,7 @@ export function OpenFolderButton({
       <TooltipTrigger
         render={
           <Button
-            variant="outline"
+            variant={variant}
             size="icon-sm"
             className={className}
             aria-label="Open folder"

@@ -276,12 +276,14 @@ function SortableAppCard({
             <OpenFolderButton
               appId={app.id}
               iconOnly
-              className="border-yellow-200 bg-yellow-100 text-yellow-900 hover:bg-yellow-200 hover:text-yellow-900 dark:border-transparent dark:bg-yellow-500/20 dark:text-yellow-200 dark:hover:bg-yellow-500/30"
+              variant="ghost"
+              className="text-muted-foreground"
             />
             <OpenEditorButton
               appId={app.id}
               iconOnly
-              className="border-blue-200 bg-blue-100 text-blue-900 hover:bg-blue-200 hover:text-blue-900 aria-expanded:bg-blue-200 aria-expanded:text-blue-900 dark:border-transparent dark:bg-blue-500/20 dark:text-blue-200 dark:hover:bg-blue-500/30 dark:aria-expanded:bg-blue-500/30"
+              variant="ghost"
+              className="text-muted-foreground"
             />
             <Tooltip>
               <TooltipTrigger

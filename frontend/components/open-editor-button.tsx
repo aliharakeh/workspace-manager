@@ -19,6 +19,7 @@ import {
 type OpenEditorButtonProps = {
   appId: number
   iconOnly?: boolean
+  variant?: React.ComponentProps<typeof Button>["variant"]
   className?: string
 }
 
@@ -32,6 +33,7 @@ function loadEditors() {
 export function OpenEditorButton({
   appId,
   iconOnly,
+  variant = "outline",
   className,
 }: OpenEditorButtonProps) {
   const [editors, setEditors] = useState<Editor[]>([])
@@ -54,7 +56,7 @@ export function OpenEditorButton({
 
   const button = (
     <Button
-      variant="outline"
+      variant={variant}
       size={iconOnly ? "icon-sm" : "sm"}
       className={className}
       aria-label="Open in editor"
