@@ -630,6 +630,128 @@ func (a *App) RunnerReload(appID int64) (types.StatusEvent, error) {
 	return a.runner.Reload(a.ctx, appID)
 }
 
+// appProjectDir returns the validated project path of an app.
+func (a *App) appProjectDir(appID int64) (string, error) {
+	app, err := a.db.GetAppT(a.ctx, appID)
+	if err != nil {
+		return "", err
+	}
+	ok, resolved, errMsg := lib.ValidateProjectPath(app.ProjectPath)
+	if !ok {
+		return "", fmt.Errorf("%s", errMsg)
+	}
+	return resolved, nil
+}
+
+func (a *App) GitInfo(appID int64) (types.GitInfo, error) {
+	dir, err := a.appProjectDir(appID)
+	if err != nil {
+		return types.GitInfo{}, err
+	}
+	return services.GitInfo(dir)
+}
+
+func (a *App) GitFetchAll(appID int64) (types.GitOutput, error) {
+	dir, err := a.appProjectDir(appID)
+	if err != nil {
+		return types.GitOutput{}, err
+	}
+	out, err := services.GitFetchAll(dir)
+	if err != nil {
+		return types.GitOutput{}, err
+	}
+	return types.GitOutput{Output: out}, nil
+}
+
+func (a *App) GitWorktreeAdd(appID int64, body types.GitWorktreeAddInput) (types.GitWorktreeAddResult, error) {
+	dir, err := a.appProjectDir(appID)
+	if err != nil {
+		return types.GitWorktreeAddResult{}, err
+	}
+	path, err := services.GitWorktreeAdd(dir, body)
+	if err != nil {
+		return types.GitWorktreeAddResult{}, err
+	}
+	return types.GitWorktreeAddResult{Path: path}, nil
+}
+
+func (a *App) GitWorktreeRemove(appID int64, path string, force bool) (types.Ok, error) {
+	dir, err := a.appProjectDir(appID)
+	if err != nil {
+		return types.Ok{}, err
+	}
+	if err := services.GitWorktreeRemove(dir, path, force); err != nil {
+		return types.Ok{}, err
+	}
+	return types.Ok{Ok: true}, nil
+}
+
+func (a *App) GitWorktreePrune(appID int64) (types.GitOutput, error) {
+	dir, err := a.appProjectDir(appID)
+	if err != nil {
+		return types.GitOutput{}, err
+	}
+	out, err := services.GitWorktreePrune(dir)
+	if err != nil {
+		return types.GitOutput{}, err
+	}
+	return types.GitOutput{Output: out}, nil
+}
+
+// GitWorktreeStart runs the app's run, build or setup config (by kind) inside
+// the worktree at path, with config set configSetID (0: the app's active set).
+// It is the app's one runner session, like RunnerRun.
+func (a *App) GitWorktreeStart(appID int64, path string, kind string, configSetID int64) (types.StatusEvent, error) {
+	if kind != types.KindRun && kind != types.KindBuild && kind != types.KindSetup {
+		return types.StatusEvent{}, fmt.Errorf("unknown kind %q", kind)
+	}
+	dir, err := a.appProjectDir(appID)
+	if err != nil {
+		return types.StatusEvent{}, err
+	}
+	appDir, root, err := services.WorktreeAppDir(dir, path)
+	if err != nil {
+		return types.StatusEvent{}, err
+	}
+	return a.runner.StartIn(a.ctx, appID, kind, appDir, root, configSetID)
+}
+
+// worktreeAppDir is the app's folder inside the worktree at path, as used by
+// GitWorktreeStart.
+func (a *App) worktreeAppDir(appID int64, path string) (string, error) {
+	dir, err := a.appProjectDir(appID)
+	if err != nil {
+		return "", err
+	}
+	appDir, _, err := services.WorktreeAppDir(dir, path)
+	return appDir, err
+}
+
+// GitWorktreeOpenFolder opens the app's folder inside the worktree at path.
+func (a *App) GitWorktreeOpenFolder(appID int64, path string) (types.Ok, error) {
+	appDir, err := a.worktreeAppDir(appID, path)
+	if err != nil {
+		return types.Ok{}, err
+	}
+	if err := native.OpenFolder(appDir); err != nil {
+		return types.Ok{}, err
+	}
+	return types.Ok{Ok: true}, nil
+}
+
+// GitWorktreeOpenInEditor opens the app's folder inside the worktree at path in
+// an editor (an id from AppsEditors).
+func (a *App) GitWorktreeOpenInEditor(appID int64, path string, editor string) (types.Ok, error) {
+	appDir, err := a.worktreeAppDir(appID, path)
+	if err != nil {
+		return types.Ok{}, err
+	}
+	if err := native.OpenInEditor(editor, appDir); err != nil {
+		return types.Ok{}, err
+	}
+	return types.Ok{Ok: true}, nil
+}
+
 func (a *App) PortsList() (types.PortsListResult, error) {
 	procs, err := native.ListListeningProcesses()
 	if err != nil {

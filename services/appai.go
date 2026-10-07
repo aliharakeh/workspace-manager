@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"workspace-manager/db"
@@ -21,6 +22,9 @@ Use tools to inspect and change this set:
 - run config (commands that start the app): get_run_config, update_run_config
 - build config (commands that build it, run on demand): get_build_config, update_build_config
 - project files: search_files (glob; gitignored omitted), read_file (relative path)
+- git: git_fetch_all (runs "git fetch --all --prune" immediately), prune_worktrees (runs "git worktree prune" immediately),
+  list_worktrees, list_branches,
+  add_worktree, remove_worktree (worktree changes are staged and run only when the user applies)
 
 You must NOT:
 - create, rename, or delete config sets
@@ -29,6 +33,7 @@ You must NOT:
 - get, update, or delete env vars that list_vars returns without a value (AI-excluded)
 
 When updating run or build commands, send the full command list.
+Only add or remove worktrees when the user asks. Never remove the main worktree. Use force on remove only when the user accepts losing uncommitted changes.
 Edits are staged for the user to review. Reply in short markdown (lists, inline code). No JSON. No headings.`
 
 type emptyIn struct{}
@@ -96,6 +101,8 @@ type appAIState struct {
 	origTmpl    map[string]string
 	run         commandList
 	build       commandList
+	wtAdd       []types.GitWorktreeAddInput
+	wtRemove    []types.AppAIWorktreeRemove
 	calls       []types.AppAIToolCall
 	emit        func(types.AppAIStreamEvent)
 }
@@ -189,6 +196,9 @@ func (s *appAIState) patch() types.AppAIPatch {
 	}
 	p.Run = s.run.patch()
 	p.Build = s.build.patch()
+	if len(s.wtAdd) > 0 || len(s.wtRemove) > 0 {
+		p.Worktrees = &types.AppAIWorktreePatch{Add: s.wtAdd, Remove: s.wtRemove}
+	}
 	return p
 }
 
@@ -345,6 +355,99 @@ func (s *appAIState) readFile(path string) map[string]any {
 	return map[string]any{"file_path": rel, "content": content}
 }
 
+func (s *appAIState) gitFetchAll() map[string]any {
+	out, err := GitFetchAll(s.projectPath)
+	if err != nil {
+		return map[string]any{"error": err.Error()}
+	}
+	return map[string]any{"ok": true, "output": out}
+}
+
+func (s *appAIState) pruneWorktrees() map[string]any {
+	out, err := GitWorktreePrune(s.projectPath)
+	if err != nil {
+		return map[string]any{"error": err.Error()}
+	}
+	return map[string]any{"ok": true, "output": out}
+}
+
+// worktreesNow lists the repo's worktrees, without the staged changes.
+func (s *appAIState) worktreesNow() ([]types.GitWorktree, map[string]any) {
+	wts, err := GitWorktrees(s.projectPath)
+	if err != nil {
+		return nil, map[string]any{"error": err.Error()}
+	}
+	return wts, nil
+}
+
+func (s *appAIState) listWorktrees() map[string]any {
+	wts, errOut := s.worktreesNow()
+	if errOut != nil {
+		return errOut
+	}
+	out := map[string]any{"worktrees": wts}
+	if len(s.wtAdd) > 0 || len(s.wtRemove) > 0 {
+		out["staged"] = types.AppAIWorktreePatch{Add: s.wtAdd, Remove: s.wtRemove}
+	}
+	return out
+}
+
+func (s *appAIState) listBranches() map[string]any {
+	branches, err := GitBranches(s.projectPath)
+	if err != nil {
+		return map[string]any{"error": err.Error()}
+	}
+	return map[string]any{"branches": branches}
+}
+
+func (s *appAIState) addWorktree(in types.GitWorktreeAddInput) map[string]any {
+	wts, errOut := s.worktreesNow()
+	if errOut != nil {
+		return errOut
+	}
+	// Staged adds count as existing so two adds cannot clash.
+	for _, a := range s.wtAdd {
+		wts = append(wts, types.GitWorktree{Path: a.Path, Branch: a.Branch})
+	}
+	in, err := ResolveWorktreeAdd(s.projectPath, wts, in)
+	if err != nil {
+		return map[string]any{"error": err.Error()}
+	}
+	s.wtAdd = append(s.wtAdd, in)
+	return map[string]any{"ok": true, "staged": in}
+}
+
+func (s *appAIState) removeWorktree(in types.AppAIWorktreeRemove) map[string]any {
+	wts, errOut := s.worktreesNow()
+	if errOut != nil {
+		return errOut
+	}
+	path := strings.TrimSpace(in.Path)
+	if path != "" && !filepath.IsAbs(path) {
+		path = filepath.Join(s.projectPath, path)
+	}
+	// Removing a worktree this chat staged just drops the staged add.
+	for i, a := range s.wtAdd {
+		if samePath(a.Path, path) {
+			s.wtAdd = append(s.wtAdd[:i], s.wtAdd[i+1:]...)
+			return map[string]any{"ok": true, "unstaged_add": a.Path}
+		}
+	}
+	w, err := FindRemovableWorktree(s.projectPath, wts, path)
+	if err != nil {
+		return map[string]any{"error": err.Error()}
+	}
+	for i, r := range s.wtRemove {
+		if samePath(r.Path, w.Path) {
+			s.wtRemove[i].Force = in.Force
+			return map[string]any{"ok": true, "staged": s.wtRemove[i]}
+		}
+	}
+	r := types.AppAIWorktreeRemove{Path: w.Path, Force: in.Force}
+	s.wtRemove = append(s.wtRemove, r)
+	return map[string]any{"ok": true, "staged": r}
+}
+
 func (s *appAIState) tools() []ai.ToolRef {
 	return []ai.ToolRef{
 		ai.NewTool("list_vars", "List all env var keys; values are omitted for AI-excluded vars.",
@@ -399,12 +502,36 @@ func (s *appAIState) tools() []ai.ToolRef {
 			func(_ *ai.ToolContext, in filePathIn) (any, error) {
 				return s.record("read_file", in, s.readFile(in.Path)), nil
 			}),
+		ai.NewTool("git_fetch_all", "Run git fetch --all --prune in the project now (not staged). Returns git's output.",
+			func(_ *ai.ToolContext, in emptyIn) (any, error) {
+				return s.record("git_fetch_all", in, s.gitFetchAll()), nil
+			}),
+		ai.NewTool("prune_worktrees", "Run git worktree prune now (not staged): drops records of worktrees whose folder was deleted. Returns git's output.",
+			func(_ *ai.ToolContext, in emptyIn) (any, error) {
+				return s.record("prune_worktrees", in, s.pruneWorktrees()), nil
+			}),
+		ai.NewTool("list_worktrees", "List the repo's git worktrees (path, branch, main, current) and any worktree changes staged in this chat.",
+			func(_ *ai.ToolContext, in emptyIn) (any, error) {
+				return s.record("list_worktrees", in, s.listWorktrees()), nil
+			}),
+		ai.NewTool("list_branches", "List local branches, then remote-tracking branches (e.g. origin/main).",
+			func(_ *ai.ToolContext, in emptyIn) (any, error) {
+				return s.record("list_branches", in, s.listBranches()), nil
+			}),
+		ai.NewTool("add_worktree", "Stage a new git worktree. new_branch=true creates branch from base (default HEAD); otherwise branch must exist and not be checked out. path is optional (default: sibling folder <repo>-<branch>); relative paths are from the project path.",
+			func(_ *ai.ToolContext, in types.GitWorktreeAddInput) (any, error) {
+				return s.record("add_worktree", in, s.addWorktree(in)), nil
+			}),
+		ai.NewTool("remove_worktree", "Stage removal of a linked git worktree by path (from list_worktrees). The branch is kept. force=true also removes uncommitted changes. The main worktree and this app's own worktree cannot be removed.",
+			func(_ *ai.ToolContext, in types.AppAIWorktreeRemove) (any, error) {
+				return s.record("remove_worktree", in, s.removeWorktree(in)), nil
+			}),
 	}
 }
 
 func buildAppAIAgentContext(appName, projectPath, setName string, setID int64) string {
 	return fmt.Sprintf(
-		"App: %s\nProject path: %s\n\nActive config set (ONLY edit this one):\nid: %d\nname: %s\n\nUse tools to read or edit env vars, templates, run config, and build config. Use search_files and read_file when you need project files.",
+		"App: %s\nProject path: %s\n\nActive config set (ONLY edit this one):\nid: %d\nname: %s\n\nUse tools to read or edit env vars, templates, run config, and build config. Use search_files and read_file when you need project files. Use the git tools for fetching and worktrees.",
 		appName, projectPath, setID, setName,
 	)
 }
@@ -452,7 +579,7 @@ func patchHasEdits(p types.AppAIPatch) bool {
 	if len(p.Templates) > 0 {
 		return true
 	}
-	return p.Run != nil || p.Build != nil
+	return p.Run != nil || p.Build != nil || p.Worktrees != nil
 }
 
 // AppChatAI runs the config-set agent with tools. Updates are staged in the

@@ -1,5 +1,10 @@
 import { useMemo, useState } from "react"
-import { ExternalLinkIcon, PencilIcon, Trash2Icon } from "lucide-react"
+import {
+  ExternalLinkIcon,
+  GitBranchIcon,
+  PencilIcon,
+  Trash2Icon,
+} from "lucide-react"
 import { handleReadyUrlClick } from "@/lib/api"
 import type { App, StatusEvent } from "@/lib/types"
 import type { AppTab } from "@/lib/routes"
@@ -13,6 +18,7 @@ import { EnvVarsPanel } from "@/components/env-vars-panel"
 import { TemplatesPanel } from "@/components/templates-panel"
 import { CommandConfigPanel } from "@/components/command-config-panel"
 import { LogsPanel } from "@/components/logs-panel"
+import { GitPanel } from "@/components/git-panel"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -81,6 +87,13 @@ export function AppDetail({
           <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
             {app.project_path}
           </p>
+          {running && status?.worktree ? (
+            <p className="mt-1 flex items-center gap-1 truncate text-xs text-muted-foreground">
+              <GitBranchIcon className="size-3.5 shrink-0" />
+              In worktree
+              <span className="truncate font-mono">{status.worktree}</span>
+            </p>
+          ) : null}
           <div className="mt-3">
             <ConfigSetSwitcher app={app} onAppChange={handleAppChange} />
           </div>
@@ -166,6 +179,7 @@ export function AppDetail({
           <TabsTrigger value="setup">Setup</TabsTrigger>
           <TabsTrigger value="run">Run</TabsTrigger>
           <TabsTrigger value="build">Build</TabsTrigger>
+          <TabsTrigger value="git">Git</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
         </TabsList>
@@ -190,7 +204,16 @@ export function AppDetail({
         <TabsContent value="build" className="mt-4 min-h-0 overflow-y-auto">
           <CommandConfigPanel key={panelKey} appId={app.id} kind="build" />
         </TabsContent>
-        <TabsContent value="ai" className="flex min-h-0 flex-1 flex-col overflow-hidden pt-4" keepMounted>
+        <TabsContent value="git" className="mt-4 min-h-0 overflow-y-auto">
+          <GitPanel
+            appId={app.id}
+            active={tab === "git"}
+            activeConfigSetId={app.active_config_set_id ?? null}
+            status={status}
+            onStatus={handleStatus}
+          />
+        </TabsContent>
+        <TabsContent value="ai"className="flex min-h-0 flex-1 flex-col overflow-hidden pt-4" keepMounted>
           <AppAIPanel
             app={app}
             onApplied={() => setPanelEpoch((n) => n + 1)}

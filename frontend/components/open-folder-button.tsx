@@ -10,6 +10,8 @@ import {
 
 type OpenFolderButtonProps = {
   appId: number
+  /** Open the app's folder inside this git worktree instead of its project path. */
+  worktreePath?: string
   iconOnly?: boolean
   variant?: React.ComponentProps<typeof Button>["variant"]
   className?: string
@@ -17,13 +19,18 @@ type OpenFolderButtonProps = {
 
 export function OpenFolderButton({
   appId,
+  worktreePath,
   iconOnly,
   variant = "outline",
   className,
 }: OpenFolderButtonProps) {
   async function open() {
     try {
-      await api.apps.openFolder(appId)
+      if (worktreePath) {
+        await api.git.worktreeOpenFolder(appId, worktreePath)
+      } else {
+        await api.apps.openFolder(appId)
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not open folder")
     }
@@ -63,7 +70,9 @@ export function OpenFolderButton({
       >
         <FolderOpenIcon />
       </TooltipTrigger>
-      <TooltipContent>Open the project folder</TooltipContent>
+      <TooltipContent>
+        {worktreePath ? "Open this worktree's folder" : "Open the project folder"}
+      </TooltipContent>
     </Tooltip>
   )
 }

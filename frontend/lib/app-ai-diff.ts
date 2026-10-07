@@ -10,6 +10,8 @@ export type AppAIFileDiff = {
 export type AppAIDiff = {
   files: AppAIFileDiff[]
   skipped: string[]
+  /** Git actions that run on apply, one line each. */
+  actions: string[]
 }
 
 function dumpEnv(pairs: { key: string; value: string }[]): string {
@@ -126,9 +128,20 @@ export function buildAppAIDiff(
     }
   }
 
-  return { files, skipped }
+  const actions: string[] = []
+  for (const r of patch.worktrees?.remove ?? []) {
+    actions.push(`Remove worktree ${r.path}${r.force ? " (force)" : ""}`)
+  }
+  for (const a of patch.worktrees?.add ?? []) {
+    const what = a.new_branch
+      ? `new branch ${a.branch} from ${a.base || "HEAD"}`
+      : `branch ${a.branch}`
+    actions.push(`Add worktree ${a.path} (${what})`)
+  }
+
+  return { files, skipped, actions }
 }
 
 export function appAIDiffCount(diff: AppAIDiff): number {
-  return diff.files.length + diff.skipped.length
+  return diff.files.length + diff.skipped.length + diff.actions.length
 }

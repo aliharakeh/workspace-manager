@@ -1,4 +1,4 @@
-import type { ConfigSetDetail, RunMode } from "./types"
+import type { ConfigSetDetail, GitWorktreeAddInput, RunMode } from "./types"
 
 export const APP_AI_SYSTEM_PROMPT = `You are a configuration assistant for Workspace Manager.
 You edit ONLY the currently selected config set of the current app.
@@ -64,6 +64,11 @@ export type AppAIPatch = {
   templates?: { file_path: string; content: string }[]
   run?: AppAICommandPatch
   build?: AppAICommandPatch
+  /** Git worktree changes; they run against the repo when the patch is applied. */
+  worktrees?: {
+    add?: GitWorktreeAddInput[]
+    remove?: { path: string; force: boolean }[]
+  }
 }
 
 /** A staged change to a run or build config. */
@@ -218,6 +223,8 @@ export function patchHasEdits(patch: AppAIPatch): boolean {
     patch.env?.delete?.length ||
     patch.templates?.length ||
     patch.run ||
-    patch.build
+    patch.build ||
+    patch.worktrees?.add?.length ||
+    patch.worktrees?.remove?.length
   )
 }

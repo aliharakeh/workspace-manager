@@ -174,6 +174,38 @@ export function FsValidatePath(arg1) {
   return window['go']['main']['App']['FsValidatePath'](arg1);
 }
 
+export function GitFetchAll(arg1) {
+  return window['go']['main']['App']['GitFetchAll'](arg1);
+}
+
+export function GitInfo(arg1) {
+  return window['go']['main']['App']['GitInfo'](arg1);
+}
+
+export function GitWorktreeAdd(arg1, arg2) {
+  return window['go']['main']['App']['GitWorktreeAdd'](arg1, arg2);
+}
+
+export function GitWorktreeOpenFolder(arg1, arg2) {
+  return window['go']['main']['App']['GitWorktreeOpenFolder'](arg1, arg2);
+}
+
+export function GitWorktreeOpenInEditor(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GitWorktreeOpenInEditor'](arg1, arg2, arg3);
+}
+
+export function GitWorktreePrune(arg1) {
+  return window['go']['main']['App']['GitWorktreePrune'](arg1);
+}
+
+export function GitWorktreeRemove(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GitWorktreeRemove'](arg1, arg2, arg3);
+}
+
+export function GitWorktreeStart(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GitWorktreeStart'](arg1, arg2, arg3, arg4);
+}
+
 export function OpenExternal(arg1) {
   return window['go']['main']['App']['OpenExternal'](arg1);
 }

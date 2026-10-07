@@ -269,6 +269,70 @@ export namespace types {
 		    return a;
 		}
 	}
+	export class AppAIWorktreeRemove {
+	    path: string;
+	    force: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIWorktreeRemove(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.force = source["force"];
+	    }
+	}
+	export class GitWorktreeAddInput {
+	    path: string;
+	    branch: string;
+	    new_branch: boolean;
+	    base: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GitWorktreeAddInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.branch = source["branch"];
+	        this.new_branch = source["new_branch"];
+	        this.base = source["base"];
+	    }
+	}
+	export class AppAIWorktreePatch {
+	    add?: GitWorktreeAddInput[];
+	    remove?: AppAIWorktreeRemove[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIWorktreePatch(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.add = this.convertValues(source["add"], GitWorktreeAddInput);
+	        this.remove = this.convertValues(source["remove"], AppAIWorktreeRemove);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class AppAIRunCommand {
 	    label?: string;
 	    command: string;
@@ -381,6 +445,7 @@ export namespace types {
 	    templates?: AppAITemplatePatch[];
 	    run?: AppAIRunPatch;
 	    build?: AppAIRunPatch;
+	    worktrees?: AppAIWorktreePatch;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppAIPatch(source);
@@ -393,6 +458,7 @@ export namespace types {
 	        this.templates = this.convertValues(source["templates"], AppAITemplatePatch);
 	        this.run = this.convertValues(source["run"], AppAIRunPatch);
 	        this.build = this.convertValues(source["build"], AppAIRunPatch);
+	        this.worktrees = this.convertValues(source["worktrees"], AppAIWorktreePatch);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -447,6 +513,8 @@ export namespace types {
 		    return a;
 		}
 	}
+	
+	
 	
 	
 	
@@ -1063,6 +1131,94 @@ export namespace types {
 	        this.startDir = source["startDir"];
 	    }
 	}
+	export class GitWorktree {
+	    path: string;
+	    head: string;
+	    branch: string;
+	    detached: boolean;
+	    bare: boolean;
+	    locked: boolean;
+	    prunable: boolean;
+	    main: boolean;
+	    current: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new GitWorktree(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.head = source["head"];
+	        this.branch = source["branch"];
+	        this.detached = source["detached"];
+	        this.bare = source["bare"];
+	        this.locked = source["locked"];
+	        this.prunable = source["prunable"];
+	        this.main = source["main"];
+	        this.current = source["current"];
+	    }
+	}
+	export class GitInfo {
+	    is_repo: boolean;
+	    worktrees: GitWorktree[];
+	    branches: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new GitInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.is_repo = source["is_repo"];
+	        this.worktrees = this.convertValues(source["worktrees"], GitWorktree);
+	        this.branches = source["branches"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class GitOutput {
+	    output: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GitOutput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.output = source["output"];
+	    }
+	}
+	
+	
+	export class GitWorktreeAddResult {
+	    path: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GitWorktreeAddResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	    }
+	}
 	export class ImportTemplateResult {
 	    id: number;
 	    file_path: string;
@@ -1445,6 +1601,8 @@ export namespace types {
 	    sessionId: string;
 	    appId: number;
 	    kind: string;
+	    worktree?: string;
+	    configSetId?: number;
 	    running: boolean;
 	    processes: ProcessState[];
 	    error?: string;
@@ -1460,6 +1618,8 @@ export namespace types {
 	        this.sessionId = source["sessionId"];
 	        this.appId = source["appId"];
 	        this.kind = source["kind"];
+	        this.worktree = source["worktree"];
+	        this.configSetId = source["configSetId"];
 	        this.running = source["running"];
 	        this.processes = this.convertValues(source["processes"], ProcessState);
 	        this.error = source["error"];

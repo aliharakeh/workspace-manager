@@ -30,20 +30,21 @@ func backupRoot(appID int64, sessionID string) string {
 	return filepath.Join(db.DataDir(), "backups", strconv.FormatInt(appID, 10), sessionID)
 }
 
-func ApplyTemplates(ctx context.Context, d *db.DB, appID int64, sessionID string) error {
+// ApplyTemplates renders config set setID's templates into dir (the app's
+// project path when empty), backing up the originals for RestoreTemplates.
+func ApplyTemplates(ctx context.Context, d *db.DB, appID, setID int64, dir, sessionID string) error {
 	app, err := d.GetAppT(ctx, appID)
 	if err != nil {
 		return err
 	}
-	set, err := d.ResolveActive(ctx, appID)
+	if dir == "" {
+		dir = app.ProjectPath
+	}
+	templates, err := d.ListTemplatesT(ctx, setID)
 	if err != nil {
 		return err
 	}
-	templates, err := d.ListTemplatesT(ctx, set.ID)
-	if err != nil {
-		return err
-	}
-	env, err := d.EnvToRecord(ctx, set.ID)
+	env, err := d.EnvToRecord(ctx, setID)
 	if err != nil {
 		return err
 	}
@@ -52,56 +53,57 @@ func ApplyTemplates(ctx context.Context, d *db.DB, appID int64, sessionID string
 		return err
 	}
 	for _, template := range templates {
-		targetPath, err := lib.ResolveSafePath(app.ProjectPath, template.FilePath)
+		targetPath, err := lib.ResolveSafePath(dir, template.FilePath)
 		if err != nil {
-			_ = RestoreTemplates(ctx, d, appID, sessionID)
+			_ = RestoreTemplates(ctx, d, appID, setID, dir, sessionID)
 			return err
 		}
 		if _, err := os.Stat(targetPath); err != nil {
-			_ = RestoreTemplates(ctx, d, appID, sessionID)
+			_ = RestoreTemplates(ctx, d, appID, setID, dir, sessionID)
 			return fmt.Errorf("Target file does not exist: %s", template.FilePath)
 		}
 		backupPath := filepath.Join(backupDir, filepath.FromSlash(strings.ReplaceAll(template.FilePath, "\\", "/")))
 		if err := os.MkdirAll(filepath.Dir(backupPath), 0o755); err != nil {
-			_ = RestoreTemplates(ctx, d, appID, sessionID)
+			_ = RestoreTemplates(ctx, d, appID, setID, dir, sessionID)
 			return err
 		}
 		data, err := os.ReadFile(targetPath)
 		if err != nil {
-			_ = RestoreTemplates(ctx, d, appID, sessionID)
+			_ = RestoreTemplates(ctx, d, appID, setID, dir, sessionID)
 			return err
 		}
 		if err := os.WriteFile(backupPath, data, 0o644); err != nil {
-			_ = RestoreTemplates(ctx, d, appID, sessionID)
+			_ = RestoreTemplates(ctx, d, appID, setID, dir, sessionID)
 			return err
 		}
 		rendered, err := renderHandlebars(template.Content, env)
 		if err != nil {
-			_ = RestoreTemplates(ctx, d, appID, sessionID)
+			_ = RestoreTemplates(ctx, d, appID, setID, dir, sessionID)
 			return fmt.Errorf("failed to render template %s: %w", template.FilePath, err)
 		}
 		if err := os.WriteFile(targetPath, []byte(rendered), 0o644); err != nil {
-			_ = RestoreTemplates(ctx, d, appID, sessionID)
+			_ = RestoreTemplates(ctx, d, appID, setID, dir, sessionID)
 			return err
 		}
 	}
 	return nil
 }
 
-func RestoreTemplates(ctx context.Context, d *db.DB, appID int64, sessionID string) error {
+// RestoreTemplates puts back the files ApplyTemplates replaced in dir (the app's
+// project path when empty).
+func RestoreTemplates(ctx context.Context, d *db.DB, appID, setID int64, dir, sessionID string) error {
 	app, err := d.GetAppT(ctx, appID)
 	if err != nil {
 		return nil
+	}
+	if dir == "" {
+		dir = app.ProjectPath
 	}
 	backupDir := backupRoot(appID, sessionID)
 	if _, err := os.Stat(backupDir); err != nil {
 		return nil
 	}
-	set, err := d.ResolveActive(ctx, appID)
-	if err != nil {
-		return err
-	}
-	templates, err := d.ListTemplatesT(ctx, set.ID)
+	templates, err := d.ListTemplatesT(ctx, setID)
 	if err != nil {
 		return err
 	}
@@ -110,7 +112,7 @@ func RestoreTemplates(ctx context.Context, d *db.DB, appID int64, sessionID stri
 		if _, err := os.Stat(backupPath); err != nil {
 			continue
 		}
-		targetPath, err := lib.ResolveSafePath(app.ProjectPath, template.FilePath)
+		targetPath, err := lib.ResolveSafePath(dir, template.FilePath)
 		if err != nil {
 			continue
 		}

@@ -18,6 +18,8 @@ import {
 
 type OpenEditorButtonProps = {
   appId: number
+  /** Open the app's folder inside this git worktree instead of its project path. */
+  worktreePath?: string
   iconOnly?: boolean
   variant?: React.ComponentProps<typeof Button>["variant"]
   className?: string
@@ -32,6 +34,7 @@ function loadEditors() {
 
 export function OpenEditorButton({
   appId,
+  worktreePath,
   iconOnly,
   variant = "outline",
   className,
@@ -44,7 +47,11 @@ export function OpenEditorButton({
 
   async function open(editor: Editor) {
     try {
-      await api.apps.openInEditor(appId, editor.id)
+      if (worktreePath) {
+        await api.git.worktreeOpenInEditor(appId, worktreePath, editor.id)
+      } else {
+        await api.apps.openInEditor(appId, editor.id)
+      }
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : `Could not open ${editor.name}`
@@ -73,7 +80,11 @@ export function OpenEditorButton({
           >
             <CodeIcon />
           </TooltipTrigger>
-          <TooltipContent>Open the project in an editor</TooltipContent>
+          <TooltipContent>
+            {worktreePath
+              ? "Open this worktree in an editor"
+              : "Open the project in an editor"}
+          </TooltipContent>
         </Tooltip>
       ) : (
         <DropdownMenuTrigger render={button}>

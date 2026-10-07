@@ -22,6 +22,13 @@ type session struct {
 	appID           int64
 	appName         string
 	kind            string
+	// dir is where commands run and templates are applied: the app's project
+	// path, or the matching folder of a git worktree (then worktree is that
+	// worktree's root).
+	dir             string
+	worktree        string
+	// setID is the config set the session runs with (env, templates, commands).
+	setID           int64
 	mode            string
 	processes       []types.ProcessState
 	children        map[int64]*childProc
@@ -109,7 +116,7 @@ func (r *Runner) statusEvent(s *session, errMsg string) types.StatusEvent {
 	}
 	ev := types.StatusEvent{
 		Type: "status", SessionID: s.id, AppID: s.appID, Kind: s.kind,
-		Running: s.running, Processes: procs, Ts: time.Now().UnixMilli(),
+		Worktree: s.worktree, ConfigSetID: s.setID, Running: s.running, Processes: procs, Ts: time.Now().UnixMilli(),
 	}
 	if errMsg != "" {
 		ev.Error = errMsg
@@ -315,7 +322,7 @@ func (r *Runner) runSession(s *session) {
 		return
 	}
 	s.appName = app.Name
-	if err := ApplyTemplates(ctx, r.db, s.appID, s.id); err != nil {
+	if err := ApplyTemplates(ctx, r.db, s.appID, s.setID, s.dir, s.id); err != nil {
 		s.running = false
 		s.hadError = true
 		msg := err.Error()
@@ -334,15 +341,9 @@ func (r *Runner) runSession(s *session) {
 	}
 	r.systemLog(s, cmdID, "Templates applied")
 
-	set, err := r.db.ResolveActive(ctx, s.appID)
-	if err != nil {
-		s.running = false
-		r.emit(s, r.statusEvent(s, err.Error()))
-		return
-	}
-	envMap, _ := r.db.EnvToRecord(ctx, set.ID)
+	envMap, _ := r.db.EnvToRecord(ctx, s.setID)
 	env := native.MergeTerminalEnv(envMap)
-	config, err := r.db.GetRunConfigByConfigSetT(ctx, set.ID, s.kind)
+	config, err := r.db.GetRunConfigByConfigSetT(ctx, s.setID, s.kind)
 	if err != nil {
 		s.running = false
 		r.emit(s, r.statusEvent(s, err.Error()))
@@ -364,7 +365,7 @@ func (r *Runner) runSession(s *session) {
 			r.stopIdleWatcher(s)
 			r.clearReadyURLs(s)
 			if !s.restored {
-				_ = RestoreTemplates(ctx, r.db, s.appID, s.id)
+				_ = RestoreTemplates(ctx, r.db, s.appID, s.setID, s.dir, s.id)
 				s.restored = true
 				r.systemLog(s, cmdID, "Original files restored")
 			}
@@ -378,7 +379,7 @@ func (r *Runner) runSession(s *session) {
 			for _, c := range commands {
 				c := c
 				wg.Add(1)
-				go func() { defer wg.Done(); r.spawnCommand(s, c, app.ProjectPath, env) }()
+				go func() { defer wg.Done(); r.spawnCommand(s, c, s.dir, env) }()
 			}
 			wg.Wait()
 			return
@@ -387,7 +388,7 @@ func (r *Runner) runSession(s *session) {
 			if s.abortSequential {
 				break
 			}
-			code := r.spawnCommand(s, c, app.ProjectPath, env)
+			code := r.spawnCommand(s, c, s.dir, env)
 			if code != 0 {
 				r.systemLog(s, c.ID, "Sequential "+s.kind+" stopped due to non-zero exit")
 				break
@@ -396,8 +397,21 @@ func (r *Runner) runSession(s *session) {
 	}()
 }
 
-func (r *Runner) createSession(ctx context.Context, appID int64, kind string) (*session, error) {
-	set, err := r.db.ResolveActive(ctx, appID)
+func (r *Runner) createSession(ctx context.Context, appID int64, kind, dir, worktree string, setID int64) (*session, error) {
+	if dir == "" {
+		app, err := r.db.GetAppT(ctx, appID)
+		if err != nil {
+			return nil, err
+		}
+		dir, worktree = app.ProjectPath, ""
+	}
+	var set types.ConfigSet
+	var err error
+	if setID == 0 {
+		set, err = r.db.ResolveActive(ctx, appID)
+	} else if set, err = r.db.GetConfigSetT(ctx, setID); err == nil && set.AppID != appID {
+		err = fmt.Errorf("Config set not found")
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -423,6 +437,9 @@ func (r *Runner) createSession(ctx context.Context, appID int64, kind string) (*
 		id:        fmt.Sprintf("%d-%d", appID, time.Now().UnixMilli()),
 		appID:     appID,
 		kind:      kind,
+		dir:       dir,
+		worktree:  worktree,
+		setID:     set.ID,
 		mode:      config.Mode,
 		processes: procs,
 		children:  map[int64]*childProc{},
@@ -485,6 +502,13 @@ func (r *Runner) Resize(appID, commandID int64, cols, rows int) {
 // session at a time because all apply and restore the templates, so Start
 // fails while any kind is still going.
 func (r *Runner) Start(ctx context.Context, appID int64, kind string) (types.StatusEvent, error) {
+	return r.StartIn(ctx, appID, kind, "", "", 0)
+}
+
+// StartIn is Start in another folder and/or with another config set: dir is the
+// app's folder inside the git worktree whose root is worktree (empty: the app's
+// project path), setID one of the app's config sets (0: its active set).
+func (r *Runner) StartIn(ctx context.Context, appID int64, kind, dir, worktree string, setID int64) (types.StatusEvent, error) {
 	if _, err := r.db.GetAppT(ctx, appID); err != nil {
 		return types.StatusEvent{}, err
 	}
@@ -503,7 +527,7 @@ func (r *Runner) Start(ctx context.Context, appID int64, kind string) (types.Sta
 	}
 	r.mu.Unlock()
 
-	s, err := r.createSession(ctx, appID, kind)
+	s, err := r.createSession(ctx, appID, kind, dir, worktree, setID)
 	if err != nil {
 		return types.StatusEvent{}, err
 	}
@@ -546,7 +570,7 @@ func (r *Runner) Stop(ctx context.Context, appID int64) (types.StatusEvent, erro
 		}
 	}
 	if !s.restored {
-		_ = RestoreTemplates(ctx, r.db, appID, s.id)
+		_ = RestoreTemplates(ctx, r.db, appID, s.setID, s.dir, s.id)
 		s.restored = true
 		cmdID := int64(0)
 		if len(s.processes) > 0 {
@@ -562,13 +586,19 @@ func (r *Runner) Reload(ctx context.Context, appID int64) (types.StatusEvent, er
 	r.mu.Lock()
 	existing := r.sessions[appID]
 	running := existing != nil && existing.running
+	// A reload stays in the worktree the last session ran in.
+	var dir, worktree string
+	var setID int64
+	if existing != nil && existing.worktree != "" {
+		dir, worktree, setID = existing.dir, existing.worktree, existing.setID
+	}
 	r.mu.Unlock()
 	if running {
 		if _, err := r.Stop(ctx, appID); err != nil {
 			return types.StatusEvent{}, err
 		}
 	}
-	return r.Start(ctx, appID, types.KindRun)
+	return r.StartIn(ctx, appID, types.KindRun, dir, worktree, setID)
 }
 
 func (r *Runner) StopAll(ctx context.Context) {

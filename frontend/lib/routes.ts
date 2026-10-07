@@ -4,6 +4,7 @@ export type AppTab =
   | "setup"
   | "run"
   | "build"
+  | "git"
   | "ai"
   | "logs"
 
@@ -13,6 +14,7 @@ export const APP_TABS: AppTab[] = [
   "setup",
   "run",
   "build",
+  "git",
   "ai",
   "logs",
 ]

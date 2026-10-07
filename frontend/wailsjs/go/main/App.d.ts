@@ -88,6 +88,22 @@ export function FsReadAppFile(arg1:number,arg2:string):Promise<types.ReadAppFile
 
 export function FsValidatePath(arg1:string):Promise<types.ValidatePathResult>;
 
+export function GitFetchAll(arg1:number):Promise<types.GitOutput>;
+
+export function GitInfo(arg1:number):Promise<types.GitInfo>;
+
+export function GitWorktreeAdd(arg1:number,arg2:types.GitWorktreeAddInput):Promise<types.GitWorktreeAddResult>;
+
+export function GitWorktreeOpenFolder(arg1:number,arg2:string):Promise<types.Ok>;
+
+export function GitWorktreeOpenInEditor(arg1:number,arg2:string,arg3:string):Promise<types.Ok>;
+
+export function GitWorktreePrune(arg1:number):Promise<types.GitOutput>;
+
+export function GitWorktreeRemove(arg1:number,arg2:string,arg3:boolean):Promise<types.Ok>;
+
+export function GitWorktreeStart(arg1:number,arg2:string,arg3:string,arg4:number):Promise<types.StatusEvent>;
+
 export function OpenExternal(arg1:string):Promise<types.Ok>;
 
 export function PackageScriptsList(arg1:number):Promise<types.PackageScripts>;

@@ -135,7 +135,12 @@ type StatusEvent struct {
 	SessionID string `json:"sessionId"`
 	AppID     int64  `json:"appId"`
 	// Kind is what the session executes: "run", "build" or "setup" (empty before any).
-	Kind      string         `json:"kind"`
+	Kind string `json:"kind"`
+	// Worktree is the root of the git worktree the session runs in; empty when
+	// it runs in the app's own project path.
+	Worktree string `json:"worktree,omitempty"`
+	// ConfigSetID is the config set the session runs with.
+	ConfigSetID int64          `json:"configSetId,omitempty"`
 	Running   bool           `json:"running"`
 	Processes []ProcessState `json:"processes"`
 	Error     string         `json:"error,omitempty"`
@@ -423,6 +428,59 @@ type AppAIPatch struct {
 	Templates []AppAITemplatePatch `json:"templates,omitempty"`
 	Run       *AppAIRunPatch       `json:"run,omitempty"`
 	Build     *AppAIRunPatch       `json:"build,omitempty"`
+	Worktrees *AppAIWorktreePatch  `json:"worktrees,omitempty"`
+}
+
+// AppAIWorktreeRemove is a staged `git worktree remove`.
+type AppAIWorktreeRemove struct {
+	Path  string `json:"path"`
+	Force bool   `json:"force"`
+}
+
+// AppAIWorktreePatch holds git worktree changes the agent staged; they run when
+// the user applies the patch.
+type AppAIWorktreePatch struct {
+	Add    []GitWorktreeAddInput `json:"add,omitempty"`
+	Remove []AppAIWorktreeRemove `json:"remove,omitempty"`
+}
+
+// GitWorktree is one entry of `git worktree list`. Main is the repository's
+// main worktree; Current is the one the app's project path is in.
+type GitWorktree struct {
+	Path     string `json:"path"`
+	Head     string `json:"head"`
+	Branch   string `json:"branch"`
+	Detached bool   `json:"detached"`
+	Bare     bool   `json:"bare"`
+	Locked   bool   `json:"locked"`
+	Prunable bool   `json:"prunable"`
+	Main     bool   `json:"main"`
+	Current  bool   `json:"current"`
+}
+
+// GitInfo is the git state of an app's project path.
+type GitInfo struct {
+	IsRepo    bool          `json:"is_repo"`
+	Worktrees []GitWorktree `json:"worktrees"`
+	Branches  []string      `json:"branches"`
+}
+
+// GitWorktreeAddInput creates a worktree. Path is optional (default: a sibling
+// of the main worktree) and relative paths are taken from the project path.
+// NewBranch creates Branch from Base (default HEAD); otherwise Branch must exist.
+type GitWorktreeAddInput struct {
+	Path      string `json:"path"`
+	Branch    string `json:"branch"`
+	NewBranch bool   `json:"new_branch"`
+	Base      string `json:"base"`
+}
+
+type GitOutput struct {
+	Output string `json:"output"`
+}
+
+type GitWorktreeAddResult struct {
+	Path string `json:"path"`
 }
 
 type AppAIChatInput struct {

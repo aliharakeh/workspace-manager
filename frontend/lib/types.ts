@@ -134,6 +134,10 @@ export type StatusEvent = {
     appId: number
     /** What the session executes; empty before the app was ever started. */
     kind?: CommandKind | ''
+    /** Root of the git worktree the session runs in; absent for the app's own folder. */
+    worktree?: string
+    /** Config set the session runs with. */
+    configSetId?: number
     running: boolean
     processes: ProcessState[]
     error?: string
@@ -164,6 +168,36 @@ export type ListeningProcess = {
     port: number
     pid: number
     name: string
+}
+
+/** One entry of `git worktree list`. */
+export type GitWorktree = {
+    path: string
+    head: string
+    branch: string
+    detached: boolean
+    bare: boolean
+    locked: boolean
+    prunable: boolean
+    /** The repository's main worktree (cannot be removed). */
+    main: boolean
+    /** The worktree the app's project path is in (cannot be removed). */
+    current: boolean
+}
+
+export type GitInfo = {
+    is_repo: boolean
+    worktrees: GitWorktree[]
+    /** Local branches, then remote-tracking ones (e.g. "origin/main"). */
+    branches: string[]
+}
+
+/** Path is optional (default: sibling "<repo>-<branch>"); relative paths are from the project path. */
+export type GitWorktreeAddInput = {
+    path: string
+    branch: string
+    new_branch: boolean
+    base: string
 }
 
 /** Regex used to detect ready URLs from process logs. */

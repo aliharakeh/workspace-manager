@@ -7,8 +7,11 @@ import type {
     BlueprintRunInput,
     CommandKind,
     CopyParts,
+    GitInfo,
+    GitWorktreeAddInput,
     RunMode,
     RunnerEvent,
+    StatusEvent,
 } from '@/lib/types'
 import * as Go from './wailsjs/go/main/App'
 import { types } from './wailsjs/go/models'
@@ -170,6 +173,24 @@ export const api = {
         setup: (appId: number) => call(() => Go.RunnerSetup(appId)),
         stop: (appId: number) => call(() => Go.RunnerStop(appId)),
         reload: (appId: number) => call(() => Go.RunnerReload(appId)),
+    },
+
+    git: {
+        info: (appId: number) => call(() => Go.GitInfo(appId)) as Promise<GitInfo>,
+        fetchAll: (appId: number) => call(() => Go.GitFetchAll(appId)),
+        worktreeAdd: (appId: number, body: GitWorktreeAddInput) =>
+            call(() => Go.GitWorktreeAdd(appId, body)),
+        worktreeRemove: (appId: number, path: string, force: boolean) =>
+            call(() => Go.GitWorktreeRemove(appId, path, force)),
+        worktreePrune: (appId: number) => call(() => Go.GitWorktreePrune(appId)),
+        /** Open the app's folder inside the worktree at `path`. */
+        worktreeOpenFolder: (appId: number, path: string) =>
+            call(() => Go.GitWorktreeOpenFolder(appId, path)),
+        worktreeOpenInEditor: (appId: number, path: string, editor: string) =>
+            call(() => Go.GitWorktreeOpenInEditor(appId, path, editor)),
+        /** Runs the app's run/build/setup config inside the worktree at `path`, with config set `configSetId` (0: the active one). */
+        worktreeStart: (appId: number, path: string, kind: CommandKind, configSetId: number) =>
+            call(() => Go.GitWorktreeStart(appId, path, kind, configSetId)) as Promise<StatusEvent>,
     },
 
     ports: {
