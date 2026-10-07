@@ -135,9 +135,9 @@ export const api = {
 
     templates: {
         list: (appId: number) => call(() => Go.TemplatesList(appId)),
-        create: (appId: number, body: { file_path: string; content?: string }) =>
+        create: (appId: number, body: { file_path: string; content?: string; include_in_ai?: boolean }) =>
             call(() => Go.TemplatesCreate(appId, body)),
-        update: (id: number, body: { file_path?: string; content?: string }) =>
+        update: (id: number, body: { file_path?: string; content?: string; include_in_ai?: boolean }) =>
             call(() => Go.TemplatesUpdate(id, body)),
         delete: (id: number) => call(() => Go.TemplatesDelete(id)),
     },

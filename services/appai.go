@@ -24,7 +24,7 @@ Use tools to inspect and change this set:
 
 You must NOT:
 - create, rename, or delete config sets
-- invent template file paths; only update templates list_templates returns
+- invent template file paths; only update templates list_templates returns (templates the user excluded from AI are not listed)
 - reformat template files unless the user asked
 - get, update, or delete env vars that list_vars returns without a value (AI-excluded)
 
@@ -131,6 +131,9 @@ func newAppAIState(detail types.ConfigSetDetail, projectPath string) *appAIState
 		s.origEnv[v.Key] = v.Value
 	}
 	for _, t := range detail.Templates {
+		if !t.IncludeInAI {
+			continue
+		}
 		s.templates[t.FilePath] = t.Content
 		s.origTmpl[t.FilePath] = t.Content
 	}

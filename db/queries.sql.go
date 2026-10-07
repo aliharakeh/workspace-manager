@@ -223,23 +223,30 @@ func (q *Queries) CreateRunConfig(ctx context.Context, arg CreateRunConfigParams
 }
 
 const createTemplate = `-- name: CreateTemplate :one
-INSERT INTO templates (config_set_id, file_path, content) VALUES (?, ?, ?) RETURNING id, config_set_id, file_path, content, created_at, updated_at
+INSERT INTO templates (config_set_id, file_path, content, include_in_ai) VALUES (?, ?, ?, ?) RETURNING id, config_set_id, file_path, content, include_in_ai, created_at, updated_at
 `
 
 type CreateTemplateParams struct {
 	ConfigSetID int64  `json:"config_set_id"`
 	FilePath    string `json:"file_path"`
 	Content     string `json:"content"`
+	IncludeInAi int64  `json:"include_in_ai"`
 }
 
 func (q *Queries) CreateTemplate(ctx context.Context, arg CreateTemplateParams) (Template, error) {
-	row := q.db.QueryRowContext(ctx, createTemplate, arg.ConfigSetID, arg.FilePath, arg.Content)
+	row := q.db.QueryRowContext(ctx, createTemplate,
+		arg.ConfigSetID,
+		arg.FilePath,
+		arg.Content,
+		arg.IncludeInAi,
+	)
 	var i Template
 	err := row.Scan(
 		&i.ID,
 		&i.ConfigSetID,
 		&i.FilePath,
 		&i.Content,
+		&i.IncludeInAi,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -563,7 +570,7 @@ func (q *Queries) GetSetting(ctx context.Context, key string) (AppSetting, error
 }
 
 const getTemplate = `-- name: GetTemplate :one
-SELECT id, config_set_id, file_path, content, created_at, updated_at FROM templates WHERE id = ?
+SELECT id, config_set_id, file_path, content, include_in_ai, created_at, updated_at FROM templates WHERE id = ?
 `
 
 func (q *Queries) GetTemplate(ctx context.Context, id int64) (Template, error) {
@@ -574,6 +581,7 @@ func (q *Queries) GetTemplate(ctx context.Context, id int64) (Template, error) {
 		&i.ConfigSetID,
 		&i.FilePath,
 		&i.Content,
+		&i.IncludeInAi,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -581,7 +589,7 @@ func (q *Queries) GetTemplate(ctx context.Context, id int64) (Template, error) {
 }
 
 const getTemplateByPath = `-- name: GetTemplateByPath :one
-SELECT id, config_set_id, file_path, content, created_at, updated_at FROM templates WHERE config_set_id = ? AND file_path = ?
+SELECT id, config_set_id, file_path, content, include_in_ai, created_at, updated_at FROM templates WHERE config_set_id = ? AND file_path = ?
 `
 
 type GetTemplateByPathParams struct {
@@ -597,6 +605,7 @@ func (q *Queries) GetTemplateByPath(ctx context.Context, arg GetTemplateByPathPa
 		&i.ConfigSetID,
 		&i.FilePath,
 		&i.Content,
+		&i.IncludeInAi,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -886,7 +895,7 @@ func (q *Queries) ListSettings(ctx context.Context) ([]AppSetting, error) {
 }
 
 const listTemplatesByConfigSet = `-- name: ListTemplatesByConfigSet :many
-SELECT id, config_set_id, file_path, content, created_at, updated_at FROM templates WHERE config_set_id = ? ORDER BY file_path COLLATE NOCASE ASC
+SELECT id, config_set_id, file_path, content, include_in_ai, created_at, updated_at FROM templates WHERE config_set_id = ? ORDER BY file_path COLLATE NOCASE ASC
 `
 
 // templates (db/templates.ts)
@@ -904,6 +913,7 @@ func (q *Queries) ListTemplatesByConfigSet(ctx context.Context, configSetID int6
 			&i.ConfigSetID,
 			&i.FilePath,
 			&i.Content,
+			&i.IncludeInAi,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -1245,25 +1255,32 @@ func (q *Queries) UpdateRunConfigMode(ctx context.Context, arg UpdateRunConfigMo
 
 const updateTemplate = `-- name: UpdateTemplate :one
 UPDATE templates
-SET file_path = ?, content = ?, updated_at = datetime('now')
+SET file_path = ?, content = ?, include_in_ai = ?, updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, config_set_id, file_path, content, created_at, updated_at
+RETURNING id, config_set_id, file_path, content, include_in_ai, created_at, updated_at
 `
 
 type UpdateTemplateParams struct {
-	FilePath string `json:"file_path"`
-	Content  string `json:"content"`
-	ID       int64  `json:"id"`
+	FilePath    string `json:"file_path"`
+	Content     string `json:"content"`
+	IncludeInAi int64  `json:"include_in_ai"`
+	ID          int64  `json:"id"`
 }
 
 func (q *Queries) UpdateTemplate(ctx context.Context, arg UpdateTemplateParams) (Template, error) {
-	row := q.db.QueryRowContext(ctx, updateTemplate, arg.FilePath, arg.Content, arg.ID)
+	row := q.db.QueryRowContext(ctx, updateTemplate,
+		arg.FilePath,
+		arg.Content,
+		arg.IncludeInAi,
+		arg.ID,
+	)
 	var i Template
 	err := row.Scan(
 		&i.ID,
 		&i.ConfigSetID,
 		&i.FilePath,
 		&i.Content,
+		&i.IncludeInAi,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

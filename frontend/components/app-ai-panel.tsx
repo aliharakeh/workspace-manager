@@ -284,7 +284,8 @@ async function applyAppAIPatch(
   )
   for (const t of patch.templates ?? []) {
     const existing = templatesByPath.get(t.file_path)
-    if (!existing || existing.content === t.content) continue
+    if (!existing || !existing.include_in_ai) continue
+    if (existing.content === t.content) continue
     await api.templates.update(existing.id, { content: t.content })
   }
 

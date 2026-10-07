@@ -414,10 +414,10 @@ func (a *App) EnvVarsImport(appID int64) (types.ImportEnvResult, error) {
 	if err == nil {
 		existing, findErr := a.db.GetTemplateByPath(a.ctx, db.GetTemplateByPathParams{ConfigSetID: set.ID, FilePath: rel})
 		if findErr == nil {
-			row, _ := a.db.UpdateTemplate(a.ctx, db.UpdateTemplateParams{FilePath: existing.FilePath, Content: tplContent, ID: existing.ID})
+			row, _ := a.db.UpdateTemplate(a.ctx, db.UpdateTemplateParams{FilePath: existing.FilePath, Content: tplContent, IncludeInAi: existing.IncludeInAi, ID: existing.ID})
 			result.Template = &types.ImportTemplateResult{ID: row.ID, FilePath: rel, Created: false}
 		} else {
-			row, createErr := a.db.CreateTemplate(a.ctx, db.CreateTemplateParams{ConfigSetID: set.ID, FilePath: rel, Content: tplContent})
+			row, createErr := a.db.CreateTemplate(a.ctx, db.CreateTemplateParams{ConfigSetID: set.ID, FilePath: rel, Content: tplContent, IncludeInAi: db.BoolInt(true)})
 			if createErr == nil {
 				result.Template = &types.ImportTemplateResult{ID: row.ID, FilePath: rel, Created: true}
 			}
@@ -453,11 +453,19 @@ func (a *App) TemplatesCreate(appID int64, body types.TemplateCreateInput) (type
 	if body.Content != nil {
 		content = *body.Content
 	}
-	row, err := a.db.CreateTemplate(a.ctx, db.CreateTemplateParams{ConfigSetID: set.ID, FilePath: path, Content: content})
+	include := true
+	if body.IncludeInAI != nil {
+		include = *body.IncludeInAI
+	}
+	row, err := a.db.CreateTemplate(a.ctx, db.CreateTemplateParams{ConfigSetID: set.ID, FilePath: path, Content: content, IncludeInAi: db.BoolInt(include)})
 	if err != nil {
 		return types.Template{}, db.UniqueErr(err, "Template for this file already exists")
 	}
-	return types.Template{ID: row.ID, ConfigSetID: row.ConfigSetID, FilePath: row.FilePath, Content: row.Content, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}, nil
+	return templateResult(row), nil
+}
+
+func templateResult(row db.Template) types.Template {
+	return types.Template{ID: row.ID, ConfigSetID: row.ConfigSetID, FilePath: row.FilePath, Content: row.Content, IncludeInAI: row.IncludeInAi != 0, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
 }
 
 func (a *App) TemplatesUpdate(id int64, body types.TemplateUpdateInput) (types.Template, error) {
@@ -465,7 +473,7 @@ func (a *App) TemplatesUpdate(id int64, body types.TemplateUpdateInput) (types.T
 	if err != nil {
 		return types.Template{}, fmt.Errorf("Template not found")
 	}
-	path, content := existing.FilePath, existing.Content
+	path, content, include := existing.FilePath, existing.Content, existing.IncludeInAi != 0
 	if body.FilePath != nil {
 		path = strings.ReplaceAll(strings.TrimSpace(*body.FilePath), "\\", "/")
 		if path == "" {
@@ -475,11 +483,14 @@ func (a *App) TemplatesUpdate(id int64, body types.TemplateUpdateInput) (types.T
 	if body.Content != nil {
 		content = *body.Content
 	}
-	row, err := a.db.UpdateTemplate(a.ctx, db.UpdateTemplateParams{FilePath: path, Content: content, ID: id})
+	if body.IncludeInAI != nil {
+		include = *body.IncludeInAI
+	}
+	row, err := a.db.UpdateTemplate(a.ctx, db.UpdateTemplateParams{FilePath: path, Content: content, IncludeInAi: db.BoolInt(include), ID: id})
 	if err != nil {
 		return types.Template{}, db.UniqueErr(err, "Template for this file already exists")
 	}
-	return types.Template{ID: row.ID, ConfigSetID: row.ConfigSetID, FilePath: row.FilePath, Content: row.Content, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}, nil
+	return templateResult(row), nil
 }
 
 func (a *App) TemplatesDelete(id int64) (types.Ok, error) {

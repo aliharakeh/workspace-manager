@@ -43,6 +43,7 @@ type Template struct {
 	ConfigSetID int64  `json:"config_set_id"`
 	FilePath    string `json:"file_path"`
 	Content     string `json:"content"`
+	IncludeInAI bool   `json:"include_in_ai"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }
@@ -283,13 +284,15 @@ type EnvVarUpdateInput struct {
 }
 
 type TemplateCreateInput struct {
-	FilePath string  `json:"file_path"`
-	Content  *string `json:"content"`
+	FilePath    string  `json:"file_path"`
+	Content     *string `json:"content"`
+	IncludeInAI *bool   `json:"include_in_ai"`
 }
 
 type TemplateUpdateInput struct {
-	FilePath *string `json:"file_path"`
-	Content  *string `json:"content"`
+	FilePath    *string `json:"file_path"`
+	Content     *string `json:"content"`
+	IncludeInAI *bool   `json:"include_in_ai"`
 }
 
 type RunConfigSaveInput struct {

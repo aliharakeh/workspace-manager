@@ -65,6 +65,7 @@ export type Template = {
     config_set_id: number
     file_path: string
     content: string
+    include_in_ai: boolean
     created_at: string
     updated_at: string
 }

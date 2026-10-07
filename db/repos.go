@@ -51,7 +51,8 @@ func EnvVarFrom(row EnvVar) types.EnvVar {
 func templateFrom(row Template) types.Template {
 	return types.Template{
 		ID: row.ID, ConfigSetID: row.ConfigSetID, FilePath: row.FilePath, Content: row.Content,
-		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+		IncludeInAI: row.IncludeInAi != 0,
+		CreatedAt:   row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
 }
 
@@ -670,7 +671,7 @@ func (d *DB) CopyFrom(ctx context.Context, sourceID, targetID int64, parts *type
 		}
 		for _, t := range sourceTpl {
 			if tplAll || containsStr(tplItems, t.FilePath) {
-				if _, err := d.CreateTemplate(ctx, CreateTemplateParams{ConfigSetID: targetID, FilePath: t.FilePath, Content: t.Content}); err != nil {
+				if _, err := d.CreateTemplate(ctx, CreateTemplateParams{ConfigSetID: targetID, FilePath: t.FilePath, Content: t.Content, IncludeInAi: BoolInt(t.IncludeInAI)}); err != nil {
 					return err
 				}
 			}

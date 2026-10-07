@@ -16,6 +16,7 @@ import { renderTemplatePreview } from "@/lib/template-preview"
 import type { Template } from "@/lib/types"
 import { TemplateEditor } from "@/components/template-editor"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Accordion,
   AccordionContent,
@@ -76,6 +77,7 @@ function TemplateItem({
   const [saving, setSaving] = useState(false)
   const [reloading, setReloading] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [togglingAi, setTogglingAi] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const dirty = content !== template.content
 
@@ -98,6 +100,21 @@ function TemplateItem({
       toast.error(err instanceof Error ? err.message : "Failed to save")
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleAiToggle(next: boolean) {
+    if (next === template.include_in_ai) return
+    setTogglingAi(true)
+    try {
+      const updated = await api.templates.update(template.id, {
+        include_in_ai: next,
+      })
+      onUpdated(updated)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update")
+    } finally {
+      setTogglingAi(false)
     }
   }
 
@@ -142,6 +159,11 @@ function TemplateItem({
             {template.file_path}
           </span>
         </div>
+        {!template.include_in_ai ? (
+          <span className="mr-2 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            Hidden from AI
+          </span>
+        ) : null}
         {dirty ? (
           <span className="mr-2 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
             Unsaved
@@ -155,27 +177,41 @@ function TemplateItem({
               ? "Edit the template source. Use Handlebars like {{API_URL}}."
               : "Preview with current env vars applied (as on Run)."}
           </p>
-          <ToggleGroup
-            value={[mode]}
-            onValueChange={(v) => {
-              if (v[0] === "edit" || v[0] === "preview") setMode(v[0])
-            }}
-            variant="outline"
-            size="sm"
-            spacing={0}
-          >
-            <ToggleGroupItem value="edit" aria-label="Edit template">
-              <PencilIcon />
-              Edit
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="preview"
-              aria-label="Preview rendered template"
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-1.5 text-sm">
+              <Checkbox
+                checked={template.include_in_ai}
+                disabled={togglingAi || deleting}
+                onCheckedChange={(checked) =>
+                  void handleAiToggle(checked === true)
+                }
+                aria-label="Include in AI"
+                title="Include this template in AI chat"
+              />
+              Include in AI
+            </label>
+            <ToggleGroup
+              value={[mode]}
+              onValueChange={(v) => {
+                if (v[0] === "edit" || v[0] === "preview") setMode(v[0])
+              }}
+              variant="outline"
+              size="sm"
+              spacing={0}
             >
-              <EyeIcon />
-              Preview
-            </ToggleGroupItem>
-          </ToggleGroup>
+              <ToggleGroupItem value="edit" aria-label="Edit template">
+                <PencilIcon />
+                Edit
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="preview"
+                aria-label="Preview rendered template"
+              >
+                <EyeIcon />
+                Preview
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
         </div>
 
         {mode === "edit" ? (

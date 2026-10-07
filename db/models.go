@@ -85,6 +85,7 @@ type Template struct {
 	ConfigSetID int64  `json:"config_set_id"`
 	FilePath    string `json:"file_path"`
 	Content     string `json:"content"`
+	IncludeInAi int64  `json:"include_in_ai"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }

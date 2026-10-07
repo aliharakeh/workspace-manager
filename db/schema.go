@@ -25,6 +25,9 @@ func applySchema(sqlDB *sql.DB) error {
 	if err := addWorkspaceColor(sqlDB); err != nil {
 		return err
 	}
+	if err := addTemplateIncludeInAI(sqlDB); err != nil {
+		return err
+	}
 	if _, err := sqlDB.Exec(schemaSQL); err != nil {
 		return err
 	}
@@ -90,6 +93,22 @@ func addWorkspaceColor(sqlDB *sql.DB) error {
 		return err
 	}
 	_, err = sqlDB.Exec(`ALTER TABLE workspaces ADD COLUMN color text`)
+	return err
+}
+
+// addTemplateIncludeInAI upgrades a templates table created before templates
+// could be hidden from the AI. Existing templates stay visible to it. A fresh
+// table already has the column from schemaSQL.
+func addTemplateIncludeInAI(sqlDB *sql.DB) error {
+	cols, err := tableColumns(sqlDB, "templates")
+	if err != nil || len(cols) == 0 {
+		return err // fresh database: schemaSQL creates the table with include_in_ai
+	}
+	has, err := hasColumn(sqlDB, "templates", "include_in_ai")
+	if err != nil || has {
+		return err
+	}
+	_, err = sqlDB.Exec(`ALTER TABLE templates ADD COLUMN include_in_ai integer DEFAULT true NOT NULL`)
 	return err
 }
 

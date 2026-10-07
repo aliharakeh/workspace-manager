@@ -884,6 +884,7 @@ export namespace types {
 	    config_set_id: number;
 	    file_path: string;
 	    content: string;
+	    include_in_ai: boolean;
 	    created_at: string;
 	    updated_at: string;
 	
@@ -897,6 +898,7 @@ export namespace types {
 	        this.config_set_id = source["config_set_id"];
 	        this.file_path = source["file_path"];
 	        this.content = source["content"];
+	        this.include_in_ai = source["include_in_ai"];
 	        this.created_at = source["created_at"];
 	        this.updated_at = source["updated_at"];
 	    }
@@ -1482,6 +1484,7 @@ export namespace types {
 	export class TemplateCreateInput {
 	    file_path: string;
 	    content?: string;
+	    include_in_ai?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new TemplateCreateInput(source);
@@ -1491,11 +1494,13 @@ export namespace types {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.file_path = source["file_path"];
 	        this.content = source["content"];
+	        this.include_in_ai = source["include_in_ai"];
 	    }
 	}
 	export class TemplateUpdateInput {
 	    file_path?: string;
 	    content?: string;
+	    include_in_ai?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new TemplateUpdateInput(source);
@@ -1505,6 +1510,7 @@ export namespace types {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.file_path = source["file_path"];
 	        this.content = source["content"];
+	        this.include_in_ai = source["include_in_ai"];
 	    }
 	}
 	export class ValidatePathResult {

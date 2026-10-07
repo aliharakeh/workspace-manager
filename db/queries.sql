@@ -118,11 +118,11 @@ SELECT * FROM templates WHERE id = ?;
 SELECT * FROM templates WHERE config_set_id = ? AND file_path = ?;
 
 -- name: CreateTemplate :one
-INSERT INTO templates (config_set_id, file_path, content) VALUES (?, ?, ?) RETURNING *;
+INSERT INTO templates (config_set_id, file_path, content, include_in_ai) VALUES (?, ?, ?, ?) RETURNING *;
 
 -- name: UpdateTemplate :one
 UPDATE templates
-SET file_path = ?, content = ?, updated_at = datetime('now')
+SET file_path = ?, content = ?, include_in_ai = ?, updated_at = datetime('now')
 WHERE id = ?
 RETURNING *;
 

@@ -12,7 +12,7 @@ func TestAppAIStatePatch(t *testing.T) {
 	label := "web"
 	detail := types.ConfigSetDetail{
 		EnvVars:   []types.EnvVar{{Key: "PORT", Value: "3000", IncludeInAI: true}},
-		Templates: []types.Template{{FilePath: ".env", Content: "PORT=3000"}},
+		Templates: []types.Template{{FilePath: ".env", Content: "PORT=3000", IncludeInAI: true}},
 		RunConfig: &types.RunConfig{
 			Mode:     "parallel",
 			Commands: []types.RunCommand{{Label: &label, Command: "npm run dev"}},
@@ -68,6 +68,28 @@ func TestAppAIStateHidesExcludedEnv(t *testing.T) {
 	}
 	if p := s.patch(); p.Env != nil {
 		t.Fatalf("patch should be empty: %+v", p.Env)
+	}
+}
+
+func TestAppAIStateHidesExcludedTemplates(t *testing.T) {
+	s := newAppAIState(types.ConfigSetDetail{
+		Templates: []types.Template{
+			{FilePath: ".env", Content: "PORT=3000", IncludeInAI: true},
+			{FilePath: "secrets.env", Content: "KEY=shh", IncludeInAI: false},
+		},
+	}, ".")
+	paths := s.listTemplates()["file_paths"].([]string)
+	if len(paths) != 1 || paths[0] != ".env" {
+		t.Fatalf("list: %+v", paths)
+	}
+	if _, ok := s.getTemplate("secrets.env")["error"]; !ok {
+		t.Fatal("expected get secrets.env error")
+	}
+	if _, ok := s.updateTemplate("secrets.env", "x")["error"]; !ok {
+		t.Fatal("expected update secrets.env error")
+	}
+	if p := s.patch(); len(p.Templates) != 0 {
+		t.Fatalf("patch should be empty: %+v", p.Templates)
 	}
 }
 
