@@ -165,3 +165,55 @@ func TestRunnerBuildRunsBuildCommands(t *testing.T) {
 		t.Fatalf("a build must not detect URLs or run the run commands:\n%q", text)
 	}
 }
+
+func TestRunnerSetupRunsSetupCommands(t *testing.T) {
+	ctx := context.Background()
+	d := newBlueprintTestDB(t)
+	ws, _ := d.CreateWorkspaceT(ctx, "ws", nil, nil)
+	app, err := d.CreateAppT(ctx, ws.ID, "demo", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	set, err := d.ResolveActive(ctx, app.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := NewRunner(d, nil, nil)
+
+	if _, err := runner.Start(ctx, app.ID, types.KindSetup); err == nil || !strings.Contains(err.Error(), "No setup commands configured") {
+		t.Fatalf("expected a missing setup commands error, got %v", err)
+	}
+
+	if _, err := d.UpsertRunConfig(ctx, set.ID, types.KindBuild, nil, []types.RunCommandInput{{Command: "echo build-only"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.UpsertRunConfig(ctx, set.ID, types.KindSetup, nil, []types.RunCommandInput{{Command: "echo set-up-done"}}); err != nil {
+		t.Fatal(err)
+	}
+	status, err := runner.Start(ctx, app.ID, types.KindSetup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Kind != types.KindSetup || len(status.Processes) != 1 || status.Processes[0].Command != "echo set-up-done" {
+		t.Fatalf("status: %+v", status)
+	}
+	if _, err := runner.Start(ctx, app.ID, types.KindRun); err == nil || !strings.Contains(err.Error(), "being set up") {
+		t.Fatalf("expected a run to be refused during a setup, got %v", err)
+	}
+	commandID := status.Processes[0].CommandID
+	deadline := time.Now().Add(20 * time.Second)
+	for runner.GetStatus(app.ID).Running {
+		if time.Now().After(deadline) {
+			t.Fatal("setup did not finish")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	raw, err := base64.StdEncoding.DecodeString(runner.GetOutput(app.ID, commandID).Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	if !strings.Contains(text, "set-up-done") || strings.Contains(text, "build-only") {
+		t.Fatalf("unexpected setup output:\n%q", text)
+	}
+}

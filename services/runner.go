@@ -47,8 +47,11 @@ type session struct {
 
 // subject names what the session executes, for notifications.
 func (s *session) subject() string {
-	if s.kind == types.KindBuild {
+	switch s.kind {
+	case types.KindBuild:
 		return s.appName + " build"
+	case types.KindSetup:
+		return s.appName + " setup"
 	}
 	return s.appName
 }
@@ -127,7 +130,7 @@ func (r *Runner) systemLog(s *session, commandID int64, text string) {
 }
 
 func (r *Runner) noteReadyURL(s *session, commandID int64, line string) {
-	if !s.running || s.kind == types.KindBuild {
+	if !s.running || s.kind != types.KindRun {
 		return
 	}
 	match := MatchReadyURL(context.Background(), r.db, line)
@@ -350,7 +353,7 @@ func (r *Runner) runSession(s *session) {
 		commands = config.Commands
 	}
 
-	// Only a run is waited on to come up; a build just ends.
+	// Only a run is waited on to come up; a build or a setup just ends.
 	if s.kind == types.KindRun {
 		r.startIdleWatcher(s)
 	}
@@ -478,9 +481,9 @@ func (r *Runner) Resize(appID, commandID int64, cols, rows int) {
 	}
 }
 
-// Start runs the app's run commands or build commands, by kind. An app has one
-// session at a time because both apply and restore the templates, so Start
-// fails while either kind is still going.
+// Start runs the app's run, build or setup commands, by kind. An app has one
+// session at a time because all apply and restore the templates, so Start
+// fails while any kind is still going.
 func (r *Runner) Start(ctx context.Context, appID int64, kind string) (types.StatusEvent, error) {
 	if _, err := r.db.GetAppT(ctx, appID); err != nil {
 		return types.StatusEvent{}, err
@@ -488,10 +491,13 @@ func (r *Runner) Start(ctx context.Context, appID int64, kind string) (types.Sta
 	r.mu.Lock()
 	existing := r.sessions[appID]
 	if existing != nil && existing.running {
-		building := existing.kind == types.KindBuild
+		kind := existing.kind
 		r.mu.Unlock()
-		if building {
+		switch kind {
+		case types.KindBuild:
 			return types.StatusEvent{}, fmt.Errorf("App is already building")
+		case types.KindSetup:
+			return types.StatusEvent{}, fmt.Errorf("App is already being set up")
 		}
 		return types.StatusEvent{}, fmt.Errorf("App is already running")
 	}

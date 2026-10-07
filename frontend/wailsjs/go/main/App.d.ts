@@ -118,6 +118,8 @@ export function RunnerResize(arg1:number,arg2:number,arg3:number,arg4:number):Pr
 
 export function RunnerRun(arg1:number):Promise<types.StatusEvent>;
 
+export function RunnerSetup(arg1:number):Promise<types.StatusEvent>;
+
 export function RunnerStatus(arg1:number):Promise<types.StatusEvent>;
 
 export function RunnerStop(arg1:number):Promise<types.StatusEvent>;

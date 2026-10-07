@@ -59,10 +59,12 @@ type RunCommand struct {
 }
 
 // Kinds of command list: a config set has one RunConfig of each. A run starts
-// the app; a build builds it. They share the app's single runner session.
+// the app; a build builds it; a setup prepares it (install dependencies and the
+// like). They share the app's single runner session.
 const (
 	KindRun   = "run"
 	KindBuild = "build"
+	KindSetup = "setup"
 )
 
 // RunConfig is the command list of one kind (Kind) of a config set.
@@ -82,6 +84,7 @@ type ConfigSetDetail struct {
 	Templates   []Template `json:"templates"`
 	RunConfig   *RunConfig `json:"run_config"`
 	BuildConfig *RunConfig `json:"build_config"`
+	SetupConfig *RunConfig `json:"setup_config"`
 }
 
 type PackageScript struct {
@@ -103,6 +106,7 @@ type CopyParts struct {
 	Templates any `json:"templates,omitempty"`
 	Run       any `json:"run,omitempty"`
 	Build     any `json:"build,omitempty"`
+	Setup     any `json:"setup,omitempty"`
 }
 
 type ReadyUrlPattern struct {
@@ -130,7 +134,7 @@ type StatusEvent struct {
 	Type      string `json:"type"`
 	SessionID string `json:"sessionId"`
 	AppID     int64  `json:"appId"`
-	// Kind is what the session executes: "run" or "build" (empty before any).
+	// Kind is what the session executes: "run", "build" or "setup" (empty before any).
 	Kind      string         `json:"kind"`
 	Running   bool           `json:"running"`
 	Processes []ProcessState `json:"processes"`

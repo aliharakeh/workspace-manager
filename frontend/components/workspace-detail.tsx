@@ -25,6 +25,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { api, handleReadyUrlClick } from "@/lib/api"
+import { isTaskKind } from "@/lib/app-state"
 import type { App, StatusEvent, Workspace } from "@/lib/types"
 import { AppRunControls } from "@/components/app-run-controls"
 import { ConfigSetPicker } from "@/components/config-set-picker"
@@ -115,12 +116,17 @@ export function WorkspaceDetail({
     onReorderApps(arrayMove(ids, from, to))
   }
 
-  const buildingCount = apps.filter((app) => {
-    const status = statusByAppId[app.id]
-    return status?.running && status.kind === "build"
-  }).length
+  const countKind = (kind: string) =>
+    apps.filter((app) => {
+      const status = statusByAppId[app.id]
+      return status?.running && status.kind === kind
+    }).length
+  const buildingCount = countKind("build")
+  const settingUpCount = countKind("setup")
   const runningCount =
-    apps.filter((app) => statusByAppId[app.id]?.running).length - buildingCount
+    apps.filter((app) => statusByAppId[app.id]?.running).length -
+    buildingCount -
+    settingUpCount
 
   if (apps.length === 0) {
     return (
@@ -168,6 +174,9 @@ export function WorkspaceDetail({
             </Badge>
             {buildingCount > 0 ? (
               <Badge variant="default">{buildingCount} building</Badge>
+            ) : null}
+            {settingUpCount > 0 ? (
+              <Badge variant="default">{settingUpCount} setting up</Badge>
             ) : null}
           </div>
           <p className="text-sm text-muted-foreground">
@@ -231,7 +240,7 @@ function SortableAppCard({
   } = useSortable({ id: app.id })
 
   const running = !!status?.running
-  const building = running && status?.kind === "build"
+  const task = running && isTaskKind(status?.kind)
   const readyUrls = running
     ? [...new Set((status?.processes ?? []).flatMap((p) => p.urls ?? []))]
     : []
@@ -250,7 +259,7 @@ function SortableAppCard({
           "flex h-full flex-col gap-3 rounded-xl bg-background p-4",
           !running
             ? "ring-1 ring-foreground/10"
-            : building
+            : task
               ? "ring-2 ring-amber-500"
               : "ring-2 ring-emerald-500",
           isDragging && "shadow-lg"
@@ -339,7 +348,7 @@ function SortableAppCard({
           <AppRunControls
             appId={app.id}
             running={running}
-            building={building}
+            kind={status?.kind}
             onStatus={onStatus}
             variant="icon"
           />

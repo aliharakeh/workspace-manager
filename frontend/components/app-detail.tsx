@@ -46,7 +46,6 @@ export function AppDetail({
   onAppChange,
 }: AppDetailProps) {
   const running = !!status?.running
-  const building = running && status?.kind === "build"
   const [panelEpoch, setPanelEpoch] = useState(0)
   const readyUrls = useMemo(() => {
     if (!running) return []
@@ -76,7 +75,7 @@ export function AppDetail({
               {app.name}
             </h1>
             <Badge variant={running ? "default" : "outline"}>
-              {appStateLabel(running, building)}
+              {appStateLabel(running, status?.kind)}
             </Badge>
           </div>
           <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
@@ -114,7 +113,7 @@ export function AppDetail({
           <AppRunControls
             appId={app.id}
             running={running}
-            building={building}
+            kind={status?.kind}
             onStatus={handleStatus}
             variant="icon"
           />
@@ -164,6 +163,7 @@ export function AppDetail({
         <TabsList>
           <TabsTrigger value="env">Env</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
+          <TabsTrigger value="setup">Setup</TabsTrigger>
           <TabsTrigger value="run">Run</TabsTrigger>
           <TabsTrigger value="build">Build</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
@@ -174,6 +174,15 @@ export function AppDetail({
         </TabsContent>
         <TabsContent value="templates" className="mt-4 min-h-0 overflow-y-auto">
           <TemplatesPanel key={panelKey} appId={app.id} />
+        </TabsContent>
+        <TabsContent value="setup" className="mt-4 min-h-0 overflow-y-auto">
+          <CommandConfigPanel
+            key={panelKey}
+            appId={app.id}
+            kind="setup"
+            status={status}
+            onStatus={handleStatus}
+          />
         </TabsContent>
         <TabsContent value="run" className="mt-4 min-h-0 overflow-y-auto">
           <CommandConfigPanel key={panelKey} appId={app.id} kind="run" />

@@ -1,8 +1,16 @@
-export type AppTab = "env" | "templates" | "run" | "build" | "ai" | "logs"
+export type AppTab =
+  | "env"
+  | "templates"
+  | "setup"
+  | "run"
+  | "build"
+  | "ai"
+  | "logs"
 
 export const APP_TABS: AppTab[] = [
   "env",
   "templates",
+  "setup",
   "run",
   "build",
   "ai",

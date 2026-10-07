@@ -304,8 +304,7 @@ export function AppSidebar({
                         <SidebarMenuSub {...lineProps}>
                           {apps.map((app) => {
                             const running = !!statusByAppId[app.id]?.running
-                            const building =
-                              running && statusByAppId[app.id]?.kind === "build"
+                            const kind = statusByAppId[app.id]?.kind
                             return (
                               <SidebarMenuSubItem key={app.id}>
                                 <div className="flex w-full min-w-0 items-center justify-between gap-1">
@@ -327,7 +326,7 @@ export function AppSidebar({
                                     className="shrink-0"
                                     appId={app.id}
                                     running={running}
-                                    building={building}
+                                    kind={kind}
                                     onStatus={onStatus}
                                     variant="compact"
                                   />

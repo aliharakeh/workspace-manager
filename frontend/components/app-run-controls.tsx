@@ -2,7 +2,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { HammerIcon, PlayIcon, RefreshCwIcon, SquareIcon } from "lucide-react"
 import { api } from "@/lib/api"
-import { appStateLabel } from "@/lib/app-state"
+import { appStateLabel, isTaskKind } from "@/lib/app-state"
 import type { StatusEvent } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,10 +14,10 @@ import { cn } from "@/lib/utils"
 
 type AppRunControlsProps = {
   appId: number
-  /** True while the app is running or building: both hold the app's one session. */
+  /** True while the app is running, building or being set up: all hold the app's one session. */
   running: boolean
-  /** True while that session is a build; Stop ends it, Reload is unavailable. */
-  building?: boolean
+  /** Kind of the current session. For a build or setup, Stop ends it and Reload is unavailable. */
+  kind?: string
   onStatus: (status: StatusEvent) => void
   /** "icon" is the full set of actions as icon buttons with tooltips. */
   variant?: "default" | "compact" | "icon"
@@ -27,12 +27,14 @@ type AppRunControlsProps = {
 export function AppRunControls({
   appId,
   running,
-  building = false,
+  kind,
   onStatus,
   variant = "default",
   className,
 }: AppRunControlsProps) {
   const [busy, setBusy] = useState(false)
+  const task = running && isTaskKind(kind)
+  const taskName = kind === "setup" ? "setup" : "build"
   const compact = variant === "compact"
 
   async function runAction(
@@ -131,7 +133,7 @@ export function AppRunControls({
       },
       {
         label: "Stop",
-        hint: building ? "Stop the build" : "Stop the app",
+        hint: task ? `Stop the ${taskName}` : "Stop the app",
         icon: <SquareIcon />,
         variant: "secondary",
         className: running ? "bg-red-600 text-white hover:bg-red-700" : "",
@@ -146,7 +148,7 @@ export function AppRunControls({
         className: running
           ? "border-transparent bg-yellow-500 text-black hover:bg-yellow-600 hover:text-black dark:border-transparent dark:bg-yellow-500 dark:hover:bg-yellow-600"
           : "",
-        disabled: busy || building,
+        disabled: busy || task,
         onClick: () => runAction("reload", "Reloaded", "Failed to reload"),
       },
     ] as const
@@ -210,7 +212,7 @@ export function AppRunControls({
       <Button
         size="sm"
         variant="outline"
-        disabled={busy || building}
+        disabled={busy || task}
         onClick={() => void runAction("reload", "Reloaded", "Failed to reload")}
       >
         <RefreshCwIcon data-icon="inline-start" />
@@ -222,21 +224,21 @@ export function AppRunControls({
 
 export function AppStatusDot({
   running,
-  building = false,
+  kind,
   className,
 }: {
   running: boolean
-  building?: boolean
+  kind?: string
   className?: string
 }) {
-  const label = appStateLabel(running, building)
+  const label = appStateLabel(running, kind)
   return (
     <span
       className={cn(
         "size-2 shrink-0 rounded-full",
         !running
           ? "bg-muted-foreground/35"
-          : building
+          : isTaskKind(kind)
             ? "bg-amber-500"
             : "bg-emerald-500",
         className

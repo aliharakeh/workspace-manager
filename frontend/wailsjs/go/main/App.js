@@ -234,6 +234,10 @@ export function RunnerRun(arg1) {
   return window['go']['main']['App']['RunnerRun'](arg1);
 }
 
+export function RunnerSetup(arg1) {
+  return window['go']['main']['App']['RunnerSetup'](arg1);
+}
+
 export function RunnerStatus(arg1) {
   return window['go']['main']['App']['RunnerStatus'](arg1);
 }

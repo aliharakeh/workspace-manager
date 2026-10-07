@@ -512,16 +512,17 @@ func (a *App) PackageScriptsList(appID int64) (types.PackageScripts, error) {
 	return lib.ReadPackageScripts(app.ProjectPath), nil
 }
 
-// checkConfigKind rejects anything but the two kinds of command list.
+// checkConfigKind rejects anything but the three kinds of command list.
 func checkConfigKind(kind string) error {
-	if kind != types.KindRun && kind != types.KindBuild {
-		return fmt.Errorf("kind must be %s or %s", types.KindRun, types.KindBuild)
+	switch kind {
+	case types.KindRun, types.KindBuild, types.KindSetup:
+		return nil
 	}
-	return nil
+	return fmt.Errorf("kind must be %s, %s or %s", types.KindRun, types.KindBuild, types.KindSetup)
 }
 
 // RunConfigGet returns the active config set's command list of a kind: "run"
-// (starts the app) or "build" (builds it).
+// (starts the app), "build" (builds it) or "setup" (prepares it).
 func (a *App) RunConfigGet(appID int64, kind string) (types.RunConfig, error) {
 	if err := checkConfigKind(kind); err != nil {
 		return types.RunConfig{}, err
@@ -606,6 +607,16 @@ func (a *App) RunnerBuild(appID int64) (types.StatusEvent, error) {
 		return types.StatusEvent{}, err
 	}
 	return a.runner.Start(a.ctx, appID, types.KindBuild)
+}
+
+// RunnerSetup runs the active config set's setup commands. Like RunnerBuild it
+// shares the app's session: it fails while the app is running, building or
+// being set up, and RunnerStop stops it.
+func (a *App) RunnerSetup(appID int64) (types.StatusEvent, error) {
+	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
+		return types.StatusEvent{}, err
+	}
+	return a.runner.Start(a.ctx, appID, types.KindSetup)
 }
 
 func (a *App) RunnerStop(appID int64) (types.StatusEvent, error) {

@@ -36,18 +36,20 @@ export type ConfigSetDetail = ConfigSet & {
     templates: Template[]
     run_config: RunConfig | null
     build_config: RunConfig | null
+    setup_config: RunConfig | null
 }
 
 /**
  * What to copy from a source config set.
  * `true` copies everything, `false` skips, an array copies only the listed
- * items: env var keys, template file paths, or source run/build command ids.
+ * items: env var keys, template file paths, or source run/build/setup command ids.
  */
 export type CopyParts = {
     env?: boolean | string[]
     templates?: boolean | string[]
     run?: boolean | number[]
     build?: boolean | number[]
+    setup?: boolean | number[]
 }
 
 export type EnvVar = {
@@ -72,8 +74,11 @@ export type Template = {
 
 export type RunMode = 'sequential' | 'parallel'
 
-/** The command list a config set holds one of: `run` starts the app, `build` builds it. */
-export type CommandKind = 'run' | 'build'
+/**
+ * The command list a config set holds one of: `run` starts the app, `build`
+ * builds it, `setup` prepares it (install dependencies and the like).
+ */
+export type CommandKind = 'run' | 'build' | 'setup'
 
 export type RunCommand = {
     id: number

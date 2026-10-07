@@ -764,6 +764,7 @@ export namespace types {
 	    templates?: any;
 	    run?: any;
 	    build?: any;
+	    setup?: any;
 	
 	    static createFrom(source: any = {}) {
 	        return new CopyParts(source);
@@ -775,6 +776,7 @@ export namespace types {
 	        this.templates = source["templates"];
 	        this.run = source["run"];
 	        this.build = source["build"];
+	        this.setup = source["setup"];
 	    }
 	}
 	export class ConfigSetCreateInput {
@@ -937,6 +939,7 @@ export namespace types {
 	    templates: Template[];
 	    run_config?: RunConfig;
 	    build_config?: RunConfig;
+	    setup_config?: RunConfig;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConfigSetDetail(source);
@@ -953,6 +956,7 @@ export namespace types {
 	        this.templates = this.convertValues(source["templates"], Template);
 	        this.run_config = this.convertValues(source["run_config"], RunConfig);
 	        this.build_config = this.convertValues(source["build_config"], RunConfig);
+	        this.setup_config = this.convertValues(source["setup_config"], RunConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

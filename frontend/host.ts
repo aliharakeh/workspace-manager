@@ -146,7 +146,7 @@ export const api = {
         list: (appId: number) => call(() => Go.PackageScriptsList(appId)),
     },
 
-    /** The active config set's run or build command list, by `kind`. */
+    /** The active config set's run, build or setup command list, by `kind`. */
     runConfig: {
         get: (appId: number, kind: CommandKind) => call(() => Go.RunConfigGet(appId, kind)),
         save: (
@@ -167,6 +167,7 @@ export const api = {
             call(() => Go.RunnerResize(appId, commandId, cols, rows)),
         run: (appId: number) => call(() => Go.RunnerRun(appId)),
         build: (appId: number) => call(() => Go.RunnerBuild(appId)),
+        setup: (appId: number) => call(() => Go.RunnerSetup(appId)),
         stop: (appId: number) => call(() => Go.RunnerStop(appId)),
         reload: (appId: number) => call(() => Go.RunnerReload(appId)),
     },

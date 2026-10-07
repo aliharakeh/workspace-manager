@@ -219,7 +219,7 @@ func (d *DB) CreateAppT(ctx context.Context, workspaceID int64, name, projectPat
 	if err != nil {
 		return types.App{}, err
 	}
-	for _, kind := range []string{types.KindRun, types.KindBuild} {
+	for _, kind := range []string{types.KindRun, types.KindBuild, types.KindSetup} {
 		if _, err := q.CreateRunConfig(ctx, CreateRunConfigParams{ConfigSetID: set.ID, Kind: kind, Mode: DefaultMode(kind)}); err != nil {
 			return types.App{}, err
 		}
@@ -292,7 +292,7 @@ func (d *DB) CreateConfigSetT(ctx context.Context, appID int64, name string) (ty
 	if err != nil {
 		return types.ConfigSet{}, UniqueErr(err, "A config set with this name already exists")
 	}
-	for _, kind := range []string{types.KindRun, types.KindBuild} {
+	for _, kind := range []string{types.KindRun, types.KindBuild, types.KindSetup} {
 		if _, err := d.GetOrCreateRunConfig(ctx, row.ID, kind); err != nil {
 			return types.ConfigSet{}, err
 		}
@@ -342,9 +342,9 @@ func (d *DB) ResolveActive(ctx context.Context, appID int64) (types.ConfigSet, e
 }
 
 // DefaultMode is the execution mode a new config of the kind starts with: a
-// run starts its processes together, a build runs its steps in order.
+// run starts its processes together, a build or a setup runs its steps in order.
 func DefaultMode(kind string) string {
-	if kind == types.KindBuild {
+	if kind == types.KindBuild || kind == types.KindSetup {
 		return "sequential"
 	}
 	return "parallel"
@@ -420,7 +420,7 @@ func (d *DB) UpsertRunConfig(ctx context.Context, configSetID int64, kind string
 }
 
 // ConfigSetDetailT loads a config set with its env vars, templates, and its
-// run and build configs (nil where none was ever created).
+// run, build and setup configs (nil where none was ever created).
 func (d *DB) ConfigSetDetailT(ctx context.Context, set types.ConfigSet) (types.ConfigSetDetail, error) {
 	envVars, err := d.ListEnvVarsT(ctx, set.ID)
 	if err != nil {
@@ -438,7 +438,11 @@ func (d *DB) ConfigSetDetailT(ctx context.Context, set types.ConfigSet) (types.C
 	if err != nil {
 		return types.ConfigSetDetail{}, err
 	}
-	return types.ConfigSetDetail{ConfigSet: set, EnvVars: envVars, Templates: templates, RunConfig: runCfg, BuildConfig: buildCfg}, nil
+	setupCfg, err := d.GetRunConfigByConfigSetT(ctx, set.ID, types.KindSetup)
+	if err != nil {
+		return types.ConfigSetDetail{}, err
+	}
+	return types.ConfigSetDetail{ConfigSet: set, EnvVars: envVars, Templates: templates, RunConfig: runCfg, BuildConfig: buildCfg, SetupConfig: setupCfg}, nil
 }
 
 func (d *DB) ListEnvVarsT(ctx context.Context, configSetID int64) ([]types.EnvVar, error) {
@@ -531,7 +535,7 @@ func HasAnyPart(parts *types.CopyParts) bool {
 	if parts == nil {
 		return true
 	}
-	return isPartEnabled(parts.Env) || isPartEnabled(parts.Templates) || isPartEnabled(parts.Run) || isPartEnabled(parts.Build)
+	return isPartEnabled(parts.Env) || isPartEnabled(parts.Templates) || isPartEnabled(parts.Run) || isPartEnabled(parts.Build) || isPartEnabled(parts.Setup)
 }
 
 func stringList(v any) (all bool, items []string, skip bool) {
@@ -625,14 +629,14 @@ func (d *DB) CopyFrom(ctx context.Context, sourceID, targetID int64, parts *type
 	}
 	envAll, envItems, envSkip := stringList(nil)
 	tplAll, tplItems, tplSkip := stringList(nil)
-	// What to copy of the run and the build command list, by kind (nil: all).
+	// What to copy of the run, build and setup command lists, by kind (nil: all).
 	cmdParts := map[string]any{}
 	if parts != nil {
 		envAll, envItems, envSkip = stringList(parts.Env)
 		tplAll, tplItems, tplSkip = stringList(parts.Templates)
-		cmdParts[types.KindRun], cmdParts[types.KindBuild] = parts.Run, parts.Build
+		cmdParts[types.KindRun], cmdParts[types.KindBuild], cmdParts[types.KindSetup] = parts.Run, parts.Build, parts.Setup
 	}
-	cmdKinds := []string{types.KindRun, types.KindBuild}
+	cmdKinds := []string{types.KindRun, types.KindBuild, types.KindSetup}
 	cmdSkip := true
 	for _, kind := range cmdKinds {
 		if _, _, skip := intList(cmdParts[kind]); !skip {

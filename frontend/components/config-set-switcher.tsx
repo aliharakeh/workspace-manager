@@ -68,6 +68,7 @@ type CopySel = {
   templates: CategorySel
   run: CategorySel
   build: CategorySel
+  setup: CategorySel
 }
 
 function blankCategory(): CategorySel {
@@ -80,6 +81,7 @@ function blankSel(): CopySel {
     templates: blankCategory(),
     run: blankCategory(),
     build: blankCategory(),
+    setup: blankCategory(),
   }
 }
 
@@ -99,6 +101,7 @@ function selToParts(sel: CopySel): CopyParts {
     templates: categoryToPart(sel.templates),
     run: runToPart(sel.run),
     build: runToPart(sel.build),
+    setup: runToPart(sel.setup),
   }
 }
 
@@ -112,7 +115,8 @@ function partsEnabled(parts: CopyParts): boolean {
     isPartEnabled(parts.env) ||
     isPartEnabled(parts.templates) ||
     isPartEnabled(parts.run) ||
-    isPartEnabled(parts.build)
+    isPartEnabled(parts.build) ||
+    isPartEnabled(parts.setup)
   )
 }
 
@@ -278,6 +282,9 @@ function PartsPicker({
         <TabsTrigger value="templates" className="flex-1">
           Templates
         </TabsTrigger>
+        <TabsTrigger value="setup" className="flex-1">
+          Setup config
+        </TabsTrigger>
         <TabsTrigger value="run" className="flex-1">
           Run config
         </TabsTrigger>
@@ -306,6 +313,19 @@ function PartsPicker({
           }))}
           sel={sel.templates}
           onChange={(templates) => onChange({ ...sel, templates })}
+          query={query}
+          onQueryChange={setQuery}
+        />
+      </TabsContent>
+      <TabsContent value="setup" className="mt-3">
+        <CategoryPicker
+          items={(detail.setup_config?.commands ?? []).map((c) => ({
+            id: String(c.id),
+            title: c.label ?? c.command,
+            sub: c.label ? c.command : undefined,
+          }))}
+          sel={sel.setup}
+          onChange={(setup) => onChange({ ...sel, setup })}
           query={query}
           onQueryChange={setQuery}
         />

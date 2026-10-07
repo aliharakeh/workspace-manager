@@ -124,7 +124,7 @@ export function LogsPanel({ appId, status }: LogsPanelProps) {
   if (processes.length === 0 || activeId === null) {
     return (
       <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-        Run or build the app to see its output here.
+        Run, build or set up the app to see its output here.
         {status?.error ? (
           <p className="mt-2 text-destructive">{status.error}</p>
         ) : null}
