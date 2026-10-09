@@ -456,6 +456,9 @@ type GitWorktree struct {
 	Prunable bool   `json:"prunable"`
 	Main     bool   `json:"main"`
 	Current  bool   `json:"current"`
+	// SharedLinks is the worktree's own shared paths, chosen when it was added
+	// (nil: it uses the app's).
+	SharedLinks []string `json:"shared_links,omitempty"`
 }
 
 // GitInfo is the git state of an app's project path.
@@ -468,19 +471,35 @@ type GitInfo struct {
 // GitWorktreeAddInput creates a worktree. Path is optional (default: a sibling
 // of the main worktree) and relative paths are taken from the project path.
 // NewBranch creates Branch from Base (default HEAD); otherwise Branch must exist.
+// LinkShared links the shared worktree paths into the new worktree. Links, when
+// set, replaces the app's shared paths for this worktree only (kept for later
+// setups and links); otherwise it uses the app's.
 type GitWorktreeAddInput struct {
-	Path      string `json:"path"`
-	Branch    string `json:"branch"`
-	NewBranch bool   `json:"new_branch"`
-	Base      string `json:"base"`
+	Path       string   `json:"path"`
+	Branch     string   `json:"branch"`
+	NewBranch  bool     `json:"new_branch"`
+	Base       string   `json:"base"`
+	LinkShared bool     `json:"link_shared"`
+	Links      []string `json:"links,omitempty"`
 }
 
 type GitOutput struct {
 	Output string `json:"output"`
 }
 
+// GitWorktreeAddResult is the new worktree. Links holds the shared paths it
+// tried to link (empty without LinkShared or when the app has none).
 type GitWorktreeAddResult struct {
-	Path string `json:"path"`
+	Path  string              `json:"path"`
+	Links []WorktreeLinkState `json:"links"`
+}
+
+// WorktreeLinkState is one shared path of an app in one worktree. Path is
+// relative to the app folder; State is one of the services.Link* values.
+type WorktreeLinkState struct {
+	Path    string `json:"path"`
+	State   string `json:"state"`
+	Message string `json:"message,omitempty"`
 }
 
 type AppAIChatInput struct {

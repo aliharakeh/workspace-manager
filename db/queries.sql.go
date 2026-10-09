@@ -277,6 +277,21 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 	return i, err
 }
 
+const createWorktreeLink = `-- name: CreateWorktreeLink :exec
+INSERT INTO worktree_links (app_id, path, sort_order) VALUES (?, ?, ?)
+`
+
+type CreateWorktreeLinkParams struct {
+	AppID     int64  `json:"app_id"`
+	Path      string `json:"path"`
+	SortOrder int64  `json:"sort_order"`
+}
+
+func (q *Queries) CreateWorktreeLink(ctx context.Context, arg CreateWorktreeLinkParams) error {
+	_, err := q.db.ExecContext(ctx, createWorktreeLink, arg.AppID, arg.Path, arg.SortOrder)
+	return err
+}
+
 const deleteApp = `-- name: DeleteApp :execrows
 DELETE FROM apps WHERE id = ?
 `
@@ -395,6 +410,15 @@ func (q *Queries) DeleteWorkspace(ctx context.Context, id int64) (int64, error) 
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const deleteWorktreeLinks = `-- name: DeleteWorktreeLinks :exec
+DELETE FROM worktree_links WHERE app_id = ?
+`
+
+func (q *Queries) DeleteWorktreeLinks(ctx context.Context, appID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteWorktreeLinks, appID)
+	return err
 }
 
 const getApp = `-- name: GetApp :one
@@ -955,6 +979,34 @@ func (q *Queries) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorktreeLinks = `-- name: ListWorktreeLinks :many
+SELECT path FROM worktree_links WHERE app_id = ? ORDER BY sort_order ASC, id ASC
+`
+
+// worktree_links
+func (q *Queries) ListWorktreeLinks(ctx context.Context, appID int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listWorktreeLinks, appID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			return nil, err
+		}
+		items = append(items, path)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

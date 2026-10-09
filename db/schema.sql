@@ -121,3 +121,17 @@ CREATE TABLE IF NOT EXISTS blueprints (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS blueprints_name_unique ON blueprints (name);
+
+-- Paths (relative to the app's folder) that a git worktree of the app links
+-- back to the app's own folder instead of having its own copy, e.g.
+-- node_modules or .env. Applied before setup runs in a worktree.
+CREATE TABLE IF NOT EXISTS worktree_links (
+  id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+  app_id integer NOT NULL,
+  path text NOT NULL,
+  sort_order integer DEFAULT 0 NOT NULL,
+  created_at text DEFAULT (datetime('now')) NOT NULL,
+  FOREIGN KEY (app_id) REFERENCES apps (id) ON DELETE cascade
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS worktree_links_app_id_path_unique ON worktree_links (app_id, path);

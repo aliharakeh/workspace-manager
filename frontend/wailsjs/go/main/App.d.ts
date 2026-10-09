@@ -94,6 +94,8 @@ export function GitInfo(arg1:number):Promise<types.GitInfo>;
 
 export function GitWorktreeAdd(arg1:number,arg2:types.GitWorktreeAddInput):Promise<types.GitWorktreeAddResult>;
 
+export function GitWorktreeLinks(arg1:number,arg2:string,arg3:boolean):Promise<Array<types.WorktreeLinkState>>;
+
 export function GitWorktreeOpenFolder(arg1:number,arg2:string):Promise<types.Ok>;
 
 export function GitWorktreeOpenInEditor(arg1:number,arg2:string,arg3:string):Promise<types.Ok>;
@@ -161,3 +163,7 @@ export function WorkspacesDelete(arg1:number):Promise<types.Ok>;
 export function WorkspacesList():Promise<Array<types.Workspace>>;
 
 export function WorkspacesUpdate(arg1:number,arg2:types.WorkspaceUpdateInput):Promise<types.Workspace>;
+
+export function WorktreeLinksGet(arg1:number):Promise<Array<string>>;
+
+export function WorktreeLinksSave(arg1:number,arg2:Array<string>):Promise<Array<string>>;

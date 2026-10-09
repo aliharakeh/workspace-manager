@@ -41,6 +41,11 @@ func GitInfo(dir string) (types.GitInfo, error) {
 	if err != nil {
 		return info, err
 	}
+	for i := range wts {
+		if !wts[i].Main && !wts[i].Bare {
+			wts[i].SharedLinks, _ = WorktreeLinksOverride(wts[i].Path)
+		}
+	}
 	info.Worktrees = wts
 	branches, err := GitBranches(dir)
 	if err != nil {
@@ -163,6 +168,13 @@ func ResolveWorktreeAdd(dir string, wts []types.GitWorktree, in types.GitWorktre
 	if !in.NewBranch {
 		in.Base = ""
 	}
+	if in.Links != nil {
+		links, err := NormalizeWorktreeLinks(in.Links)
+		if err != nil {
+			return in, err
+		}
+		in.Links = links
+	}
 	if in.Path == "" {
 		if len(wts) == 0 {
 			return in, fmt.Errorf("path is required")
@@ -205,6 +217,11 @@ func GitWorktreeAdd(dir string, in types.GitWorktreeAddInput) (string, error) {
 	}
 	if _, err := git(dir, args...); err != nil {
 		return "", err
+	}
+	if len(in.Links) > 0 {
+		if err := SaveWorktreeLinksOverride(in.Path, in.Links); err != nil {
+			return in.Path, fmt.Errorf("worktree created at %s, but its shared paths were not saved: %w", in.Path, err)
+		}
 	}
 	return in.Path, nil
 }

@@ -228,3 +228,13 @@ RETURNING *;
 
 -- name: DeleteBlueprint :execrows
 DELETE FROM blueprints WHERE id = ?;
+
+-- worktree_links
+-- name: ListWorktreeLinks :many
+SELECT path FROM worktree_links WHERE app_id = ? ORDER BY sort_order ASC, id ASC;
+
+-- name: DeleteWorktreeLinks :exec
+DELETE FROM worktree_links WHERE app_id = ?;
+
+-- name: CreateWorktreeLink :exec
+INSERT INTO worktree_links (app_id, path, sort_order) VALUES (?, ?, ?);

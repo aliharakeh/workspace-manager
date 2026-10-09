@@ -98,3 +98,11 @@ type Workspace struct {
 	CreatedAt string  `json:"created_at"`
 	UpdatedAt string  `json:"updated_at"`
 }
+
+type WorktreeLink struct {
+	ID        int64  `json:"id"`
+	AppID     int64  `json:"app_id"`
+	Path      string `json:"path"`
+	SortOrder int64  `json:"sort_order"`
+	CreatedAt string `json:"created_at"`
+}

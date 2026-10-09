@@ -518,7 +518,7 @@ func (s *appAIState) tools() []ai.ToolRef {
 			func(_ *ai.ToolContext, in emptyIn) (any, error) {
 				return s.record("list_branches", in, s.listBranches()), nil
 			}),
-		ai.NewTool("add_worktree", "Stage a new git worktree. new_branch=true creates branch from base (default HEAD); otherwise branch must exist and not be checked out. path is optional (default: sibling folder <repo>-<branch>); relative paths are from the project path.",
+		ai.NewTool("add_worktree", "Stage a new git worktree. new_branch=true creates branch from base (default HEAD); otherwise branch must exist and not be checked out. path is optional (default: sibling folder <repo>-<branch>); relative paths are from the project path. link_shared=true links the app's shared worktree files (e.g. node_modules, .env) into it right after it is created. links (optional, paths relative to the app folder) replaces the app's shared files for this worktree only.",
 			func(_ *ai.ToolContext, in types.GitWorktreeAddInput) (any, error) {
 				return s.record("add_worktree", in, s.addWorktree(in)), nil
 			}),

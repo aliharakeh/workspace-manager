@@ -186,6 +186,10 @@ export function GitWorktreeAdd(arg1, arg2) {
   return window['go']['main']['App']['GitWorktreeAdd'](arg1, arg2);
 }
 
+export function GitWorktreeLinks(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GitWorktreeLinks'](arg1, arg2, arg3);
+}
+
 export function GitWorktreeOpenFolder(arg1, arg2) {
   return window['go']['main']['App']['GitWorktreeOpenFolder'](arg1, arg2);
 }
@@ -320,4 +324,12 @@ export function WorkspacesList() {
 
 export function WorkspacesUpdate(arg1, arg2) {
   return window['go']['main']['App']['WorkspacesUpdate'](arg1, arg2);
+}
+
+export function WorktreeLinksGet(arg1) {
+  return window['go']['main']['App']['WorktreeLinksGet'](arg1);
+}
+
+export function WorktreeLinksSave(arg1, arg2) {
+  return window['go']['main']['App']['WorktreeLinksSave'](arg1, arg2);
 }

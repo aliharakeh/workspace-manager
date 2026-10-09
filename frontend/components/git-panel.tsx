@@ -5,6 +5,7 @@ import {
   FolderGit2Icon,
   GitBranchIcon,
   HammerIcon,
+  Link2Icon,
   PlayIcon,
   PlusIcon,
   RefreshCwIcon,
@@ -21,6 +22,7 @@ import type {
   GitInfo,
   GitWorktree,
   StatusEvent,
+  WorktreeLinkState,
 } from "@/lib/types"
 import {
   AlertDialog,
@@ -50,8 +52,16 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -133,7 +143,50 @@ function fetchGitState(appId: number) {
   return Promise.all([
     api.git.info(appId),
     api.configSets.list(appId) as Promise<ConfigSet[]>,
+    api.git.linksGet(appId),
   ])
+}
+
+const LINK_STATE_LABELS: Record<WorktreeLinkState["state"], string> = {
+  linked: "linked",
+  missing: "not linked",
+  exists: "skipped, real copy present",
+  other_link: "skipped, links elsewhere",
+  no_source: "skipped, not in the app folder",
+  error: "failed",
+}
+
+/** One line per shared path, for the "Last git output" box. */
+function formatLinkStates(states: WorktreeLinkState[]): string {
+  return states
+    .map(
+      (s) =>
+        `${s.path}: ${LINK_STATE_LABELS[s.state]}${s.message ? ` (${s.message})` : ""}`
+    )
+    .join("\n")
+}
+
+/** Links the shared paths into the worktree at path and reports the outcome. */
+async function linkSharedPaths(
+  appId: number,
+  path: string,
+  setOutput: (output: string) => void
+) {
+  reportLinkStates(await api.git.worktreeLinks(appId, path, true), setOutput)
+}
+
+/** Shows the outcome of linking shared paths in the output box and a toast. */
+function reportLinkStates(
+  states: WorktreeLinkState[],
+  setOutput: (output: string) => void
+) {
+  setOutput(formatLinkStates(states))
+  const linked = states.filter((s) => s.state === "linked").length
+  const failed = states.filter((s) => s.state === "error").length
+  const message = `${linked} of ${states.length} shared paths linked`
+  if (failed) toast.error(`${message}, ${failed} failed`)
+  else if (linked < states.length) toast.warning(`${message}, see the output`)
+  else toast.success(message)
 }
 
 function readChosenSets(appId: number): ChosenSets {
@@ -161,6 +214,9 @@ export function GitPanel({
 }: GitPanelProps) {
   const [info, setInfo] = useState<GitInfo | null>(null)
   const [sets, setSets] = useState<ConfigSet[]>([])
+  const [links, setLinks] = useState<string[]>([])
+  const [linksOpen, setLinksOpen] = useState(false)
+  const [linking, setLinking] = useState(false)
   const [chosen, setChosen] = useState(() => readChosenSets(appId))
   // The panel is reused across apps: reload the remembered choices on a switch.
   const [chosenFor, setChosenFor] = useState(appId)
@@ -183,9 +239,10 @@ export function GitPanel({
   async function load() {
     setLoading(true)
     try {
-      const [nextInfo, nextSets] = await fetchGitState(appId)
+      const [nextInfo, nextSets, nextLinks] = await fetchGitState(appId)
       setInfo(nextInfo)
       setSets(nextSets)
+      setLinks(nextLinks)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to read git")
     } finally {
@@ -219,10 +276,11 @@ export function GitPanel({
     if (!active) return
     let cancelled = false
     fetchGitState(appId)
-      .then(([nextInfo, nextSets]) => {
+      .then(([nextInfo, nextSets, nextLinks]) => {
         if (cancelled) return
         setInfo(nextInfo)
         setSets(nextSets)
+        setLinks(nextLinks)
       })
       .catch((err) => {
         if (!cancelled) {
@@ -276,6 +334,17 @@ export function GitPanel({
       toast.error(err instanceof Error ? err.message : `Failed to start ${kind}`)
     } finally {
       setStarting(false)
+    }
+  }
+
+  async function handleLink(w: GitWorktree) {
+    setLinking(true)
+    try {
+      await linkSharedPaths(appId, w.path, setOutput)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to link")
+    } finally {
+      setLinking(false)
     }
   }
 
@@ -357,7 +426,8 @@ export function GitPanel({
               </div>
               <p className="text-sm text-muted-foreground">
                 Setup, Run and Build use this app's config, with the config set
-                picked per worktree, inside that worktree.
+                picked per worktree, inside that worktree. Setup first links
+                the shared files.
               </p>
             </div>
             <div className="ml-auto flex flex-wrap justify-end gap-2">
@@ -368,6 +438,17 @@ export function GitPanel({
               >
                 <RefreshCwIcon data-icon="inline-start" />
                 Refresh
+              </Button>
+              <Button
+                variant="outline"
+                title="Files and folders worktrees link to from this app's folder, e.g. node_modules"
+                onClick={() => setLinksOpen(true)}
+              >
+                <Link2Icon data-icon="inline-start" />
+                Shared files
+                {links.length ? (
+                  <Badge variant="secondary">{links.length}</Badge>
+                ) : null}
               </Button>
               <Button
                 variant="outline"
@@ -413,6 +494,14 @@ export function GitPanel({
                       {w.main ? <Badge variant="secondary">main</Badge> : null}
                       {w.current ? <Badge>this app</Badge> : null}
                       {w.locked ? <Badge variant="outline">locked</Badge> : null}
+                      {w.shared_links ? (
+                        <Badge
+                          variant="outline"
+                          title={`Shared files for this worktree only: ${w.shared_links.join(", ")}`}
+                        >
+                          own shared files
+                        </Badge>
+                      ) : null}
                       {w.prunable ? (
                         <Badge variant="destructive">missing</Badge>
                       ) : null}
@@ -463,6 +552,15 @@ export function GitPanel({
                           </SelectGroup>
                         </SelectContent>
                       </Select>
+                      {(w.shared_links ?? links).length ? (
+                        <IconAction
+                          label="Link shared files"
+                          disabled={linking || runningIn(w)}
+                          onClick={() => void handleLink(w)}
+                        >
+                          <Link2Icon />
+                        </IconAction>
+                      ) : null}
                       {runningIn(w) ? (
                         <IconAction
                           label="Stop"
@@ -532,11 +630,21 @@ export function GitPanel({
         <AddWorktreeDialog
           appId={appId}
           info={info}
+          links={links}
           open={addOpen}
           onOpenChange={setAddOpen}
           onAdded={() => void load()}
+          onOutput={setOutput}
         />
       ) : null}
+
+      <SharedLinksDialog
+        appId={appId}
+        links={links}
+        open={linksOpen}
+        onOpenChange={setLinksOpen}
+        onSaved={setLinks}
+      />
 
       <AlertDialog
         open={!!pendingRemove}
@@ -583,23 +691,136 @@ export function GitPanel({
   )
 }
 
+/** Common candidates, offered as one-click additions. */
+const LINK_SUGGESTIONS = ["node_modules", ".env", ".env.local", ".venv", "vendor"]
+
+function SharedLinksDialog({
+  appId,
+  links,
+  open,
+  onOpenChange,
+  onSaved,
+}: {
+  appId: number
+  links: string[]
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSaved: (links: string[]) => void
+}) {
+  const [text, setText] = useState("")
+  const [saving, setSaving] = useState(false)
+
+  // The dialog stays mounted, so the draft is reset each time it opens.
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) setText(links.join("\n"))
+  }
+
+  const draft = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+
+  function addSuggestion(path: string) {
+    setText([...draft, path].join("\n"))
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      onSaved(await api.git.linksSave(appId, draft))
+      toast.success("Shared files saved")
+      onOpenChange(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Shared files</DialogTitle>
+          <DialogDescription>
+            Files and folders each worktree links to in this app's folder
+            instead of having its own copy. They are linked when a worktree is
+            added (unless turned off there), before Setup runs in a worktree,
+            or with the link button on its row.
+          </DialogDescription>
+        </DialogHeader>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="git-shared-links">
+              Paths, one per line
+            </FieldLabel>
+            <Textarea
+              id="git-shared-links"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={"node_modules\n.env"}
+              rows={6}
+              className="font-mono text-xs"
+            />
+            <FieldDescription>
+              Relative to the app folder. A worktree that already has a real
+              file or folder at a path keeps it: delete it there to share the
+              app's one. Changes made through a link change the app's own copy.
+            </FieldDescription>
+          </Field>
+          <div className="flex flex-wrap gap-1.5">
+            {LINK_SUGGESTIONS.filter((s) => !draft.includes(s)).map((s) => (
+              <Button
+                key={s}
+                variant="outline"
+                size="sm"
+                className="font-mono text-xs"
+                onClick={() => addSuggestion(s)}
+              >
+                <PlusIcon data-icon="inline-start" />
+                {s}
+              </Button>
+            ))}
+          </div>
+        </FieldGroup>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button disabled={saving} onClick={() => void handleSave()}>
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function AddWorktreeDialog({
   appId,
   info,
+  links,
   open,
   onOpenChange,
   onAdded,
+  onOutput,
 }: {
   appId: number
   info: GitInfo
+  links: string[]
   open: boolean
   onOpenChange: (open: boolean) => void
   onAdded: () => void
+  onOutput: (output: string) => void
 }) {
   const [branch, setBranch] = useState("")
   const [newBranch, setNewBranch] = useState(true)
   const [base, setBase] = useState("")
   const [path, setPath] = useState("")
+  const [link, setLink] = useState(true)
+  const [linkText, setLinkText] = useState("")
   const [saving, setSaving] = useState(false)
 
   // The dialog stays mounted, so the form is reset each time it opens.
@@ -611,9 +832,17 @@ function AddWorktreeDialog({
       setNewBranch(true)
       setBase("")
       setPath("")
+      setLink(links.length > 0)
+      setLinkText(links.join("\n"))
     }
   }
 
+  const linkPaths = linkText
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+  // Paths that differ from the app's become this worktree's own list.
+  const ownLinks = linkPaths.join("\n") !== links.join("\n")
   const mainPath = info.worktrees[0]?.path ?? ""
   const defaultPath =
     branch.trim() && mainPath
@@ -632,10 +861,13 @@ function AddWorktreeDialog({
         new_branch: newBranch,
         base: newBranch ? base.trim() : "",
         path: path.trim(),
+        link_shared: link && linkPaths.length > 0,
+        links: link && ownLinks && linkPaths.length ? linkPaths : undefined,
       })
       toast.success(`Worktree created at ${res.path}`)
       onOpenChange(false)
       onAdded()
+      if (res.links.length) reportLinkStates(res.links, onOutput)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add worktree")
     } finally {
@@ -703,6 +935,50 @@ function AddWorktreeDialog({
               className="font-mono text-xs"
             />
           </Field>
+          <Field orientation="horizontal">
+            <FieldContent>
+              <FieldLabel htmlFor="git-link-shared">Link shared files</FieldLabel>
+              <FieldDescription>
+                Link these files and folders to the app's folder as soon as the
+                worktree is created.
+              </FieldDescription>
+            </FieldContent>
+            <Switch
+              id="git-link-shared"
+              checked={link}
+              onCheckedChange={setLink}
+            />
+          </Field>
+          {link ? (
+            <Field>
+              <Textarea
+                id="git-link-paths"
+                aria-label="Shared files for this worktree"
+                value={linkText}
+                onChange={(e) => setLinkText(e.target.value)}
+                placeholder={"node_modules\n.env"}
+                rows={4}
+                className="font-mono text-xs"
+              />
+              <FieldDescription>
+                {ownLinks ? (
+                  <>
+                    This worktree keeps its own list for later setups; the
+                    app's Shared files stay unchanged.{" "}
+                    <button
+                      type="button"
+                      className="underline underline-offset-4"
+                      onClick={() => setLinkText(links.join("\n"))}
+                    >
+                      Use the app's list
+                    </button>
+                  </>
+                ) : (
+                  "One path per line, relative to the app folder. Starts as the app's Shared files; edit it to change this worktree only."
+                )}
+              </FieldDescription>
+            </Field>
+          ) : null}
         </FieldGroup>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

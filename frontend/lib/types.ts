@@ -183,6 +183,8 @@ export type GitWorktree = {
     main: boolean
     /** The worktree the app's project path is in (cannot be removed). */
     current: boolean
+    /** Its own shared paths, chosen when it was added; absent: it uses the app's. */
+    shared_links?: string[]
 }
 
 export type GitInfo = {
@@ -198,6 +200,24 @@ export type GitWorktreeAddInput = {
     branch: string
     new_branch: boolean
     base: string
+    /** Link the app's shared worktree paths into it right after it is created. */
+    link_shared: boolean
+    /** Replaces the app's shared paths for this worktree only (kept for later setups and links). */
+    links?: string[]
+}
+
+/** links: the shared paths it tried to link (empty without link_shared). */
+export type GitWorktreeAddResult = {
+    path: string
+    links: WorktreeLinkState[]
+}
+
+/** One shared path of an app in one worktree (see services/worktreelinks.go). */
+export type WorktreeLinkState = {
+    /** Relative to the app folder. */
+    path: string
+    state: "linked" | "missing" | "exists" | "other_link" | "no_source" | "error"
+    message?: string
 }
 
 /** Regex used to detect ready URLs from process logs. */

@@ -9,9 +9,11 @@ import type {
     CopyParts,
     GitInfo,
     GitWorktreeAddInput,
+    GitWorktreeAddResult,
     RunMode,
     RunnerEvent,
     StatusEvent,
+    WorktreeLinkState,
 } from '@/lib/types'
 import * as Go from './wailsjs/go/main/App'
 import { types } from './wailsjs/go/models'
@@ -178,8 +180,9 @@ export const api = {
     git: {
         info: (appId: number) => call(() => Go.GitInfo(appId)) as Promise<GitInfo>,
         fetchAll: (appId: number) => call(() => Go.GitFetchAll(appId)),
+        /** With `link_shared`, also links the app's shared paths into the new worktree. */
         worktreeAdd: (appId: number, body: GitWorktreeAddInput) =>
-            call(() => Go.GitWorktreeAdd(appId, body)),
+            call(() => Go.GitWorktreeAdd(appId, body)) as Promise<GitWorktreeAddResult>,
         worktreeRemove: (appId: number, path: string, force: boolean) =>
             call(() => Go.GitWorktreeRemove(appId, path, force)),
         worktreePrune: (appId: number) => call(() => Go.GitWorktreePrune(appId)),
@@ -191,6 +194,13 @@ export const api = {
         /** Runs the app's run/build/setup config inside the worktree at `path`, with config set `configSetId` (0: the active one). */
         worktreeStart: (appId: number, path: string, kind: CommandKind, configSetId: number) =>
             call(() => Go.GitWorktreeStart(appId, path, kind, configSetId)) as Promise<StatusEvent>,
+        /** The app's shared paths (relative to its folder) that worktrees link to. */
+        linksGet: (appId: number) => call(() => Go.WorktreeLinksGet(appId)) as Promise<string[]>,
+        linksSave: (appId: number, paths: string[]) =>
+            call(() => Go.WorktreeLinksSave(appId, paths)) as Promise<string[]>,
+        /** State of each shared path in the worktree at `path`; with `create`, links the missing ones first. */
+        worktreeLinks: (appId: number, path: string, create: boolean) =>
+            call(() => Go.GitWorktreeLinks(appId, path, create)) as Promise<WorktreeLinkState[]>,
     },
 
     ports: {

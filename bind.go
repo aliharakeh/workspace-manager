@@ -672,13 +672,41 @@ func (a *App) GitWorktreeAdd(appID int64, body types.GitWorktreeAddInput) (types
 	if err != nil {
 		return types.GitWorktreeAddResult{}, err
 	}
-	return types.GitWorktreeAddResult{Path: path}, nil
+	res := types.GitWorktreeAddResult{Path: path, Links: []types.WorktreeLinkState{}}
+	if !body.LinkShared {
+		return res, nil
+	}
+	// The worktree exists now, so a link that fails is reported in Links
+	// instead of failing the add.
+	appDir, root, err := services.WorktreeAppDir(dir, path)
+	if err == nil {
+		res.Links, err = a.linkWorktree(appID, dir, appDir, root)
+	}
+	if err != nil {
+		return res, fmt.Errorf("worktree created at %s, but shared paths were not linked: %w", path, err)
+	}
+	return res, nil
 }
 
 func (a *App) GitWorktreeRemove(appID int64, path string, force bool) (types.Ok, error) {
 	dir, err := a.appProjectDir(appID)
 	if err != nil {
 		return types.Ok{}, err
+	}
+	// Drop the shared links first so deleting the worktree cannot reach into
+	// the app's own copies through them.
+	if appDir, root, err := services.WorktreeAppDir(dir, path); err == nil {
+		links, err := a.db.ListWorktreeLinksT(a.ctx, appID)
+		if err != nil {
+			return types.Ok{}, err
+		}
+		// The worktree's own list too: it may link paths the app's does not.
+		if own, ok := services.WorktreeLinksOverride(root); ok {
+			links = append(links, own...)
+		}
+		if err := services.UnlinkWorktree(appDir, links); err != nil {
+			return types.Ok{}, fmt.Errorf("removing shared links: %w", err)
+		}
 	}
 	if err := services.GitWorktreeRemove(dir, path, force); err != nil {
 		return types.Ok{}, err
@@ -713,7 +741,84 @@ func (a *App) GitWorktreeStart(appID int64, path string, kind string, configSetI
 	if err != nil {
 		return types.StatusEvent{}, err
 	}
+	if kind == types.KindSetup && !services.SameDir(appDir, dir) {
+		// Setup links the shared paths first, so e.g. an install reuses them.
+		states, err := a.linkWorktree(appID, dir, appDir, root)
+		if err != nil {
+			return types.StatusEvent{}, err
+		}
+		var failed []string
+		for _, s := range states {
+			if s.State == services.LinkFailed {
+				failed = append(failed, s.Path+": "+s.Message)
+			}
+		}
+		if len(failed) > 0 {
+			return types.StatusEvent{}, fmt.Errorf("could not link shared paths, setup not started:\n%s", strings.Join(failed, "\n"))
+		}
+	}
 	return a.runner.StartIn(a.ctx, appID, kind, appDir, root, configSetID)
+}
+
+func (a *App) linkWorktree(appID int64, dir, appDir, root string) ([]types.WorktreeLinkState, error) {
+	links, err := a.worktreeLinkPaths(appID, root)
+	if err != nil {
+		return nil, err
+	}
+	return services.LinkWorktree(dir, appDir, root, links), nil
+}
+
+// worktreeLinkPaths is the shared paths of the worktree at root: its own list
+// if it was given one when added, otherwise the app's.
+func (a *App) worktreeLinkPaths(appID int64, root string) ([]string, error) {
+	if own, ok := services.WorktreeLinksOverride(root); ok {
+		return own, nil
+	}
+	return a.db.ListWorktreeLinksT(a.ctx, appID)
+}
+
+// WorktreeLinksGet returns the app's shared worktree paths: files and folders,
+// relative to the app folder, that its worktrees link to instead of copying.
+func (a *App) WorktreeLinksGet(appID int64) ([]string, error) {
+	return a.db.ListWorktreeLinksT(a.ctx, appID)
+}
+
+// WorktreeLinksSave replaces the app's shared worktree paths and returns them
+// cleaned up.
+func (a *App) WorktreeLinksSave(appID int64, paths []string) ([]string, error) {
+	clean, err := services.NormalizeWorktreeLinks(paths)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.db.SetWorktreeLinksT(a.ctx, appID, clean); err != nil {
+		return nil, err
+	}
+	return clean, nil
+}
+
+// GitWorktreeLinks reports each shared path in the worktree at path; with
+// create it first links the ones that are missing there. Existing files and
+// folders are never replaced.
+func (a *App) GitWorktreeLinks(appID int64, path string, create bool) ([]types.WorktreeLinkState, error) {
+	dir, err := a.appProjectDir(appID)
+	if err != nil {
+		return nil, err
+	}
+	appDir, root, err := services.WorktreeAppDir(dir, path)
+	if err != nil {
+		return nil, err
+	}
+	if services.SameDir(appDir, dir) {
+		return nil, fmt.Errorf("this is the app's own folder: its worktrees link to it")
+	}
+	if create {
+		return a.linkWorktree(appID, dir, appDir, root)
+	}
+	links, err := a.worktreeLinkPaths(appID, root)
+	if err != nil {
+		return nil, err
+	}
+	return services.WorktreeLinkStates(dir, appDir, links), nil
 }
 
 // worktreeAppDir is the app's folder inside the worktree at path, as used by
