@@ -88,7 +88,21 @@ export function FsReadAppFile(arg1:number,arg2:string):Promise<types.ReadAppFile
 
 export function FsValidatePath(arg1:string):Promise<types.ValidatePathResult>;
 
+export function GitBranchCheckout(arg1:number,arg2:string):Promise<types.Ok>;
+
+export function GitBranchCreate(arg1:number,arg2:string,arg3:string):Promise<types.Ok>;
+
+export function GitBranchDelete(arg1:number,arg2:string,arg3:boolean):Promise<types.Ok>;
+
+export function GitBranchPull(arg1:number,arg2:string):Promise<types.GitPullResult>;
+
+export function GitBranchPush(arg1:number,arg2:string,arg3:boolean):Promise<types.GitOutput>;
+
+export function GitBranchRename(arg1:number,arg2:string,arg3:string):Promise<types.Ok>;
+
 export function GitFetchAll(arg1:number):Promise<types.GitOutput>;
+
+export function GitFileOpenInEditor(arg1:number,arg2:string,arg3:string):Promise<types.Ok>;
 
 export function GitInfo(arg1:number):Promise<types.GitInfo>;
 

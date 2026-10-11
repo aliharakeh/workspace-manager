@@ -663,6 +663,102 @@ func (a *App) GitFetchAll(appID int64) (types.GitOutput, error) {
 	return types.GitOutput{Output: out}, nil
 }
 
+// GitBranchCreate creates a local branch at base (default HEAD), not checked out.
+func (a *App) GitBranchCreate(appID int64, name string, base string) (types.Ok, error) {
+	dir, err := a.appProjectDir(appID)
+	if err != nil {
+		return types.Ok{}, err
+	}
+	if err := services.GitBranchCreate(dir, name, base); err != nil {
+		return types.Ok{}, err
+	}
+	return types.Ok{Ok: true}, nil
+}
+
+func (a *App) GitBranchRename(appID int64, oldName string, newName string) (types.Ok, error) {
+	dir, err := a.appProjectDir(appID)
+	if err != nil {
+		return types.Ok{}, err
+	}
+	if err := services.GitBranchRename(dir, oldName, newName); err != nil {
+		return types.Ok{}, err
+	}
+	return types.Ok{Ok: true}, nil
+}
+
+// GitBranchCheckout switches the app's own folder to a local branch. It is
+// refused while the app has a runner session, which works in that folder.
+func (a *App) GitBranchCheckout(appID int64, name string) (types.Ok, error) {
+	dir, err := a.appProjectDir(appID)
+	if err != nil {
+		return types.Ok{}, err
+	}
+	if a.runner.GetStatus(appID).Running {
+		return types.Ok{}, fmt.Errorf("stop the running app before switching branches")
+	}
+	if err := services.GitBranchCheckout(dir, name); err != nil {
+		return types.Ok{}, err
+	}
+	return types.Ok{Ok: true}, nil
+}
+
+// GitBranchPull pulls a local branch's upstream in the worktree that has it
+// checked out. Merge conflicts come back in the result, not as an error. It is
+// refused while the app has a runner session.
+func (a *App) GitBranchPull(appID int64, name string) (types.GitPullResult, error) {
+	dir, err := a.appProjectDir(appID)
+	if err != nil {
+		return types.GitPullResult{}, err
+	}
+	if a.runner.GetStatus(appID).Running {
+		return types.GitPullResult{}, fmt.Errorf("stop the running app before pulling")
+	}
+	return services.GitBranchPull(dir, name)
+}
+
+// GitBranchPush pushes a local branch to its upstream, or publishes it when it
+// has none; force uses --force-with-lease.
+func (a *App) GitBranchPush(appID int64, name string, force bool) (types.GitOutput, error) {
+	dir, err := a.appProjectDir(appID)
+	if err != nil {
+		return types.GitOutput{}, err
+	}
+	out, err := services.GitBranchPush(dir, name, force)
+	if err != nil {
+		return types.GitOutput{}, err
+	}
+	return types.GitOutput{Output: out}, nil
+}
+
+// GitFileOpenInEditor opens a file of one of the repo's worktrees (e.g. a
+// conflicted one) in an editor (an id from AppsEditors).
+func (a *App) GitFileOpenInEditor(appID int64, file string, editor string) (types.Ok, error) {
+	dir, err := a.appProjectDir(appID)
+	if err != nil {
+		return types.Ok{}, err
+	}
+	file, err = services.FindWorktreeFile(dir, file)
+	if err != nil {
+		return types.Ok{}, err
+	}
+	if err := native.OpenInEditor(editor, file); err != nil {
+		return types.Ok{}, err
+	}
+	return types.Ok{Ok: true}, nil
+}
+
+// GitBranchDelete deletes a local branch; force also deletes an unmerged one.
+func (a *App) GitBranchDelete(appID int64, name string, force bool) (types.Ok, error) {
+	dir, err := a.appProjectDir(appID)
+	if err != nil {
+		return types.Ok{}, err
+	}
+	if err := services.GitBranchDelete(dir, name, force); err != nil {
+		return types.Ok{}, err
+	}
+	return types.Ok{Ok: true}, nil
+}
+
 func (a *App) GitWorktreeAdd(appID int64, body types.GitWorktreeAddInput) (types.GitWorktreeAddResult, error) {
 	dir, err := a.appProjectDir(appID)
 	if err != nil {

@@ -187,11 +187,36 @@ export type GitWorktree = {
     shared_links?: string[]
 }
 
+/** One local branch. */
+export type GitLocalBranch = {
+    name: string
+    /** Short hash of its tip commit. */
+    head: string
+    /** Subject line of its tip commit. */
+    subject: string
+    /** Upstream branch, e.g. "origin/main"; empty when it has none. */
+    upstream: string
+    /** The upstream branch no longer exists on the remote. */
+    gone: boolean
+    ahead: number
+    behind: number
+    /** Path of the worktree that has it checked out; empty when none (it cannot be deleted while set). */
+    worktree: string
+}
+
+/** A `git pull` in the worktree at `path`; `conflicts` (absolute paths) is empty after a clean pull. */
+export type GitPullResult = {
+    output: string
+    path: string
+    conflicts: string[]
+}
+
 export type GitInfo = {
     is_repo: boolean
     worktrees: GitWorktree[]
     /** Local branches, then remote-tracking ones (e.g. "origin/main"). */
     branches: string[]
+    local_branches: GitLocalBranch[]
 }
 
 /** Path is optional (default: sibling "<repo>-<branch>"); relative paths are from the project path. */

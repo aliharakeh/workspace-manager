@@ -1135,6 +1135,32 @@ export namespace types {
 	        this.startDir = source["startDir"];
 	    }
 	}
+	export class GitLocalBranch {
+	    name: string;
+	    head: string;
+	    subject: string;
+	    upstream: string;
+	    gone: boolean;
+	    ahead: number;
+	    behind: number;
+	    worktree: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GitLocalBranch(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.head = source["head"];
+	        this.subject = source["subject"];
+	        this.upstream = source["upstream"];
+	        this.gone = source["gone"];
+	        this.ahead = source["ahead"];
+	        this.behind = source["behind"];
+	        this.worktree = source["worktree"];
+	    }
+	}
 	export class GitWorktree {
 	    path: string;
 	    head: string;
@@ -1169,6 +1195,7 @@ export namespace types {
 	    is_repo: boolean;
 	    worktrees: GitWorktree[];
 	    branches: string[];
+	    local_branches: GitLocalBranch[];
 	
 	    static createFrom(source: any = {}) {
 	        return new GitInfo(source);
@@ -1179,6 +1206,7 @@ export namespace types {
 	        this.is_repo = source["is_repo"];
 	        this.worktrees = this.convertValues(source["worktrees"], GitWorktree);
 	        this.branches = source["branches"];
+	        this.local_branches = this.convertValues(source["local_branches"], GitLocalBranch);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1199,6 +1227,7 @@ export namespace types {
 		    return a;
 		}
 	}
+	
 	export class GitOutput {
 	    output: string;
 	
@@ -1209,6 +1238,22 @@ export namespace types {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.output = source["output"];
+	    }
+	}
+	export class GitPullResult {
+	    output: string;
+	    path: string;
+	    conflicts: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new GitPullResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.output = source["output"];
+	        this.path = source["path"];
+	        this.conflicts = source["conflicts"];
 	    }
 	}
 	

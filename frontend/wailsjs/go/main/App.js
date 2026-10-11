@@ -174,8 +174,36 @@ export function FsValidatePath(arg1) {
   return window['go']['main']['App']['FsValidatePath'](arg1);
 }
 
+export function GitBranchCheckout(arg1, arg2) {
+  return window['go']['main']['App']['GitBranchCheckout'](arg1, arg2);
+}
+
+export function GitBranchCreate(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GitBranchCreate'](arg1, arg2, arg3);
+}
+
+export function GitBranchDelete(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GitBranchDelete'](arg1, arg2, arg3);
+}
+
+export function GitBranchPull(arg1, arg2) {
+  return window['go']['main']['App']['GitBranchPull'](arg1, arg2);
+}
+
+export function GitBranchPush(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GitBranchPush'](arg1, arg2, arg3);
+}
+
+export function GitBranchRename(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GitBranchRename'](arg1, arg2, arg3);
+}
+
 export function GitFetchAll(arg1) {
   return window['go']['main']['App']['GitFetchAll'](arg1);
+}
+
+export function GitFileOpenInEditor(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GitFileOpenInEditor'](arg1, arg2, arg3);
 }
 
 export function GitInfo(arg1) {
