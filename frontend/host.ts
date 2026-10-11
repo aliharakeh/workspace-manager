@@ -8,6 +8,7 @@ import type {
     CommandKind,
     CopyParts,
     GitInfo,
+    GitPullResult,
     GitWorktreeAddInput,
     GitWorktreeAddResult,
     RunMode,
@@ -180,6 +181,26 @@ export const api = {
     git: {
         info: (appId: number) => call(() => Go.GitInfo(appId)) as Promise<GitInfo>,
         fetchAll: (appId: number) => call(() => Go.GitFetchAll(appId)),
+        /** Creates a local branch at `base` (empty: HEAD) without checking it out. */
+        branchCreate: (appId: number, name: string, base: string) =>
+            call(() => Go.GitBranchCreate(appId, name, base)),
+        /** Switches the app's own folder to the local branch; refused while the app runs. */
+        branchCheckout: (appId: number, name: string) =>
+            call(() => Go.GitBranchCheckout(appId, name)),
+        /** Pulls the branch's upstream in the worktree that has it checked out; conflicts come back in the result. */
+        branchPull: (appId: number, name: string) =>
+            call(() => Go.GitBranchPull(appId, name)) as Promise<GitPullResult>,
+        /** Pushes the branch to its upstream, or publishes it to a remote when it has none; `force` uses --force-with-lease. */
+        branchPush: (appId: number, name: string, force: boolean) =>
+            call(() => Go.GitBranchPush(appId, name, force)),
+        /** Opens a file inside one of the repo's worktrees (e.g. a conflicted one) in an editor. */
+        fileOpenInEditor: (appId: number, file: string, editor: string) =>
+            call(() => Go.GitFileOpenInEditor(appId, file, editor)),
+        branchRename: (appId: number, oldName: string, newName: string) =>
+            call(() => Go.GitBranchRename(appId, oldName, newName)),
+        /** With `force`, also deletes a branch that is not fully merged. */
+        branchDelete: (appId: number, name: string, force: boolean) =>
+            call(() => Go.GitBranchDelete(appId, name, force)),
         /** With `link_shared`, also links the app's shared paths into the new worktree. */
         worktreeAdd: (appId: number, body: GitWorktreeAddInput) =>
             call(() => Go.GitWorktreeAdd(appId, body)) as Promise<GitWorktreeAddResult>,

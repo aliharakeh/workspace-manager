@@ -461,11 +461,26 @@ type GitWorktree struct {
 	SharedLinks []string `json:"shared_links,omitempty"`
 }
 
+// GitLocalBranch is one local branch. Worktree is the path of the worktree that
+// has it checked out ("" when none does), which blocks deleting it.
+type GitLocalBranch struct {
+	Name     string `json:"name"`
+	Head     string `json:"head"`
+	Subject  string `json:"subject"`
+	Upstream string `json:"upstream"`
+	// Gone: the upstream branch no longer exists on the remote.
+	Gone     bool   `json:"gone"`
+	Ahead    int    `json:"ahead"`
+	Behind   int    `json:"behind"`
+	Worktree string `json:"worktree"`
+}
+
 // GitInfo is the git state of an app's project path.
 type GitInfo struct {
-	IsRepo    bool          `json:"is_repo"`
-	Worktrees []GitWorktree `json:"worktrees"`
-	Branches  []string      `json:"branches"`
+	IsRepo        bool             `json:"is_repo"`
+	Worktrees     []GitWorktree    `json:"worktrees"`
+	Branches      []string         `json:"branches"`
+	LocalBranches []GitLocalBranch `json:"local_branches"`
 }
 
 // GitWorktreeAddInput creates a worktree. Path is optional (default: a sibling
@@ -481,6 +496,15 @@ type GitWorktreeAddInput struct {
 	Base       string   `json:"base"`
 	LinkShared bool     `json:"link_shared"`
 	Links      []string `json:"links,omitempty"`
+}
+
+// GitPullResult is a `git pull` in the worktree at Path. Conflicts lists the
+// absolute paths of files left with merge conflicts (the pull then stopped
+// midway and Output holds git's message); it is empty after a clean pull.
+type GitPullResult struct {
+	Output    string   `json:"output"`
+	Path      string   `json:"path"`
+	Conflicts []string `json:"conflicts"`
 }
 
 type GitOutput struct {

@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react"
 import {
+  ArrowDownToLineIcon,
+  ArrowUpFromLineIcon,
+  CheckIcon,
   DownloadCloudIcon,
   EraserIcon,
   FolderGit2Icon,
   GitBranchIcon,
   HammerIcon,
   Link2Icon,
+  PencilIcon,
   PlayIcon,
   PlusIcon,
   RefreshCwIcon,
@@ -20,6 +24,8 @@ import type {
   CommandKind,
   ConfigSet,
   GitInfo,
+  GitLocalBranch,
+  GitPullResult,
   GitWorktree,
   StatusEvent,
   WorktreeLinkState,
@@ -233,6 +239,20 @@ export function GitPanel({
   const [force, setForce] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [starting, setStarting] = useState(false)
+  const [branchCreateOpen, setBranchCreateOpen] = useState(false)
+  const [renaming, setRenaming] = useState<GitLocalBranch | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<GitLocalBranch | null>(
+    null
+  )
+  const [forceDelete, setForceDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [checkingOut, setCheckingOut] = useState(false)
+  // The branch being pulled, and the result of a pull that hit conflicts.
+  const [pulling, setPulling] = useState<string | null>(null)
+  const [conflicts, setConflicts] = useState<GitPullResult | null>(null)
+  // The branch being pushed, and one whose push was rejected (offered a force).
+  const [pushing, setPushing] = useState<string | null>(null)
+  const [rejected, setRejected] = useState<GitLocalBranch | null>(null)
 
   const running = !!status?.running
 
@@ -374,6 +394,84 @@ export function GitPanel({
     }
   }
 
+  async function handleCheckout(b: GitLocalBranch) {
+    setCheckingOut(true)
+    try {
+      await api.git.branchCheckout(appId, b.name)
+      toast.success(`Switched to ${b.name}`)
+      await load()
+    } catch (err) {
+      setOutput(err instanceof Error ? err.message : "Checkout failed")
+      toast.error("Checkout failed, see the output")
+    } finally {
+      setCheckingOut(false)
+    }
+  }
+
+  async function handlePush(b: GitLocalBranch, force = false) {
+    setPushing(b.name)
+    try {
+      const res = await api.git.branchPush(appId, b.name, force)
+      setOutput(res.output)
+      toast.success(
+        b.upstream && !b.gone ? `Pushed ${b.name}` : `Published ${b.name}`
+      )
+      setRejected(null)
+      await load()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Push failed"
+      setOutput(msg)
+      // A non-fast-forward push is the one failure a force can fix.
+      if (!force && /rejected|non-fast-forward|fetch first/i.test(msg)) {
+        setRejected(b)
+        toast.error(`Push of ${b.name} was rejected`)
+      } else {
+        toast.error("Push failed, see the output")
+      }
+    } finally {
+      setPushing(null)
+    }
+  }
+
+  async function handlePull(b: GitLocalBranch) {
+    setPulling(b.name)
+    try {
+      const res = await api.git.branchPull(appId, b.name)
+      setOutput(res.output)
+      if (res.conflicts.length) {
+        setConflicts(res)
+        toast.warning(
+          `Pull of ${b.name} stopped on ${res.conflicts.length} conflicted file${res.conflicts.length === 1 ? "" : "s"}`
+        )
+      } else {
+        toast.success(`Pulled ${b.upstream} into ${b.name}`)
+      }
+      await load()
+    } catch (err) {
+      setOutput(err instanceof Error ? err.message : "Pull failed")
+      toast.error("Pull failed, see the output")
+    } finally {
+      setPulling(null)
+    }
+  }
+
+  async function handleConfirmDeleteBranch() {
+    if (!pendingDelete) return
+    setDeleting(true)
+    try {
+      await api.git.branchDelete(appId, pendingDelete.name, forceDelete)
+      toast.success(`Branch ${pendingDelete.name} deleted`)
+      setPendingDelete(null)
+      await load()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to delete branch"
+      setOutput(msg)
+      toast.error("Failed to delete branch, see the output")
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   if (info && !info.is_repo) {
     return (
       <Empty className="border">
@@ -395,6 +493,9 @@ export function GitPanel({
   }
 
   const worktrees = info?.worktrees ?? []
+  const localBranches = info?.local_branches ?? []
+  // The branch the app's own folder is on (empty when detached).
+  const currentBranch = worktrees.find((w) => w.current)?.branch ?? ""
   // The worktree the app's session is in: the app's own one when status names none.
   const runningIn = (w: GitWorktree) =>
     running && (status?.worktree ? status.worktree === w.path : w.current)
@@ -616,6 +717,139 @@ export function GitPanel({
           )}
         </section>
 
+        <section className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium">Local branches</p>
+                <Badge variant="secondary">{localBranches.length}</Badge>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Create, rename and delete local branches. A branch checked out
+                in a worktree cannot be deleted.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              disabled={!info}
+              onClick={() => setBranchCreateOpen(true)}
+            >
+              <PlusIcon data-icon="inline-start" />
+              New branch
+            </Button>
+          </div>
+
+          {!info ? (
+            <Skeleton className="h-14 w-full" />
+          ) : localBranches.length === 0 ? (
+            <p className="rounded-lg border px-3 py-2 text-sm text-muted-foreground">
+              No local branches yet.
+            </p>
+          ) : (
+            <ul className="divide-y rounded-lg border">
+              {localBranches.map((b) => (
+                <li
+                  key={b.name}
+                  className="flex flex-wrap items-center gap-3 px-3 py-2"
+                >
+                  <div className="min-w-48 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <GitBranchIcon className="size-3.5 text-muted-foreground" />
+                      <span className="text-sm font-medium">{b.name}</span>
+                      {b.name === currentBranch ? (
+                        <Badge title={b.worktree}>this app</Badge>
+                      ) : b.worktree ? (
+                        <Badge variant="secondary" title={b.worktree}>
+                          checked out
+                        </Badge>
+                      ) : null}
+                      {b.upstream ? (
+                        <Badge
+                          variant="outline"
+                          title={b.gone ? "Upstream branch was deleted" : ""}
+                        >
+                          {b.upstream}
+                          {b.gone ? " · gone" : ""}
+                          {b.ahead ? ` · ↑${b.ahead}` : ""}
+                          {b.behind ? ` · ↓${b.behind}` : ""}
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p
+                      className="truncate text-xs text-muted-foreground"
+                      title={b.subject}
+                    >
+                      <span className="font-mono">{b.head}</span> {b.subject}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!b.upstream || b.gone || b.ahead > 0 ? (
+                      <IconAction
+                        label={
+                          b.upstream && !b.gone
+                            ? `Push ${b.ahead} commit${b.ahead === 1 ? "" : "s"} to ${b.upstream}`
+                            : "Publish branch to a remote"
+                        }
+                        disabled={pushing !== null}
+                        onClick={() => void handlePush(b)}
+                      >
+                        <ArrowUpFromLineIcon />
+                      </IconAction>
+                    ) : null}
+                    {b.worktree && b.upstream && !b.gone ? (
+                      <IconAction
+                        label={
+                          running
+                            ? "Stop the app to pull"
+                            : `Pull ${b.upstream} into ${b.name}`
+                        }
+                        disabled={pulling !== null || running}
+                        onClick={() => void handlePull(b)}
+                      >
+                        <ArrowDownToLineIcon />
+                      </IconAction>
+                    ) : null}
+                    {!b.worktree ? (
+                      <IconAction
+                        label={
+                          running
+                            ? "Stop the app to switch branches"
+                            : "Check out in this app's folder"
+                        }
+                        disabled={checkingOut || running}
+                        onClick={() => void handleCheckout(b)}
+                      >
+                        <CheckIcon />
+                      </IconAction>
+                    ) : null}
+                    <IconAction
+                      label="Rename branch"
+                      onClick={() => setRenaming(b)}
+                    >
+                      <PencilIcon />
+                    </IconAction>
+                    <IconAction
+                      label={
+                        b.worktree
+                          ? "Checked out in a worktree: cannot delete"
+                          : "Delete branch"
+                      }
+                      variant="ghost"
+                      disabled={!!b.worktree}
+                      onClick={() => {
+                        setForceDelete(false)
+                        setPendingDelete(b)
+                      }}
+                    >
+                      <Trash2Icon />
+                    </IconAction>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
         {output != null ? (
           <section className="flex flex-col gap-2">
             <p className="text-sm font-medium">Last git output</p>
@@ -645,6 +879,138 @@ export function GitPanel({
         onOpenChange={setLinksOpen}
         onSaved={setLinks}
       />
+
+      {info ? (
+        <BranchNameDialog
+          appId={appId}
+          branches={info.branches}
+          renaming={renaming}
+          open={branchCreateOpen || !!renaming}
+          onOpenChange={(open) => {
+            if (!open) {
+              setBranchCreateOpen(false)
+              setRenaming(null)
+            }
+          }}
+          onDone={() => void load()}
+          onOutput={setOutput}
+        />
+      ) : null}
+
+      <Dialog
+        open={!!conflicts}
+        onOpenChange={(open) => {
+          if (!open) setConflicts(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Merge conflicts</DialogTitle>
+            <DialogDescription>
+              The pull stopped because these files conflict. Open them in an
+              editor, resolve the conflict markers, then commit in{" "}
+              <span className="font-mono">{conflicts?.path}</span> to finish
+              the merge.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="max-h-64 divide-y overflow-auto rounded-lg border">
+            {conflicts?.conflicts.map((file) => (
+              <li key={file} className="flex items-center gap-2 px-3 py-2">
+                <span
+                  className="min-w-0 flex-1 truncate font-mono text-xs"
+                  title={file}
+                >
+                  {conflicts.path && file.startsWith(conflicts.path)
+                    ? file.slice(conflicts.path.length).replace(/^[\\/]/, "")
+                    : file}
+                </span>
+                <OpenEditorButton appId={appId} filePath={file} iconOnly />
+              </li>
+            ))}
+          </ul>
+          <DialogFooter>
+            <Button onClick={() => setConflicts(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={!!rejected}
+        onOpenChange={(open) => {
+          if (!open) setRejected(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Push rejected</AlertDialogTitle>
+            <AlertDialogDescription>
+              The remote has commits{" "}
+              <span className="font-mono">{rejected?.name}</span> does not.
+              Pull first to merge them, or force push with lease: it
+              overwrites the remote branch, but only if nobody pushed to it
+              since your last fetch.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pushing !== null}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={pushing !== null}
+              onClick={(event) => {
+                // Keep the dialog open until the push finishes.
+                event.preventDefault()
+                if (rejected) void handlePush(rejected, true)
+              }}
+            >
+              {pushing !== null ? "Pushing…" : "Force push"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete branch?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Deletes the local branch{" "}
+              <span className="font-mono">{pendingDelete?.name}</span>. A
+              branch that is not fully merged is refused unless you force it.
+              Its remote branch is not touched.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Field orientation="horizontal" className="gap-2">
+            <Checkbox
+              id="git-delete-branch-force"
+              checked={forceDelete}
+              onCheckedChange={(checked) => setForceDelete(checked === true)}
+            />
+            <FieldLabel
+              htmlFor="git-delete-branch-force"
+              className="text-xs font-normal text-muted-foreground"
+            >
+              Force: delete even if it has unmerged commits
+            </FieldLabel>
+          </Field>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => void handleConfirmDeleteBranch()}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={!!pendingRemove}
@@ -688,6 +1054,142 @@ export function GitPanel({
         </AlertDialogContent>
       </AlertDialog>
     </>
+  )
+}
+
+/** Creates a local branch, or with `renaming` set renames that one. */
+function BranchNameDialog({
+  appId,
+  branches,
+  renaming,
+  open,
+  onOpenChange,
+  onDone,
+  onOutput,
+}: {
+  appId: number
+  branches: string[]
+  renaming: GitLocalBranch | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onDone: () => void
+  onOutput: (output: string) => void
+}) {
+  const [name, setName] = useState("")
+  const [base, setBase] = useState("")
+  const [saving, setSaving] = useState(false)
+
+  // The dialog stays mounted, so the form is reset each time it opens.
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) {
+      setName(renaming?.name ?? "")
+      setBase("")
+    }
+  }
+
+  const isRename = !!renaming
+
+  async function handleSave() {
+    const next = name.trim()
+    if (!next) {
+      toast.error("Branch name is required")
+      return
+    }
+    setSaving(true)
+    try {
+      if (renaming) {
+        await api.git.branchRename(appId, renaming.name, next)
+        toast.success(`Renamed ${renaming.name} to ${next}`)
+      } else {
+        await api.git.branchCreate(appId, next, base.trim())
+        toast.success(`Branch ${next} created`)
+      }
+      onOpenChange(false)
+      onDone()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed"
+      onOutput(msg)
+      toast.error(`${renaming ? "Rename" : "Create"} failed: ${msg}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {isRename ? "Rename branch" : "New branch"}
+          </DialogTitle>
+          <DialogDescription>
+            {isRename ? (
+              <>
+                Renames <span className="font-mono">{renaming?.name}</span>. A
+                worktree that has it checked out follows the new name; its
+                upstream and remote branch are not renamed.
+              </>
+            ) : (
+              "Creates a local branch without checking it out."
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <datalist id="git-base-branches">
+          {branches.map((b) => (
+            <option key={b} value={b} />
+          ))}
+        </datalist>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="git-branch-name">
+              {isRename ? "New name" : "Branch name"}
+            </FieldLabel>
+            <Input
+              id="git-branch-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !saving) void handleSave()
+              }}
+              placeholder="feature/my-change"
+              autoFocus
+            />
+          </Field>
+          {!isRename ? (
+            <Field>
+              <FieldLabel htmlFor="git-branch-base">Start from</FieldLabel>
+              <Input
+                id="git-branch-base"
+                value={base}
+                onChange={(e) => setBase(e.target.value)}
+                placeholder="HEAD"
+                list="git-base-branches"
+              />
+              <FieldDescription>
+                A branch, tag or commit. Empty: the current HEAD of the app's
+                folder.
+              </FieldDescription>
+            </Field>
+          ) : null}
+        </FieldGroup>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button disabled={saving} onClick={() => void handleSave()}>
+            {saving
+              ? isRename
+                ? "Renaming…"
+                : "Creating…"
+              : isRename
+                ? "Rename"
+                : "Create"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
