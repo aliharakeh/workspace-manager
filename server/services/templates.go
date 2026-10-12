@@ -10,8 +10,8 @@ import (
 
 	"github.com/aymerick/raymond"
 
-	"workspace-manager/db"
-	"workspace-manager/lib"
+	"workspace-manager/server/db"
+	"workspace-manager/api/lib"
 )
 
 func renderHandlebars(content string, env map[string]string) (string, error) {

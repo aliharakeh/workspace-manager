@@ -1,16 +1,16 @@
-module workspace-manager
+module workspace-manager/gui
 
 go 1.25.0
 
 require (
-	github.com/aymerick/raymond v2.0.2+incompatible
-	github.com/creack/pty v1.1.24
-	github.com/firebase/genkit/go v1.12.0
-	github.com/openai/openai-go v1.12.0
+	github.com/aymerick/raymond v2.0.2+incompatible // indirect
+	github.com/creack/pty v1.1.24 // indirect
+	github.com/firebase/genkit/go v1.12.0 // indirect
+	github.com/openai/openai-go v1.12.0 // indirect
 	github.com/wailsapp/wails/v2 v2.14.0
-	golang.org/x/sys v0.47.0
-	gopkg.in/yaml.v3 v3.0.1
-	modernc.org/sqlite v1.57.0
+	golang.org/x/sys v0.47.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+	modernc.org/sqlite v1.57.0 // indirect
 )
 
 require (
@@ -87,3 +87,13 @@ require (
 )
 
 // replace github.com/wailsapp/wails/v2 v2.14.0 => C:\Users\ali\go\pkg\mod
+
+require (
+	workspace-manager/api v0.0.0
+	workspace-manager/server v0.0.0
+)
+
+replace (
+	workspace-manager/api => ../api
+	workspace-manager/server => ../server
+)

@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 
-	"workspace-manager/db"
-	"workspace-manager/native"
-	"workspace-manager/services"
-	"workspace-manager/types"
+	"workspace-manager/server/db"
+	"workspace-manager/server/native"
+	"workspace-manager/server/services"
+	"workspace-manager/api/types"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )

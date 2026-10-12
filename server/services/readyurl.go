@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"workspace-manager/db"
+	"workspace-manager/server/db"
 )
 
 type ReadyURLMatch struct {

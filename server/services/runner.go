@@ -8,9 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"workspace-manager/db"
-	"workspace-manager/native"
-	"workspace-manager/types"
+	"workspace-manager/server/db"
+	"workspace-manager/server/native"
+	"workspace-manager/api/types"
 )
 
 type childProc struct {

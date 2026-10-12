@@ -4,7 +4,7 @@ import (
 	"embed"
 	"log"
 
-	"workspace-manager/db"
+	"workspace-manager/server/db"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"

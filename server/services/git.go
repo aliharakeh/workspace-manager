@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"workspace-manager/native"
-	"workspace-manager/types"
+	"workspace-manager/server/native"
+	"workspace-manager/api/types"
 )
 
 // git runs git in dir and returns its combined output. A non-zero exit becomes

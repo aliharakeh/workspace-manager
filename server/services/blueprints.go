@@ -13,10 +13,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"workspace-manager/db"
-	"workspace-manager/lib"
-	"workspace-manager/native"
-	"workspace-manager/types"
+	"workspace-manager/server/db"
+	"workspace-manager/api/lib"
+	"workspace-manager/server/native"
+	"workspace-manager/api/types"
 )
 
 var errBlueprintCancelled = errors.New("Cancelled")
