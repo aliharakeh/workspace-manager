@@ -12,10 +12,10 @@ import (
 	"workspace-manager/server/db"
 	"workspace-manager/api/lib"
 	"workspace-manager/server/native"
+	"workspace-manager/server/ai"
 	"workspace-manager/server/services"
 	"workspace-manager/api/types"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 func (a *App) WorkspacesList() ([]types.Workspace, error) {
@@ -1067,7 +1067,7 @@ func (a *App) SettingsSet(key string, value string) (map[string]string, error) {
 }
 
 // aiConnectionInfo maps a stored connection to what the UI sees (no API key).
-func aiConnectionInfo(name string, cfg services.AIProviderConfig) types.AIConnectionInfo {
+func aiConnectionInfo(name string, cfg ai.AIProviderConfig) types.AIConnectionInfo {
 	return types.AIConnectionInfo{
 		Name:        name,
 		Provider:    cfg.Provider,
@@ -1080,7 +1080,7 @@ func aiConnectionInfo(name string, cfg services.AIProviderConfig) types.AIConnec
 	}
 }
 
-func aiConfigInfo(store services.AIStore) types.AIConfigInfo {
+func aiConfigInfo(store ai.AIStore) types.AIConfigInfo {
 	info := types.AIConfigInfo{
 		Providers: make([]types.AIConnectionInfo, 0, len(store.Providers)),
 		Active:    store.Active,
@@ -1097,7 +1097,7 @@ func aiConfigInfo(store services.AIStore) types.AIConfigInfo {
 }
 
 func (a *App) AIConfigGet() (types.AIConfigInfo, error) {
-	store, err := services.LoadAIStore()
+	store, err := ai.LoadAIStore()
 	if err != nil {
 		return types.AIConfigInfo{}, err
 	}
@@ -1106,11 +1106,11 @@ func (a *App) AIConfigGet() (types.AIConfigInfo, error) {
 
 // AIConfigSave upserts one connection keyed by its normalized name.
 func (a *App) AIConfigSave(body types.AIProviderConfigInput) (types.AIConfigInfo, error) {
-	store, err := services.LoadAIStore()
+	store, err := ai.LoadAIStore()
 	if err != nil {
 		return types.AIConfigInfo{}, err
 	}
-	if err := store.UpsertAIConnection(body.Name, body.Provider, services.AIProviderConfig{
+	if err := store.UpsertAIConnection(body.Name, body.Provider, ai.AIProviderConfig{
 		BaseURL:     body.BaseURL,
 		APIKey:      body.APIKey,
 		Model:       body.Model,
@@ -1120,35 +1120,35 @@ func (a *App) AIConfigSave(body types.AIProviderConfigInput) (types.AIConfigInfo
 	}, body.ClearAPIKey); err != nil {
 		return types.AIConfigInfo{}, err
 	}
-	if err := services.SaveAIStore(store); err != nil {
+	if err := ai.SaveAIStore(store); err != nil {
 		return types.AIConfigInfo{}, err
 	}
 	return aiConfigInfo(store), nil
 }
 
 func (a *App) AIConfigDelete(name string) (types.AIConfigInfo, error) {
-	store, err := services.LoadAIStore()
+	store, err := ai.LoadAIStore()
 	if err != nil {
 		return types.AIConfigInfo{}, err
 	}
 	if !store.DeleteAIConnection(name) {
 		return types.AIConfigInfo{}, fmt.Errorf("Connection not found")
 	}
-	if err := services.SaveAIStore(store); err != nil {
+	if err := ai.SaveAIStore(store); err != nil {
 		return types.AIConfigInfo{}, err
 	}
 	return aiConfigInfo(store), nil
 }
 
 func (a *App) AIConfigActivate(body types.AIActivateInput) (types.AIConfigInfo, error) {
-	store, err := services.LoadAIStore()
+	store, err := ai.LoadAIStore()
 	if err != nil {
 		return types.AIConfigInfo{}, err
 	}
 	if err := store.ActivateAIConnection(body.Name); err != nil {
 		return types.AIConfigInfo{}, err
 	}
-	if err := services.SaveAIStore(store); err != nil {
+	if err := ai.SaveAIStore(store); err != nil {
 		return types.AIConfigInfo{}, err
 	}
 	return aiConfigInfo(store), nil
@@ -1159,7 +1159,7 @@ func (a *App) AIChat(body types.AIChatInput) (types.AIChatResult, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	text, err := services.ChatAI(ctx, body.System, body.Prompt)
+	text, err := ai.ChatAI(ctx, body.System, body.Prompt)
 	if err != nil {
 		return types.AIChatResult{}, err
 	}
@@ -1171,7 +1171,7 @@ func (a *App) AIAppChat(body types.AppAIChatInput) (types.AppAIChatResult, error
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return services.AppChatAI(ctx, a.db, body.AppID, body.ConfigSetID, body.History, body.Instruction, func(ev types.AppAIStreamEvent) {
+	return ai.AppChatAI(ctx, a.db, body.AppID, body.ConfigSetID, body.History, body.Instruction, func(ev types.AppAIStreamEvent) {
 		if a.ctx == nil {
 			return
 		}
@@ -1197,8 +1197,8 @@ func (a *App) AITest(body types.AITestInput) (types.AITestResult, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	slug := services.NormalizeProvider(body.Provider)
-	text, err := services.TestAI(ctx, slug, services.AIProviderConfig{
+	slug := ai.NormalizeProvider(body.Provider)
+	text, err := ai.TestAI(ctx, slug, ai.AIProviderConfig{
 		BaseURL:     body.BaseURL,
 		APIKey:      body.APIKey,
 		Model:       body.Model,
@@ -1317,7 +1317,7 @@ func (a *App) OpenExternal(url string) (types.Ok, error) {
 	if strings.TrimSpace(url) == "" {
 		return types.Ok{}, fmt.Errorf("url is required")
 	}
-	runtime.BrowserOpenURL(a.ctx, strings.TrimSpace(url))
+	native.OpenURL(strings.TrimSpace(url))
 	return types.Ok{Ok: true}, nil
 }
 
@@ -1351,7 +1351,7 @@ func (a *App) BlueprintsAIPropose(body types.BlueprintAIInput) (types.BlueprintA
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return services.ProposeBlueprintAI(ctx, body.Instruction, body.Draft)
+	return ai.ProposeBlueprintAI(ctx, body.Instruction, body.Draft)
 }
 
 // BlueprintsCreateApp runs a blueprint to completion (logs stream on the

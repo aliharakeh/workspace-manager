@@ -21,13 +21,20 @@ import (
 
 var errBlueprintCancelled = errors.New("Cancelled")
 
-var blueprintVarRe = regexp.MustCompile(`\{\{\s*(app_name|folder_name|app_dir)\s*\}\}`)
+// BlueprintVarRe matches the placeholders a blueprint command may use.
+var BlueprintVarRe = regexp.MustCompile(`\{\{\s*(app_name|folder_name|app_dir)\s*\}\}`)
+
+// RenderBlueprintCommand replaces {{app_name}}, {{folder_name}} and {{app_dir}}
+// in a blueprint command. Values are inserted verbatim; other tokens stay.
+func RenderBlueprintCommand(command string, vars map[string]string) string {
+	return renderBlueprintCommand(command, vars)
+}
 
 // renderBlueprintCommand replaces {{app_name}}, {{folder_name}} and {{app_dir}}.
 // Values are inserted verbatim (no shell quoting); other {{tokens}} are kept.
 func renderBlueprintCommand(command string, vars map[string]string) string {
-	return blueprintVarRe.ReplaceAllStringFunc(command, func(m string) string {
-		return vars[blueprintVarRe.FindStringSubmatch(m)[1]]
+	return BlueprintVarRe.ReplaceAllStringFunc(command, func(m string) string {
+		return vars[BlueprintVarRe.FindStringSubmatch(m)[1]]
 	})
 }
 

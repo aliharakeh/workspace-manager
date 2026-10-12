@@ -1,4 +1,4 @@
-package services
+package ai
 
 import (
 	"encoding/json"
@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"workspace-manager/server/db"
+	"workspace-manager/api"
 )
 
 // AI provider settings live in ai.json next to the SQLite database. Multiple
@@ -39,7 +39,7 @@ type AIStore struct {
 }
 
 func aiConfigPath() string {
-	return filepath.Join(db.DataDir(), "ai.json")
+	return filepath.Join(api.DataDir(), "ai.json")
 }
 
 // migrateLegacyStore converts the old flat single-provider file into a store

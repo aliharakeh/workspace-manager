@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"workspace-manager/api"
 	"workspace-manager/server/db"
 	"workspace-manager/server/native"
 	"workspace-manager/api/types"
@@ -519,11 +520,11 @@ func (r *Runner) StartIn(ctx context.Context, appID int64, kind, dir, worktree s
 		r.mu.Unlock()
 		switch kind {
 		case types.KindBuild:
-			return types.StatusEvent{}, fmt.Errorf("App is already building")
+			return types.StatusEvent{}, api.Errf(api.KindConflict, "App is already building")
 		case types.KindSetup:
-			return types.StatusEvent{}, fmt.Errorf("App is already being set up")
+			return types.StatusEvent{}, api.Errf(api.KindConflict, "App is already being set up")
 		}
-		return types.StatusEvent{}, fmt.Errorf("App is already running")
+		return types.StatusEvent{}, api.Errf(api.KindConflict, "App is already running")
 	}
 	r.mu.Unlock()
 
@@ -544,7 +545,7 @@ func (r *Runner) Stop(ctx context.Context, appID int64) (types.StatusEvent, erro
 	s := r.sessions[appID]
 	if s == nil {
 		r.mu.Unlock()
-		return types.StatusEvent{}, fmt.Errorf("No active session")
+		return types.StatusEvent{}, api.Errf(api.KindNotFound, "No active session")
 	}
 	s.abortSequential = true
 	s.running = false

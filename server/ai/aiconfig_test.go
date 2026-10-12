@@ -1,4 +1,4 @@
-package services
+package ai
 
 import (
 	"os"
@@ -180,7 +180,7 @@ func TestLoadAIStoreLegacyMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// LoadAIStore reads from db.DataDir(); redirect via chdir is not possible,
+	// LoadAIStore reads from api.DataDir(); redirect via chdir is not possible,
 	// so exercise the migration path directly instead.
 	store, err := migrateLegacyStore(legacy)
 	if err != nil {

@@ -34,7 +34,7 @@ func (a *App) startup(ctx context.Context) {
 		}
 		EventsEmitRunner(a.ctx, appID, event)
 	}, func(title, body string) {
-		native.Notify(a.ctx, title, body)
+		native.Notify(title, body)
 	})
 }
 
