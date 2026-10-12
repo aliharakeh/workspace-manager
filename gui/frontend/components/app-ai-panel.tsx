@@ -22,7 +22,7 @@ import {
   type AppAIDiff,
   type AppAIFileDiff,
 } from "@/lib/app-ai-diff"
-import type { App, ConfigSetDetail } from "@/lib/types"
+import type { App } from "@/lib/types"
 import { useTheme } from "@/components/theme-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -265,71 +265,6 @@ function AppAIDiffView({
   )
 }
 
-async function applyAppAIPatch(
-  appId: number,
-  current: ConfigSetDetail,
-  patch: AppAIPatch
-): Promise<void> {
-  const varsByKey = new Map(current.env_vars.map((v) => [v.key, v]))
-
-  for (const key of patch.env?.delete ?? []) {
-    const existing = varsByKey.get(key)
-    if (!existing || !existing.include_in_ai) continue
-    await api.envVars.delete(existing.id)
-    varsByKey.delete(key)
-  }
-
-  for (const item of patch.env?.upsert ?? []) {
-    const existing = varsByKey.get(item.key)
-    if (existing && !existing.include_in_ai) continue
-    if (existing) {
-      if (existing.value === item.value) continue
-      await api.envVars.update(existing.id, { value: item.value })
-    } else {
-      await api.envVars.create(appId, { key: item.key, value: item.value })
-    }
-  }
-
-  const templatesByPath = new Map(
-    current.templates.map((t) => [t.file_path, t])
-  )
-  for (const t of patch.templates ?? []) {
-    const existing = templatesByPath.get(t.file_path)
-    if (!existing || !existing.include_in_ai) continue
-    if (existing.content === t.content) continue
-    await api.templates.update(existing.id, { content: t.content })
-  }
-
-  if (patch.run) {
-    const mode = patch.run.mode ?? current.run_config?.mode ?? "parallel"
-    const commands =
-      patch.run.commands ??
-      (current.run_config?.commands ?? []).map((c) => ({
-        label: c.label,
-        command: c.command,
-      }))
-    await api.runConfig.save(appId, "run", { mode, commands })
-  }
-
-  if (patch.build) {
-    const mode = patch.build.mode ?? current.build_config?.mode ?? "sequential"
-    const commands =
-      patch.build.commands ??
-      (current.build_config?.commands ?? []).map((c) => ({
-        label: c.label,
-        command: c.command,
-      }))
-    await api.runConfig.save(appId, "build", { mode, commands })
-  }
-
-  for (const r of patch.worktrees?.remove ?? []) {
-    await api.git.worktreeRemove(appId, r.path, r.force)
-  }
-  for (const a of patch.worktrees?.add ?? []) {
-    await api.git.worktreeAdd(appId, a)
-  }
-}
-
 export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
@@ -452,15 +387,16 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
     if (!msg.patch || setId == null) return
     setApplyingId(msg.id)
     try {
-      const [detail, latestApp] = await Promise.all([
-        api.configSets.getDetail(setId),
-        api.apps.get(app.id),
-      ])
+      const latestApp = await api.apps.get(app.id)
       if (latestApp.active_config_set_id !== setId) {
         toast.error("Config set changed — edits were not applied")
         return
       }
-      await applyAppAIPatch(app.id, detail, msg.patch)
+      await api.ai.applyPatch({
+        appId: app.id,
+        configSetId: setId,
+        patch: msg.patch,
+      })
       setMessages((prev) =>
         prev.map((m) => (m.id === msg.id ? { ...m, status: "applied" } : m))
       )

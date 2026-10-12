@@ -12,6 +12,254 @@ export namespace types {
 	        this.name = source["name"];
 	    }
 	}
+	export class AppAIWorktreeRemove {
+	    path: string;
+	    force: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIWorktreeRemove(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.force = source["force"];
+	    }
+	}
+	export class GitWorktreeAddInput {
+	    path: string;
+	    branch: string;
+	    new_branch: boolean;
+	    base: string;
+	    link_shared: boolean;
+	    links?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new GitWorktreeAddInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.branch = source["branch"];
+	        this.new_branch = source["new_branch"];
+	        this.base = source["base"];
+	        this.link_shared = source["link_shared"];
+	        this.links = source["links"];
+	    }
+	}
+	export class AppAIWorktreePatch {
+	    add?: GitWorktreeAddInput[];
+	    remove?: AppAIWorktreeRemove[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIWorktreePatch(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.add = this.convertValues(source["add"], GitWorktreeAddInput);
+	        this.remove = this.convertValues(source["remove"], AppAIWorktreeRemove);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AppAIRunCommand {
+	    label?: string;
+	    command: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIRunCommand(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.command = source["command"];
+	    }
+	}
+	export class AppAIRunPatch {
+	    mode?: string;
+	    commands?: AppAIRunCommand[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIRunPatch(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mode = source["mode"];
+	        this.commands = this.convertValues(source["commands"], AppAIRunCommand);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AppAITemplatePatch {
+	    file_path: string;
+	    content: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAITemplatePatch(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.file_path = source["file_path"];
+	        this.content = source["content"];
+	    }
+	}
+	export class AppAIEnvUpsert {
+	    key: string;
+	    value: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIEnvUpsert(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.value = source["value"];
+	    }
+	}
+	export class AppAIEnvPatch {
+	    upsert?: AppAIEnvUpsert[];
+	    delete?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIEnvPatch(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.upsert = this.convertValues(source["upsert"], AppAIEnvUpsert);
+	        this.delete = source["delete"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AppAIPatch {
+	    message: string;
+	    env?: AppAIEnvPatch;
+	    templates?: AppAITemplatePatch[];
+	    run?: AppAIRunPatch;
+	    build?: AppAIRunPatch;
+	    worktrees?: AppAIWorktreePatch;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppAIPatch(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.message = source["message"];
+	        this.env = this.convertValues(source["env"], AppAIEnvPatch);
+	        this.templates = this.convertValues(source["templates"], AppAITemplatePatch);
+	        this.run = this.convertValues(source["run"], AppAIRunPatch);
+	        this.build = this.convertValues(source["build"], AppAIRunPatch);
+	        this.worktrees = this.convertValues(source["worktrees"], AppAIWorktreePatch);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AIApplyPatchInput {
+	    appId: number;
+	    configSetId: number;
+	    patch: AppAIPatch;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIApplyPatchInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.appId = source["appId"];
+	        this.configSetId = source["configSetId"];
+	        this.patch = this.convertValues(source["patch"], AppAIPatch);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class AIChatInput {
 	    system?: string;
 	    prompt: string;
@@ -249,220 +497,6 @@ export namespace types {
 	        this.configSetId = source["configSetId"];
 	        this.history = this.convertValues(source["history"], AppAIChatTurn);
 	        this.instruction = source["instruction"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class AppAIWorktreeRemove {
-	    path: string;
-	    force: boolean;
-	
-	    static createFrom(source: any = {}) {
-	        return new AppAIWorktreeRemove(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.path = source["path"];
-	        this.force = source["force"];
-	    }
-	}
-	export class GitWorktreeAddInput {
-	    path: string;
-	    branch: string;
-	    new_branch: boolean;
-	    base: string;
-	    link_shared: boolean;
-	    links?: string[];
-	
-	    static createFrom(source: any = {}) {
-	        return new GitWorktreeAddInput(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.path = source["path"];
-	        this.branch = source["branch"];
-	        this.new_branch = source["new_branch"];
-	        this.base = source["base"];
-	        this.link_shared = source["link_shared"];
-	        this.links = source["links"];
-	    }
-	}
-	export class AppAIWorktreePatch {
-	    add?: GitWorktreeAddInput[];
-	    remove?: AppAIWorktreeRemove[];
-	
-	    static createFrom(source: any = {}) {
-	        return new AppAIWorktreePatch(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.add = this.convertValues(source["add"], GitWorktreeAddInput);
-	        this.remove = this.convertValues(source["remove"], AppAIWorktreeRemove);
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class AppAIRunCommand {
-	    label?: string;
-	    command: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new AppAIRunCommand(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.label = source["label"];
-	        this.command = source["command"];
-	    }
-	}
-	export class AppAIRunPatch {
-	    mode?: string;
-	    commands?: AppAIRunCommand[];
-	
-	    static createFrom(source: any = {}) {
-	        return new AppAIRunPatch(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.mode = source["mode"];
-	        this.commands = this.convertValues(source["commands"], AppAIRunCommand);
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class AppAITemplatePatch {
-	    file_path: string;
-	    content: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new AppAITemplatePatch(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.file_path = source["file_path"];
-	        this.content = source["content"];
-	    }
-	}
-	export class AppAIEnvUpsert {
-	    key: string;
-	    value: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new AppAIEnvUpsert(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.key = source["key"];
-	        this.value = source["value"];
-	    }
-	}
-	export class AppAIEnvPatch {
-	    upsert?: AppAIEnvUpsert[];
-	    delete?: string[];
-	
-	    static createFrom(source: any = {}) {
-	        return new AppAIEnvPatch(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.upsert = this.convertValues(source["upsert"], AppAIEnvUpsert);
-	        this.delete = source["delete"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class AppAIPatch {
-	    message: string;
-	    env?: AppAIEnvPatch;
-	    templates?: AppAITemplatePatch[];
-	    run?: AppAIRunPatch;
-	    build?: AppAIRunPatch;
-	    worktrees?: AppAIWorktreePatch;
-	
-	    static createFrom(source: any = {}) {
-	        return new AppAIPatch(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.message = source["message"];
-	        this.env = this.convertValues(source["env"], AppAIEnvPatch);
-	        this.templates = this.convertValues(source["templates"], AppAITemplatePatch);
-	        this.run = this.convertValues(source["run"], AppAIRunPatch);
-	        this.build = this.convertValues(source["build"], AppAIRunPatch);
-	        this.worktrees = this.convertValues(source["worktrees"], AppAIWorktreePatch);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

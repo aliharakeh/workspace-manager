@@ -1,4 +1,4 @@
-import type { AppAIChatResult, AppAIStreamEvent } from '@/lib/app-ai'
+import type { AppAIChatResult, AppAIPatch, AppAIStreamEvent } from '@/lib/app-ai'
 import type {
     AIProviderConfig,
     BlueprintAIInput,
@@ -272,6 +272,9 @@ export const api = {
             }
         },
         test: (body: AIProviderConfig) => call(() => Go.AITest(body)),
+        /** Write a staged agent patch in one server call. */
+        applyPatch: (body: { appId: number; configSetId: number; patch: AppAIPatch }) =>
+            call(() => Go.AIApplyPatch(types.AIApplyPatchInput.createFrom(body))),
     },
 
     fs: {

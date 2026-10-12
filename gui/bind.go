@@ -639,6 +639,17 @@ func (a *App) AITest(body types.AITestInput) (types.AITestResult, error) {
 	return types.AITestResult{Ok: true, Text: text}, nil
 }
 
+// AIApplyPatch writes a staged agent patch through the server, which owns the
+// write path: the config set's env vars, templates and command lists, and the
+// git worktrees. Values excluded from AI are never touched.
+func (a *App) AIApplyPatch(body types.AIApplyPatchInput) (types.Ok, error) {
+	var out types.Ok
+	if err := a.call(api.MethodAIApplyPatch, body, &out); err != nil {
+		return types.Ok{}, err
+	}
+	return out, nil
+}
+
 // appByID reads one app through the server. The in-process file dialogs and
 // the env import need its project path, which only the server owns.
 func (a *App) appByID(id int64) (types.App, error) {
