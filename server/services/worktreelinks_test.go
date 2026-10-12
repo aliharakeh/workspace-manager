@@ -135,7 +135,7 @@ func TestWorktreeLinksOverride(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, w := range info.Worktrees {
-		if samePath(w.Path, wt) && len(w.SharedLinks) != 2 {
+		if SamePath(w.Path, wt) && len(w.SharedLinks) != 2 {
 			t.Errorf("GitInfo shared_links = %v", w.SharedLinks)
 		}
 	}

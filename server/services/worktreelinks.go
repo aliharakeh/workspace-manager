@@ -304,5 +304,5 @@ func SameDir(a, b string) bool {
 	if eb, err := filepath.EvalSymlinks(b); err == nil {
 		b = eb
 	}
-	return samePath(a, b)
+	return SamePath(a, b)
 }

@@ -1,4 +1,4 @@
-package services
+package ai
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 
 	"workspace-manager/server/db"
 	"workspace-manager/api/lib"
+	"workspace-manager/server/services"
 	"workspace-manager/api/types"
 
 	"github.com/firebase/genkit/go/ai"
@@ -356,7 +357,7 @@ func (s *appAIState) readFile(path string) map[string]any {
 }
 
 func (s *appAIState) gitFetchAll() map[string]any {
-	out, err := GitFetchAll(s.projectPath)
+	out, err := services.GitFetchAll(s.projectPath)
 	if err != nil {
 		return map[string]any{"error": err.Error()}
 	}
@@ -364,7 +365,7 @@ func (s *appAIState) gitFetchAll() map[string]any {
 }
 
 func (s *appAIState) pruneWorktrees() map[string]any {
-	out, err := GitWorktreePrune(s.projectPath)
+	out, err := services.GitWorktreePrune(s.projectPath)
 	if err != nil {
 		return map[string]any{"error": err.Error()}
 	}
@@ -373,7 +374,7 @@ func (s *appAIState) pruneWorktrees() map[string]any {
 
 // worktreesNow lists the repo's worktrees, without the staged changes.
 func (s *appAIState) worktreesNow() ([]types.GitWorktree, map[string]any) {
-	wts, err := GitWorktrees(s.projectPath)
+	wts, err := services.GitWorktrees(s.projectPath)
 	if err != nil {
 		return nil, map[string]any{"error": err.Error()}
 	}
@@ -393,7 +394,7 @@ func (s *appAIState) listWorktrees() map[string]any {
 }
 
 func (s *appAIState) listBranches() map[string]any {
-	branches, err := GitBranches(s.projectPath)
+	branches, err := services.GitBranches(s.projectPath)
 	if err != nil {
 		return map[string]any{"error": err.Error()}
 	}
@@ -409,7 +410,7 @@ func (s *appAIState) addWorktree(in types.GitWorktreeAddInput) map[string]any {
 	for _, a := range s.wtAdd {
 		wts = append(wts, types.GitWorktree{Path: a.Path, Branch: a.Branch})
 	}
-	in, err := ResolveWorktreeAdd(s.projectPath, wts, in)
+	in, err := services.ResolveWorktreeAdd(s.projectPath, wts, in)
 	if err != nil {
 		return map[string]any{"error": err.Error()}
 	}
@@ -428,17 +429,17 @@ func (s *appAIState) removeWorktree(in types.AppAIWorktreeRemove) map[string]any
 	}
 	// Removing a worktree this chat staged just drops the staged add.
 	for i, a := range s.wtAdd {
-		if samePath(a.Path, path) {
+		if services.SamePath(a.Path, path) {
 			s.wtAdd = append(s.wtAdd[:i], s.wtAdd[i+1:]...)
 			return map[string]any{"ok": true, "unstaged_add": a.Path}
 		}
 	}
-	w, err := FindRemovableWorktree(s.projectPath, wts, path)
+	w, err := services.FindRemovableWorktree(s.projectPath, wts, path)
 	if err != nil {
 		return map[string]any{"error": err.Error()}
 	}
 	for i, r := range s.wtRemove {
-		if samePath(r.Path, w.Path) {
+		if services.SamePath(r.Path, w.Path) {
 			s.wtRemove[i].Force = in.Force
 			return map[string]any{"ok": true, "staged": s.wtRemove[i]}
 		}

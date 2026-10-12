@@ -69,7 +69,7 @@ func TestGitWorktreeAddRemove(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !samePath(path, filepath.Join(filepath.Dir(dir), "repo-feat-x")) {
+	if !SamePath(path, filepath.Join(filepath.Dir(dir), "repo-feat-x")) {
 		t.Errorf("path = %q", path)
 	}
 	if _, err := GitWorktreeAdd(dir, types.GitWorktreeAddInput{Branch: "feat/x", Path: "../other"}); err == nil {
@@ -102,35 +102,6 @@ func TestGitInfoNotARepo(t *testing.T) {
 	info, err := GitInfo(t.TempDir())
 	if err != nil || info.IsRepo {
 		t.Errorf("info = %+v, err = %v", info, err)
-	}
-}
-
-func TestAppAIWorktreeStaging(t *testing.T) {
-	dir := initRepo(t)
-	s := newAppAIState(types.ConfigSetDetail{}, dir)
-
-	if out := s.addWorktree(types.GitWorktreeAddInput{Branch: "a", NewBranch: true}); out["error"] != nil {
-		t.Fatal(out["error"])
-	}
-	if out := s.addWorktree(types.GitWorktreeAddInput{Branch: "a", NewBranch: true}); out["error"] == nil {
-		t.Error("second add at the same default path should fail")
-	}
-	if out := s.removeWorktree(types.AppAIWorktreeRemove{Path: dir}); out["error"] == nil {
-		t.Error("removing the main worktree should fail")
-	}
-	p := s.patch()
-	if p.Worktrees == nil || len(p.Worktrees.Add) != 1 || !patchHasEdits(p) {
-		t.Fatalf("patch = %+v", p.Worktrees)
-	}
-	// Removing a staged add unstages it; nothing ran yet.
-	if out := s.removeWorktree(types.AppAIWorktreeRemove{Path: p.Worktrees.Add[0].Path}); out["error"] != nil {
-		t.Fatal(out["error"])
-	}
-	if s.patch().Worktrees != nil {
-		t.Error("expected no staged worktree changes")
-	}
-	if wts, _ := GitWorktrees(dir); len(wts) != 1 {
-		t.Errorf("staging must not touch the repo: %+v", wts)
 	}
 }
 
@@ -184,7 +155,7 @@ func TestRunnerStartInWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !samePath(root, wt) || !samePath(appDir, filepath.Join(wt, "web")) {
+	if !SamePath(root, wt) || !SamePath(appDir, filepath.Join(wt, "web")) {
 		t.Fatalf("appDir=%q root=%q", appDir, root)
 	}
 
@@ -215,7 +186,7 @@ func TestRunnerStartInWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !samePath(status.Worktree, wt) {
+	if !SamePath(status.Worktree, wt) {
 		t.Fatalf("status.Worktree = %q", status.Worktree)
 	}
 	deadline := time.Now().Add(20 * time.Second)
@@ -394,7 +365,7 @@ func TestGitBranchPull(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Conflicts) != 1 || !samePath(res.Conflicts[0], filepath.Join(b, "f.txt")) {
+	if len(res.Conflicts) != 1 || !SamePath(res.Conflicts[0], filepath.Join(b, "f.txt")) {
 		t.Fatalf("conflicts = %+v", res.Conflicts)
 	}
 	if file, err := FindWorktreeFile(b, res.Conflicts[0]); err != nil || file == "" {

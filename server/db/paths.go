@@ -1,35 +1,20 @@
 package db
 
 import (
-	"os"
 	"path/filepath"
-	"runtime"
+
+	"workspace-manager/api"
 )
 
-const appDir = "workspace-manager"
 const dbFile = "workspace-manager.sqlite"
 
+// DataDir is where the database and the daemon's files live. It is shared with
+// the clients, so WM_DATA_DIR isolates both the daemon and the clients that
+// talk to it.
 func DataDir() string {
-	home, _ := os.UserHomeDir()
-	switch runtime.GOOS {
-	case "windows":
-		base := os.Getenv("LOCALAPPDATA")
-		if base == "" {
-			base = filepath.Join(home, "AppData", "Local")
-		}
-		return filepath.Join(base, appDir)
-	case "darwin":
-		return filepath.Join(home, "Library", "Application Support", appDir)
-	default:
-		base := os.Getenv("XDG_DATA_HOME")
-		if base == "" {
-			base = filepath.Join(home, ".local", "share")
-		}
-		return filepath.Join(base, appDir)
-	}
+	return api.DataDir()
 }
 
 func DBPath() string {
 	return filepath.Join(DataDir(), dbFile)
 }
-

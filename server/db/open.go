@@ -33,13 +33,15 @@ func Open() (*DB, error) {
 		_ = sqlDB.Close()
 		return nil, err
 	}
-	if err := applySchema(sqlDB); err != nil {
+	if err := withMigrationLock(func() error { return applySchema(sqlDB) }); err != nil {
 		_ = sqlDB.Close()
 		return nil, err
 	}
 
 	d := &DB{SQL: sqlDB, Queries: New(sqlDB)}
-	if err := d.EnsureReadyURLPatternsSeeded(context.Background()); err != nil {
+	if err := withMigrationLock(func() error {
+		return d.EnsureReadyURLPatternsSeeded(context.Background())
+	}); err != nil {
 		_ = sqlDB.Close()
 		return nil, err
 	}

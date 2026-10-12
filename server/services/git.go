@@ -88,7 +88,7 @@ func GitWorktrees(dir string) ([]types.GitWorktree, error) {
 	wts := parseWorktrees(out)
 	for i := range wts {
 		wts[i].Main = i == 0
-		wts[i].Current = top != "" && samePath(wts[i].Path, top)
+		wts[i].Current = top != "" && SamePath(wts[i].Path, top)
 	}
 	return wts, nil
 }
@@ -465,7 +465,7 @@ func ResolveWorktreeAdd(dir string, wts []types.GitWorktree, in types.GitWorktre
 	}
 	in.Path = filepath.Clean(in.Path)
 	for _, w := range wts {
-		if samePath(w.Path, in.Path) {
+		if SamePath(w.Path, in.Path) {
 			return in, fmt.Errorf("a worktree already exists at %s", in.Path)
 		}
 		if !in.NewBranch && w.Branch != "" && w.Branch == in.Branch {
@@ -516,7 +516,7 @@ func FindRemovableWorktree(dir string, wts []types.GitWorktree, path string) (ty
 		path = filepath.Join(dir, path)
 	}
 	for _, w := range wts {
-		if !samePath(w.Path, path) {
+		if !SamePath(w.Path, path) {
 			continue
 		}
 		if w.Main {
@@ -571,7 +571,7 @@ func WorktreeAppDir(dir, path string) (appDir, root string, err error) {
 	}
 	var w *types.GitWorktree
 	for i := range wts {
-		if samePath(wts[i].Path, path) {
+		if SamePath(wts[i].Path, path) {
 			w = &wts[i]
 			break
 		}
@@ -602,7 +602,9 @@ func WorktreeAppDir(dir, path string) (appDir, root string, err error) {
 	return appDir, w.Path, nil
 }
 
-func samePath(a, b string) bool {
+// SamePath reports whether two paths point at the same location, and is
+// case-insensitive on Windows.
+func SamePath(a, b string) bool {
 	a, b = filepath.Clean(filepath.FromSlash(a)), filepath.Clean(filepath.FromSlash(b))
 	if runtime.GOOS == "windows" {
 		return strings.EqualFold(a, b)
