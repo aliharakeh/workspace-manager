@@ -3,374 +3,179 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
-	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 
-	"workspace-manager/server/db"
+	"workspace-manager/api"
 	"workspace-manager/api/lib"
-	"workspace-manager/server/native"
-	"workspace-manager/server/ai"
-	"workspace-manager/server/services"
 	"workspace-manager/api/types"
+	"workspace-manager/server/ai"
+	"workspace-manager/server/native"
 
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+// Every method below is a proxy to the wmd daemon, which owns the database,
+// the runner, the git state and the blueprints. Only the file dialogs, the AI
+// methods and openExternal run in this process; see app.go for the call
+// helper.
+
 func (a *App) WorkspacesList() ([]types.Workspace, error) {
-	return a.db.ListWorkspacesT(a.ctx)
-}
-
-var workspaceColorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
-
-// normalizeWorkspaceColor returns the color to store: nil (none) for nil or "",
-// otherwise a lower-case "#rrggbb". The UI puts it straight into CSS, so
-// anything else is rejected.
-func normalizeWorkspaceColor(color *string) (*string, error) {
-	if color == nil || *color == "" {
-		return nil, nil
-	}
-	if !workspaceColorRe.MatchString(*color) {
-		return nil, fmt.Errorf("color must be a hex value like #3b82f6")
-	}
-	c := strings.ToLower(*color)
-	return &c, nil
+	var out []types.Workspace
+	err := a.call(api.MethodWorkspacesList, nil, &out)
+	return out, err
 }
 
 func (a *App) WorkspacesCreate(body types.WorkspaceCreateInput) (types.Workspace, error) {
-	name := strings.TrimSpace(body.Name)
-	if name == "" {
-		return types.Workspace{}, fmt.Errorf("name is required")
-	}
-	color, err := normalizeWorkspaceColor(body.Color)
-	if err != nil {
-		return types.Workspace{}, err
-	}
-	return a.db.CreateWorkspaceT(a.ctx, name, body.Icon, color)
+	var out types.Workspace
+	err := a.call(api.MethodWorkspacesCreate, body, &out)
+	return out, err
 }
 
 func (a *App) WorkspacesUpdate(id int64, body types.WorkspaceUpdateInput) (types.Workspace, error) {
-	if body.Name != nil && strings.TrimSpace(*body.Name) == "" {
-		return types.Workspace{}, fmt.Errorf("name cannot be empty")
-	}
-	color, err := normalizeWorkspaceColor(body.Color)
-	if err != nil {
-		return types.Workspace{}, err
-	}
-	var name *string
-	if body.Name != nil {
-		n := strings.TrimSpace(*body.Name)
-		name = &n
-	}
-	return a.db.UpdateWorkspaceT(a.ctx, id, name, body.Icon, body.Icon != nil, color, body.Color != nil)
+	var out types.Workspace
+	err := a.call(api.MethodWorkspacesUpdate, map[string]any{"id": id, "body": body}, &out)
+	return out, err
 }
 
 func (a *App) WorkspacesDelete(id int64) (types.Ok, error) {
-	n, err := a.db.DeleteWorkspace(a.ctx, id)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	if n == 0 {
-		return types.Ok{}, fmt.Errorf("Workspace not found")
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodWorkspacesDelete, map[string]any{"id": id}, &out)
+	return out, err
 }
 
 func (a *App) AppsList(workspaceID int64) ([]types.App, error) {
-	if _, err := a.db.GetWorkspaceT(a.ctx, workspaceID); err != nil {
-		return nil, err
-	}
-	return a.db.ListAppsByWorkspaceT(a.ctx, workspaceID)
+	var out []types.App
+	err := a.call(api.MethodAppsList, map[string]any{"workspaceID": workspaceID}, &out)
+	return out, err
 }
 
 func (a *App) AppsGet(id int64) (types.App, error) {
-	return a.db.GetAppT(a.ctx, id)
+	var out types.App
+	err := a.call(api.MethodAppsGet, map[string]any{"id": id}, &out)
+	return out, err
 }
 
 func (a *App) AppsCreate(workspaceID int64, body types.AppCreateInput) (types.App, error) {
-	if _, err := a.db.GetWorkspaceT(a.ctx, workspaceID); err != nil {
-		return types.App{}, err
-	}
-	if strings.TrimSpace(body.Name) == "" {
-		return types.App{}, fmt.Errorf("name is required")
-	}
-	if strings.TrimSpace(body.ProjectPath) == "" {
-		return types.App{}, fmt.Errorf("project_path is required")
-	}
-	ok, resolved, errMsg := lib.ValidateProjectPath(body.ProjectPath)
-	if !ok {
-		return types.App{}, fmt.Errorf("%s", errMsg)
-	}
-	return a.db.CreateAppT(a.ctx, workspaceID, strings.TrimSpace(body.Name), resolved)
+	var out types.App
+	err := a.call(api.MethodAppsCreate, map[string]any{"workspaceID": workspaceID, "body": body}, &out)
+	return out, err
 }
 
 func (a *App) AppsUpdate(id int64, body types.AppUpdateInput) (types.App, error) {
-	if body.Name != nil && strings.TrimSpace(*body.Name) == "" {
-		return types.App{}, fmt.Errorf("name cannot be empty")
-	}
-	var name, projectPath *string
-	if body.Name != nil {
-		n := strings.TrimSpace(*body.Name)
-		name = &n
-	}
-	if body.ProjectPath != nil {
-		ok, resolved, errMsg := lib.ValidateProjectPath(*body.ProjectPath)
-		if !ok {
-			return types.App{}, fmt.Errorf("%s", errMsg)
-		}
-		projectPath = &resolved
-	}
-	return a.db.UpdateAppT(a.ctx, id, name, projectPath)
+	var out types.App
+	err := a.call(api.MethodAppsUpdate, map[string]any{"id": id, "body": body}, &out)
+	return out, err
 }
 
 // AppsReorder saves the order of a workspace's apps; ids lists all of them.
 func (a *App) AppsReorder(workspaceID int64, ids []int64) (types.Ok, error) {
-	if err := a.db.ReorderAppsT(a.ctx, workspaceID, ids); err != nil {
-		return types.Ok{}, err
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodAppsReorder, map[string]any{"workspaceID": workspaceID, "ids": ids}, &out)
+	return out, err
 }
 
 func (a *App) AppsDelete(id int64) (types.Ok, error) {
-	n, err := a.db.DeleteApp(a.ctx, id)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	if n == 0 {
-		return types.Ok{}, fmt.Errorf("App not found")
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodAppsDelete, map[string]any{"id": id}, &out)
+	return out, err
 }
 
 func (a *App) AppsOpenFolder(id int64) (types.Ok, error) {
-	app, err := a.db.GetAppT(a.ctx, id)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	ok, resolved, errMsg := lib.ValidateProjectPath(app.ProjectPath)
-	if !ok {
-		return types.Ok{}, fmt.Errorf("%s", errMsg)
-	}
-	if err := native.OpenFolder(resolved); err != nil {
-		return types.Ok{}, err
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodAppsOpenFolder, map[string]any{"id": id}, &out)
+	return out, err
 }
 
+// AppsEditors lists the code editors installed on this machine. It has no
+// error to report, so a failure leaves the list empty.
 func (a *App) AppsEditors() []types.Editor {
-	out := []types.Editor{}
-	for _, e := range native.Editors() {
-		out = append(out, types.Editor{ID: e.ID, Name: e.Name})
+	var out []types.Editor
+	if err := a.call(api.MethodAppsEditors, nil, &out); err != nil {
+		log.Println("workspace-manager: listing editors:", err)
+		return []types.Editor{}
 	}
 	return out
 }
 
 func (a *App) AppsOpenInEditor(id int64, editor string) (types.Ok, error) {
-	app, err := a.db.GetAppT(a.ctx, id)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	ok, resolved, errMsg := lib.ValidateProjectPath(app.ProjectPath)
-	if !ok {
-		return types.Ok{}, fmt.Errorf("%s", errMsg)
-	}
-	if err := native.OpenInEditor(editor, resolved); err != nil {
-		return types.Ok{}, err
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodAppsOpenInEditor, map[string]any{"id": id, "editor": editor}, &out)
+	return out, err
 }
 
 func (a *App) ConfigSetsList(appID int64) ([]types.ConfigSet, error) {
-	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
-		return nil, err
-	}
-	return a.db.ListConfigSetsByAppT(a.ctx, appID)
+	var out []types.ConfigSet
+	err := a.call(api.MethodConfigSetsList, map[string]any{"appID": appID}, &out)
+	return out, err
 }
 
 func (a *App) ConfigSetsGetDetail(id int64) (types.ConfigSetDetail, error) {
-	set, err := a.db.GetConfigSetT(a.ctx, id)
-	if err != nil {
-		return types.ConfigSetDetail{}, err
-	}
-	return a.db.ConfigSetDetailT(a.ctx, set)
+	var out types.ConfigSetDetail
+	err := a.call(api.MethodConfigSetsDetail, map[string]any{"id": id}, &out)
+	return out, err
 }
 
 func (a *App) ConfigSetsCreate(appID int64, body types.ConfigSetCreateInput) (types.ConfigSet, error) {
-	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
-		return types.ConfigSet{}, err
-	}
-	name := strings.TrimSpace(body.Name)
-	if name == "" {
-		return types.ConfigSet{}, fmt.Errorf("name is required")
-	}
-	if body.CopyFromID != nil && !db.HasAnyPart(body.Parts) {
-		return types.ConfigSet{}, fmt.Errorf("Select at least one part to copy")
-	}
-	if body.CopyFromID != nil {
-		source, err := a.db.GetConfigSetT(a.ctx, *body.CopyFromID)
-		if err != nil || source.AppID != appID {
-			return types.ConfigSet{}, fmt.Errorf("copy_from_id must be a config set on this app")
-		}
-	}
-	set, err := a.db.CreateConfigSetT(a.ctx, appID, name)
-	if err != nil {
-		return types.ConfigSet{}, err
-	}
-	if body.CopyFromID != nil {
-		if err := a.db.CopyFrom(a.ctx, *body.CopyFromID, set.ID, body.Parts); err != nil {
-			return types.ConfigSet{}, err
-		}
-	}
-	if body.Activate == nil || *body.Activate {
-		_, _ = a.db.SetActiveConfigSetT(a.ctx, appID, set.ID)
-	}
-	return set, nil
+	var out types.ConfigSet
+	err := a.call(api.MethodConfigSetsCreate, map[string]any{"appID": appID, "body": body}, &out)
+	return out, err
 }
 
 func (a *App) ConfigSetsUpdate(id int64, body types.ConfigSetUpdateInput) (types.ConfigSet, error) {
-	name := strings.TrimSpace(body.Name)
-	if name == "" {
-		return types.ConfigSet{}, fmt.Errorf("name is required")
-	}
-	return a.db.UpdateConfigSetT(a.ctx, id, name)
+	var out types.ConfigSet
+	err := a.call(api.MethodConfigSetsUpdate, map[string]any{"id": id, "body": body}, &out)
+	return out, err
 }
 
 func (a *App) ConfigSetsDelete(id int64) (types.Ok, error) {
-	set, err := a.db.GetConfigSetT(a.ctx, id)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	siblings, err := a.db.ListConfigSetsByAppT(a.ctx, set.AppID)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	if len(siblings) <= 1 {
-		return types.Ok{}, fmt.Errorf("Cannot delete the last config set")
-	}
-	app, _ := a.db.GetAppT(a.ctx, set.AppID)
-	if _, err := a.db.DeleteConfigSet(a.ctx, id); err != nil {
-		return types.Ok{}, err
-	}
-	if app.ActiveConfigSetID != nil && *app.ActiveConfigSetID == id {
-		next, err := a.db.ListConfigSetsByAppT(a.ctx, set.AppID)
-		if err == nil && len(next) > 0 {
-			_, _ = a.db.SetActiveConfigSetT(a.ctx, set.AppID, next[0].ID)
-		}
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodConfigSetsDelete, map[string]any{"id": id}, &out)
+	return out, err
 }
 
 func (a *App) ConfigSetsActivate(id int64) (types.ConfigSetActivateResult, error) {
-	set, err := a.db.GetConfigSetT(a.ctx, id)
-	if err != nil {
-		return types.ConfigSetActivateResult{}, err
-	}
-	app, err := a.db.SetActiveConfigSetT(a.ctx, set.AppID, set.ID)
-	if err != nil {
-		return types.ConfigSetActivateResult{}, err
-	}
-	return types.ConfigSetActivateResult{ID: set.ID, AppID: set.AppID, Name: set.Name, App: app}, nil
+	var out types.ConfigSetActivateResult
+	err := a.call(api.MethodConfigSetsActivate, map[string]any{"id": id}, &out)
+	return out, err
 }
 
 func (a *App) ConfigSetsCopyFrom(id, sourceID int64, parts *types.CopyParts) (types.ConfigSet, error) {
-	target, err := a.db.GetConfigSetT(a.ctx, id)
-	if err != nil {
-		return types.ConfigSet{}, err
-	}
-	if !db.HasAnyPart(parts) {
-		return types.ConfigSet{}, fmt.Errorf("Select at least one part to copy")
-	}
-	source, err := a.db.GetConfigSetT(a.ctx, sourceID)
-	if err != nil || source.AppID != target.AppID {
-		return types.ConfigSet{}, fmt.Errorf("source_id must be a config set on the same app")
-	}
-	if err := a.db.CopyFrom(a.ctx, sourceID, id, parts); err != nil {
-		return types.ConfigSet{}, err
-	}
-	return a.db.GetConfigSetT(a.ctx, id)
+	var out types.ConfigSet
+	err := a.call(api.MethodConfigSetsCopyFrom, map[string]any{"id": id, "sourceID": sourceID, "parts": parts}, &out)
+	return out, err
 }
 
 func (a *App) EnvVarsList(appID int64) ([]types.EnvVar, error) {
-	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
-		return nil, err
-	}
-	set, err := a.db.ResolveActive(a.ctx, appID)
-	if err != nil {
-		return nil, err
-	}
-	return a.db.ListEnvVarsT(a.ctx, set.ID)
+	var out []types.EnvVar
+	err := a.call(api.MethodEnvVarsList, map[string]any{"appID": appID}, &out)
+	return out, err
 }
 
 func (a *App) EnvVarsCreate(appID int64, body types.EnvVarCreateInput) (types.EnvVar, error) {
-	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
-		return types.EnvVar{}, err
-	}
-	key := strings.TrimSpace(body.Key)
-	if key == "" {
-		return types.EnvVar{}, fmt.Errorf("key is required")
-	}
-	set, err := a.db.ResolveActive(a.ctx, appID)
-	if err != nil {
-		return types.EnvVar{}, err
-	}
-	value := ""
-	if body.Value != nil {
-		value = *body.Value
-	}
-	include := true
-	if body.IncludeInAI != nil {
-		include = *body.IncludeInAI
-	}
-	row, err := a.db.CreateEnvVar(a.ctx, db.CreateEnvVarParams{
-		ConfigSetID: set.ID, Key: key, Value: value, IncludeInAi: db.BoolInt(include),
-	})
-	if err != nil {
-		return types.EnvVar{}, db.UniqueErr(err, "Env var key already exists for this config set")
-	}
-	return db.EnvVarFrom(row), nil
+	var out types.EnvVar
+	err := a.call(api.MethodEnvVarsCreate, map[string]any{"appID": appID, "body": body}, &out)
+	return out, err
 }
 
 func (a *App) EnvVarsUpdate(id int64, body types.EnvVarUpdateInput) (types.EnvVar, error) {
-	existing, err := a.db.GetEnvVar(a.ctx, id)
-	if err != nil {
-		return types.EnvVar{}, fmt.Errorf("Env var not found")
-	}
-	key, value, include := existing.Key, existing.Value, existing.IncludeInAi != 0
-	if body.Key != nil {
-		key = strings.TrimSpace(*body.Key)
-		if key == "" {
-			return types.EnvVar{}, fmt.Errorf("key cannot be empty")
-		}
-	}
-	if body.Value != nil {
-		value = *body.Value
-	}
-	if body.IncludeInAI != nil {
-		include = *body.IncludeInAI
-	}
-	row, err := a.db.UpdateEnvVar(a.ctx, db.UpdateEnvVarParams{
-		Key: key, Value: value, IncludeInAi: db.BoolInt(include), ID: id,
-	})
-	if err != nil {
-		return types.EnvVar{}, db.UniqueErr(err, "Env var key already exists for this config set")
-	}
-	return db.EnvVarFrom(row), nil
+	var out types.EnvVar
+	err := a.call(api.MethodEnvVarsUpdate, map[string]any{"id": id, "body": body}, &out)
+	return out, err
 }
 
 func (a *App) EnvVarsDelete(id int64) (types.Ok, error) {
-	n, err := a.db.DeleteEnvVar(a.ctx, id)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	if n == 0 {
-		return types.Ok{}, fmt.Errorf("Env var not found")
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodEnvVarsDelete, map[string]any{"id": id}, &out)
+	return out, err
 }
 
+// EnvVarsImport picks the file in this process (the dialog belongs to the
+// window) and lets the server import it into the app's active config set.
 func (a *App) EnvVarsImport(appID int64) (types.ImportEnvResult, error) {
-	app, err := a.db.GetAppT(a.ctx, appID)
+	app, err := a.appByID(appID)
 	if err != nil {
 		return types.ImportEnvResult{}, err
 	}
@@ -381,689 +186,308 @@ func (a *App) EnvVarsImport(appID int64) (types.ImportEnvResult, error) {
 	if picked.Cancelled {
 		return types.ImportEnvResult{Cancelled: true}, nil
 	}
-	content, err := os.ReadFile(picked.Path)
-	if err != nil {
-		return types.ImportEnvResult{}, fmt.Errorf("Failed to read selected file")
-	}
-	format := lib.DetectImportFormat(picked.Path)
-	if format == nil {
-		return types.ImportEnvResult{}, fmt.Errorf("Unsupported file format: %s", filepath.Base(picked.Path))
-	}
-	entries, err := format.Parse(string(content))
-	if err != nil {
-		return types.ImportEnvResult{}, err
-	}
-	set, err := a.db.ResolveActive(a.ctx, appID)
-	if err != nil {
-		return types.ImportEnvResult{}, err
-	}
-	for _, e := range entries {
-		_, _ = a.db.UpsertEnvVarByKey(a.ctx, set.ID, e.Key, e.Value, false)
-	}
-	result := types.ImportEnvResult{Path: picked.Path, Format: format.Label, Imported: len(entries)}
-	vars, err := a.db.ListEnvVarsT(a.ctx, set.ID)
-	if err != nil {
-		return types.ImportEnvResult{}, err
-	}
-	result.Vars = vars
-	rel, ok := lib.ToProjectRelative(app.ProjectPath, picked.Path)
-	if !ok {
-		rel = filepath.ToSlash(filepath.Base(picked.Path))
-	}
-	tplContent, err := format.ToTemplate(string(content))
-	if err == nil {
-		existing, findErr := a.db.GetTemplateByPath(a.ctx, db.GetTemplateByPathParams{ConfigSetID: set.ID, FilePath: rel})
-		if findErr == nil {
-			row, _ := a.db.UpdateTemplate(a.ctx, db.UpdateTemplateParams{FilePath: existing.FilePath, Content: tplContent, IncludeInAi: existing.IncludeInAi, ID: existing.ID})
-			result.Template = &types.ImportTemplateResult{ID: row.ID, FilePath: rel, Created: false}
-		} else {
-			row, createErr := a.db.CreateTemplate(a.ctx, db.CreateTemplateParams{ConfigSetID: set.ID, FilePath: rel, Content: tplContent, IncludeInAi: db.BoolInt(true)})
-			if createErr == nil {
-				result.Template = &types.ImportTemplateResult{ID: row.ID, FilePath: rel, Created: true}
-			}
-		}
-	}
-	return result, nil
+	var out types.ImportEnvResult
+	err = a.call(api.MethodEnvVarsImport, map[string]any{"appID": appID, "path": picked.Path}, &out)
+	return out, err
 }
 
 func (a *App) TemplatesList(appID int64) ([]types.Template, error) {
-	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
-		return nil, err
-	}
-	set, err := a.db.ResolveActive(a.ctx, appID)
-	if err != nil {
-		return nil, err
-	}
-	return a.db.ListTemplatesT(a.ctx, set.ID)
+	var out []types.Template
+	err := a.call(api.MethodTemplatesList, map[string]any{"appID": appID}, &out)
+	return out, err
 }
 
 func (a *App) TemplatesCreate(appID int64, body types.TemplateCreateInput) (types.Template, error) {
-	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
-		return types.Template{}, err
-	}
-	path := strings.ReplaceAll(strings.TrimSpace(body.FilePath), "\\", "/")
-	if path == "" {
-		return types.Template{}, fmt.Errorf("file_path is required")
-	}
-	set, err := a.db.ResolveActive(a.ctx, appID)
-	if err != nil {
-		return types.Template{}, err
-	}
-	content := ""
-	if body.Content != nil {
-		content = *body.Content
-	}
-	include := true
-	if body.IncludeInAI != nil {
-		include = *body.IncludeInAI
-	}
-	row, err := a.db.CreateTemplate(a.ctx, db.CreateTemplateParams{ConfigSetID: set.ID, FilePath: path, Content: content, IncludeInAi: db.BoolInt(include)})
-	if err != nil {
-		return types.Template{}, db.UniqueErr(err, "Template for this file already exists")
-	}
-	return templateResult(row), nil
-}
-
-func templateResult(row db.Template) types.Template {
-	return types.Template{ID: row.ID, ConfigSetID: row.ConfigSetID, FilePath: row.FilePath, Content: row.Content, IncludeInAI: row.IncludeInAi != 0, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+	var out types.Template
+	err := a.call(api.MethodTemplatesCreate, map[string]any{"appID": appID, "body": body}, &out)
+	return out, err
 }
 
 func (a *App) TemplatesUpdate(id int64, body types.TemplateUpdateInput) (types.Template, error) {
-	existing, err := a.db.GetTemplate(a.ctx, id)
-	if err != nil {
-		return types.Template{}, fmt.Errorf("Template not found")
-	}
-	path, content, include := existing.FilePath, existing.Content, existing.IncludeInAi != 0
-	if body.FilePath != nil {
-		path = strings.ReplaceAll(strings.TrimSpace(*body.FilePath), "\\", "/")
-		if path == "" {
-			return types.Template{}, fmt.Errorf("file_path cannot be empty")
-		}
-	}
-	if body.Content != nil {
-		content = *body.Content
-	}
-	if body.IncludeInAI != nil {
-		include = *body.IncludeInAI
-	}
-	row, err := a.db.UpdateTemplate(a.ctx, db.UpdateTemplateParams{FilePath: path, Content: content, IncludeInAi: db.BoolInt(include), ID: id})
-	if err != nil {
-		return types.Template{}, db.UniqueErr(err, "Template for this file already exists")
-	}
-	return templateResult(row), nil
+	var out types.Template
+	err := a.call(api.MethodTemplatesUpdate, map[string]any{"id": id, "body": body}, &out)
+	return out, err
 }
 
 func (a *App) TemplatesDelete(id int64) (types.Ok, error) {
-	n, err := a.db.DeleteTemplate(a.ctx, id)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	if n == 0 {
-		return types.Ok{}, fmt.Errorf("Template not found")
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodTemplatesDelete, map[string]any{"id": id}, &out)
+	return out, err
 }
 
 func (a *App) PackageScriptsList(appID int64) (types.PackageScripts, error) {
-	app, err := a.db.GetAppT(a.ctx, appID)
-	if err != nil {
-		return types.PackageScripts{}, err
-	}
-	return lib.ReadPackageScripts(app.ProjectPath), nil
-}
-
-// checkConfigKind rejects anything but the three kinds of command list.
-func checkConfigKind(kind string) error {
-	switch kind {
-	case types.KindRun, types.KindBuild, types.KindSetup:
-		return nil
-	}
-	return fmt.Errorf("kind must be %s, %s or %s", types.KindRun, types.KindBuild, types.KindSetup)
+	var out types.PackageScripts
+	err := a.call(api.MethodPackageScriptsList, map[string]any{"appID": appID}, &out)
+	return out, err
 }
 
 // RunConfigGet returns the active config set's command list of a kind: "run"
 // (starts the app), "build" (builds it) or "setup" (prepares it).
 func (a *App) RunConfigGet(appID int64, kind string) (types.RunConfig, error) {
-	if err := checkConfigKind(kind); err != nil {
-		return types.RunConfig{}, err
-	}
-	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
-		return types.RunConfig{}, err
-	}
-	set, err := a.db.ResolveActive(a.ctx, appID)
-	if err != nil {
-		return types.RunConfig{}, err
-	}
-	return a.db.GetOrCreateRunConfig(a.ctx, set.ID, kind)
+	var out types.RunConfig
+	err := a.call(api.MethodRunConfigGet, map[string]any{"appID": appID, "kind": kind}, &out)
+	return out, err
 }
 
 func (a *App) RunConfigSave(appID int64, kind string, body types.RunConfigSaveInput) (types.RunConfig, error) {
-	if err := checkConfigKind(kind); err != nil {
-		return types.RunConfig{}, err
-	}
-	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
-		return types.RunConfig{}, err
-	}
-	if body.Mode != nil && *body.Mode != "sequential" && *body.Mode != "parallel" {
-		return types.RunConfig{}, fmt.Errorf("mode must be sequential or parallel")
-	}
-	var cmds []types.RunCommandInput
-	if body.Commands != nil {
-		cmds = make([]types.RunCommandInput, 0, len(body.Commands))
-		for _, c := range body.Commands {
-			if strings.TrimSpace(c.Command) == "" {
-				return types.RunConfig{}, fmt.Errorf("Each command must have a non-empty command string")
-			}
-			cmds = append(cmds, types.RunCommandInput{Label: c.Label, Command: strings.TrimSpace(c.Command)})
-		}
-	}
-	set, err := a.db.ResolveActive(a.ctx, appID)
-	if err != nil {
-		return types.RunConfig{}, err
-	}
-	return a.db.UpsertRunConfig(a.ctx, set.ID, kind, body.Mode, cmds)
+	var out types.RunConfig
+	err := a.call(api.MethodRunConfigSave, map[string]any{"appID": appID, "kind": kind, "body": body}, &out)
+	return out, err
 }
 
+// RunnerStatus reports an app's current runner session. It has no error to
+// report, so a failure reads as "not running".
 func (a *App) RunnerStatus(appID int64) types.StatusEvent {
-	return a.runner.GetStatus(appID)
+	var out types.StatusEvent
+	if err := a.call(api.MethodRunnerStatus, map[string]any{"appID": appID}, &out); err != nil {
+		log.Println("workspace-manager: runner status:", err)
+		return types.StatusEvent{Processes: []types.ProcessState{}}
+	}
+	return out
 }
 
 func (a *App) RunnerWorkspaceStatus(workspaceID int64) ([]types.StatusEvent, error) {
-	apps, err := a.db.ListAppsByWorkspaceT(a.ctx, workspaceID)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]types.StatusEvent, 0, len(apps))
-	for _, app := range apps {
-		out = append(out, a.runner.GetStatus(app.ID))
-	}
-	return out, nil
+	var out []types.StatusEvent
+	err := a.call(api.MethodRunnerWorkspaceStatus, map[string]any{"workspaceID": workspaceID}, &out)
+	return out, err
 }
 
 // RunnerOutput returns the recent terminal output of one command of the app's
 // current run, so a terminal opened late can catch up before live events.
 func (a *App) RunnerOutput(appID, commandID int64) types.RunnerOutput {
-	return a.runner.GetOutput(appID, commandID)
+	var out types.RunnerOutput
+	if err := a.call(api.MethodRunnerOutput, map[string]any{"appID": appID, "commandID": commandID}, &out); err != nil {
+		log.Println("workspace-manager: runner output:", err)
+		return types.RunnerOutput{}
+	}
+	return out
 }
 
 // RunnerResize sets the terminal size of a running command.
 func (a *App) RunnerResize(appID, commandID int64, cols, rows int) types.Ok {
-	a.runner.Resize(appID, commandID, cols, rows)
-	return types.Ok{Ok: true}
+	var out types.Ok
+	err := a.call(api.MethodRunnerResize, map[string]any{"appID": appID, "commandID": commandID, "cols": cols, "rows": rows}, &out)
+	if err != nil {
+		log.Println("workspace-manager: resizing terminal:", err)
+		return types.Ok{}
+	}
+	return out
 }
 
 func (a *App) RunnerRun(appID int64) (types.StatusEvent, error) {
-	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
-		return types.StatusEvent{}, err
-	}
-	return a.runner.Start(a.ctx, appID, types.KindRun)
+	var out types.StatusEvent
+	err := a.call(api.MethodRunnerRun, map[string]any{"appID": appID}, &out)
+	return out, err
 }
 
 // RunnerBuild runs the active config set's build commands. It shares the app's
 // session with RunnerRun: it fails while the app is running or building, and
 // RunnerStop stops it.
 func (a *App) RunnerBuild(appID int64) (types.StatusEvent, error) {
-	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
-		return types.StatusEvent{}, err
-	}
-	return a.runner.Start(a.ctx, appID, types.KindBuild)
+	var out types.StatusEvent
+	err := a.call(api.MethodRunnerBuild, map[string]any{"appID": appID}, &out)
+	return out, err
 }
 
 // RunnerSetup runs the active config set's setup commands. Like RunnerBuild it
 // shares the app's session: it fails while the app is running, building or
 // being set up, and RunnerStop stops it.
 func (a *App) RunnerSetup(appID int64) (types.StatusEvent, error) {
-	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
-		return types.StatusEvent{}, err
-	}
-	return a.runner.Start(a.ctx, appID, types.KindSetup)
+	var out types.StatusEvent
+	err := a.call(api.MethodRunnerSetup, map[string]any{"appID": appID}, &out)
+	return out, err
 }
 
 func (a *App) RunnerStop(appID int64) (types.StatusEvent, error) {
-	return a.runner.Stop(a.ctx, appID)
+	var out types.StatusEvent
+	err := a.call(api.MethodRunnerStop, map[string]any{"appID": appID}, &out)
+	return out, err
 }
 
 func (a *App) RunnerReload(appID int64) (types.StatusEvent, error) {
-	if _, err := a.db.GetAppT(a.ctx, appID); err != nil {
-		return types.StatusEvent{}, err
-	}
-	return a.runner.Reload(a.ctx, appID)
-}
-
-// appProjectDir returns the validated project path of an app.
-func (a *App) appProjectDir(appID int64) (string, error) {
-	app, err := a.db.GetAppT(a.ctx, appID)
-	if err != nil {
-		return "", err
-	}
-	ok, resolved, errMsg := lib.ValidateProjectPath(app.ProjectPath)
-	if !ok {
-		return "", fmt.Errorf("%s", errMsg)
-	}
-	return resolved, nil
+	var out types.StatusEvent
+	err := a.call(api.MethodRunnerReload, map[string]any{"appID": appID}, &out)
+	return out, err
 }
 
 func (a *App) GitInfo(appID int64) (types.GitInfo, error) {
-	dir, err := a.appProjectDir(appID)
-	if err != nil {
-		return types.GitInfo{}, err
-	}
-	return services.GitInfo(dir)
+	var out types.GitInfo
+	err := a.call(api.MethodGitInfo, map[string]any{"appID": appID}, &out)
+	return out, err
 }
 
 func (a *App) GitFetchAll(appID int64) (types.GitOutput, error) {
-	dir, err := a.appProjectDir(appID)
-	if err != nil {
-		return types.GitOutput{}, err
-	}
-	out, err := services.GitFetchAll(dir)
-	if err != nil {
-		return types.GitOutput{}, err
-	}
-	return types.GitOutput{Output: out}, nil
+	var out types.GitOutput
+	err := a.call(api.MethodGitFetchAll, map[string]any{"appID": appID}, &out)
+	return out, err
 }
 
 // GitBranchCreate creates a local branch at base (default HEAD), not checked out.
 func (a *App) GitBranchCreate(appID int64, name string, base string) (types.Ok, error) {
-	dir, err := a.appProjectDir(appID)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	if err := services.GitBranchCreate(dir, name, base); err != nil {
-		return types.Ok{}, err
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodGitBranchCreate, map[string]any{"appID": appID, "name": name, "base": base}, &out)
+	return out, err
 }
 
 func (a *App) GitBranchRename(appID int64, oldName string, newName string) (types.Ok, error) {
-	dir, err := a.appProjectDir(appID)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	if err := services.GitBranchRename(dir, oldName, newName); err != nil {
-		return types.Ok{}, err
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodGitBranchRename, map[string]any{"appID": appID, "oldName": oldName, "newName": newName}, &out)
+	return out, err
 }
 
 // GitBranchCheckout switches the app's own folder to a local branch. It is
 // refused while the app has a runner session, which works in that folder.
 func (a *App) GitBranchCheckout(appID int64, name string) (types.Ok, error) {
-	dir, err := a.appProjectDir(appID)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	if a.runner.GetStatus(appID).Running {
-		return types.Ok{}, fmt.Errorf("stop the running app before switching branches")
-	}
-	if err := services.GitBranchCheckout(dir, name); err != nil {
-		return types.Ok{}, err
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodGitBranchCheckout, map[string]any{"appID": appID, "name": name}, &out)
+	return out, err
 }
 
 // GitBranchPull pulls a local branch's upstream in the worktree that has it
 // checked out. Merge conflicts come back in the result, not as an error. It is
 // refused while the app has a runner session.
 func (a *App) GitBranchPull(appID int64, name string) (types.GitPullResult, error) {
-	dir, err := a.appProjectDir(appID)
-	if err != nil {
-		return types.GitPullResult{}, err
-	}
-	if a.runner.GetStatus(appID).Running {
-		return types.GitPullResult{}, fmt.Errorf("stop the running app before pulling")
-	}
-	return services.GitBranchPull(dir, name)
+	var out types.GitPullResult
+	err := a.call(api.MethodGitBranchPull, map[string]any{"appID": appID, "name": name}, &out)
+	return out, err
 }
 
 // GitBranchPush pushes a local branch to its upstream, or publishes it when it
 // has none; force uses --force-with-lease.
 func (a *App) GitBranchPush(appID int64, name string, force bool) (types.GitOutput, error) {
-	dir, err := a.appProjectDir(appID)
-	if err != nil {
-		return types.GitOutput{}, err
-	}
-	out, err := services.GitBranchPush(dir, name, force)
-	if err != nil {
-		return types.GitOutput{}, err
-	}
-	return types.GitOutput{Output: out}, nil
+	var out types.GitOutput
+	err := a.call(api.MethodGitBranchPush, map[string]any{"appID": appID, "name": name, "force": force}, &out)
+	return out, err
 }
 
 // GitFileOpenInEditor opens a file of one of the repo's worktrees (e.g. a
 // conflicted one) in an editor (an id from AppsEditors).
 func (a *App) GitFileOpenInEditor(appID int64, file string, editor string) (types.Ok, error) {
-	dir, err := a.appProjectDir(appID)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	file, err = services.FindWorktreeFile(dir, file)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	if err := native.OpenInEditor(editor, file); err != nil {
-		return types.Ok{}, err
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodGitFileOpenInEditor, map[string]any{"appID": appID, "file": file, "editor": editor}, &out)
+	return out, err
 }
 
 // GitBranchDelete deletes a local branch; force also deletes an unmerged one.
 func (a *App) GitBranchDelete(appID int64, name string, force bool) (types.Ok, error) {
-	dir, err := a.appProjectDir(appID)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	if err := services.GitBranchDelete(dir, name, force); err != nil {
-		return types.Ok{}, err
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodGitBranchDelete, map[string]any{"appID": appID, "name": name, "force": force}, &out)
+	return out, err
 }
 
 func (a *App) GitWorktreeAdd(appID int64, body types.GitWorktreeAddInput) (types.GitWorktreeAddResult, error) {
-	dir, err := a.appProjectDir(appID)
-	if err != nil {
-		return types.GitWorktreeAddResult{}, err
-	}
-	path, err := services.GitWorktreeAdd(dir, body)
-	if err != nil {
-		return types.GitWorktreeAddResult{}, err
-	}
-	res := types.GitWorktreeAddResult{Path: path, Links: []types.WorktreeLinkState{}}
-	if !body.LinkShared {
-		return res, nil
-	}
-	// The worktree exists now, so a link that fails is reported in Links
-	// instead of failing the add.
-	appDir, root, err := services.WorktreeAppDir(dir, path)
-	if err == nil {
-		res.Links, err = a.linkWorktree(appID, dir, appDir, root)
-	}
-	if err != nil {
-		return res, fmt.Errorf("worktree created at %s, but shared paths were not linked: %w", path, err)
-	}
-	return res, nil
+	var out types.GitWorktreeAddResult
+	err := a.call(api.MethodGitWorktreeAdd, map[string]any{"appID": appID, "body": body}, &out)
+	return out, err
 }
 
 func (a *App) GitWorktreeRemove(appID int64, path string, force bool) (types.Ok, error) {
-	dir, err := a.appProjectDir(appID)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	// Drop the shared links first so deleting the worktree cannot reach into
-	// the app's own copies through them.
-	if appDir, root, err := services.WorktreeAppDir(dir, path); err == nil {
-		links, err := a.db.ListWorktreeLinksT(a.ctx, appID)
-		if err != nil {
-			return types.Ok{}, err
-		}
-		// The worktree's own list too: it may link paths the app's does not.
-		if own, ok := services.WorktreeLinksOverride(root); ok {
-			links = append(links, own...)
-		}
-		if err := services.UnlinkWorktree(appDir, links); err != nil {
-			return types.Ok{}, fmt.Errorf("removing shared links: %w", err)
-		}
-	}
-	if err := services.GitWorktreeRemove(dir, path, force); err != nil {
-		return types.Ok{}, err
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodGitWorktreeRemove, map[string]any{"appID": appID, "path": path, "force": force}, &out)
+	return out, err
 }
 
 func (a *App) GitWorktreePrune(appID int64) (types.GitOutput, error) {
-	dir, err := a.appProjectDir(appID)
-	if err != nil {
-		return types.GitOutput{}, err
-	}
-	out, err := services.GitWorktreePrune(dir)
-	if err != nil {
-		return types.GitOutput{}, err
-	}
-	return types.GitOutput{Output: out}, nil
+	var out types.GitOutput
+	err := a.call(api.MethodGitWorktreePrune, map[string]any{"appID": appID}, &out)
+	return out, err
 }
 
 // GitWorktreeStart runs the app's run, build or setup config (by kind) inside
 // the worktree at path, with config set configSetID (0: the app's active set).
 // It is the app's one runner session, like RunnerRun.
 func (a *App) GitWorktreeStart(appID int64, path string, kind string, configSetID int64) (types.StatusEvent, error) {
-	if kind != types.KindRun && kind != types.KindBuild && kind != types.KindSetup {
-		return types.StatusEvent{}, fmt.Errorf("unknown kind %q", kind)
-	}
-	dir, err := a.appProjectDir(appID)
-	if err != nil {
-		return types.StatusEvent{}, err
-	}
-	appDir, root, err := services.WorktreeAppDir(dir, path)
-	if err != nil {
-		return types.StatusEvent{}, err
-	}
-	if kind == types.KindSetup && !services.SameDir(appDir, dir) {
-		// Setup links the shared paths first, so e.g. an install reuses them.
-		states, err := a.linkWorktree(appID, dir, appDir, root)
-		if err != nil {
-			return types.StatusEvent{}, err
-		}
-		var failed []string
-		for _, s := range states {
-			if s.State == services.LinkFailed {
-				failed = append(failed, s.Path+": "+s.Message)
-			}
-		}
-		if len(failed) > 0 {
-			return types.StatusEvent{}, fmt.Errorf("could not link shared paths, setup not started:\n%s", strings.Join(failed, "\n"))
-		}
-	}
-	return a.runner.StartIn(a.ctx, appID, kind, appDir, root, configSetID)
-}
-
-func (a *App) linkWorktree(appID int64, dir, appDir, root string) ([]types.WorktreeLinkState, error) {
-	links, err := a.worktreeLinkPaths(appID, root)
-	if err != nil {
-		return nil, err
-	}
-	return services.LinkWorktree(dir, appDir, root, links), nil
-}
-
-// worktreeLinkPaths is the shared paths of the worktree at root: its own list
-// if it was given one when added, otherwise the app's.
-func (a *App) worktreeLinkPaths(appID int64, root string) ([]string, error) {
-	if own, ok := services.WorktreeLinksOverride(root); ok {
-		return own, nil
-	}
-	return a.db.ListWorktreeLinksT(a.ctx, appID)
+	var out types.StatusEvent
+	err := a.call(api.MethodGitWorktreeStart, map[string]any{"appID": appID, "path": path, "kind": kind, "configSetID": configSetID}, &out)
+	return out, err
 }
 
 // WorktreeLinksGet returns the app's shared worktree paths: files and folders,
 // relative to the app folder, that its worktrees link to instead of copying.
 func (a *App) WorktreeLinksGet(appID int64) ([]string, error) {
-	return a.db.ListWorktreeLinksT(a.ctx, appID)
+	var out []string
+	err := a.call(api.MethodWorktreeLinksGet, map[string]any{"appID": appID}, &out)
+	return out, err
 }
 
 // WorktreeLinksSave replaces the app's shared worktree paths and returns them
 // cleaned up.
 func (a *App) WorktreeLinksSave(appID int64, paths []string) ([]string, error) {
-	clean, err := services.NormalizeWorktreeLinks(paths)
-	if err != nil {
-		return nil, err
-	}
-	if err := a.db.SetWorktreeLinksT(a.ctx, appID, clean); err != nil {
-		return nil, err
-	}
-	return clean, nil
+	var out []string
+	err := a.call(api.MethodWorktreeLinksSave, map[string]any{"appID": appID, "paths": paths}, &out)
+	return out, err
 }
 
 // GitWorktreeLinks reports each shared path in the worktree at path; with
 // create it first links the ones that are missing there. Existing files and
 // folders are never replaced.
 func (a *App) GitWorktreeLinks(appID int64, path string, create bool) ([]types.WorktreeLinkState, error) {
-	dir, err := a.appProjectDir(appID)
-	if err != nil {
-		return nil, err
-	}
-	appDir, root, err := services.WorktreeAppDir(dir, path)
-	if err != nil {
-		return nil, err
-	}
-	if services.SameDir(appDir, dir) {
-		return nil, fmt.Errorf("this is the app's own folder: its worktrees link to it")
-	}
-	if create {
-		return a.linkWorktree(appID, dir, appDir, root)
-	}
-	links, err := a.worktreeLinkPaths(appID, root)
-	if err != nil {
-		return nil, err
-	}
-	return services.WorktreeLinkStates(dir, appDir, links), nil
-}
-
-// worktreeAppDir is the app's folder inside the worktree at path, as used by
-// GitWorktreeStart.
-func (a *App) worktreeAppDir(appID int64, path string) (string, error) {
-	dir, err := a.appProjectDir(appID)
-	if err != nil {
-		return "", err
-	}
-	appDir, _, err := services.WorktreeAppDir(dir, path)
-	return appDir, err
+	var out []types.WorktreeLinkState
+	err := a.call(api.MethodGitWorktreeLinks, map[string]any{"appID": appID, "path": path, "create": create}, &out)
+	return out, err
 }
 
 // GitWorktreeOpenFolder opens the app's folder inside the worktree at path.
 func (a *App) GitWorktreeOpenFolder(appID int64, path string) (types.Ok, error) {
-	appDir, err := a.worktreeAppDir(appID, path)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	if err := native.OpenFolder(appDir); err != nil {
-		return types.Ok{}, err
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodGitWorktreeOpenFolder, map[string]any{"appID": appID, "path": path}, &out)
+	return out, err
 }
 
 // GitWorktreeOpenInEditor opens the app's folder inside the worktree at path in
 // an editor (an id from AppsEditors).
 func (a *App) GitWorktreeOpenInEditor(appID int64, path string, editor string) (types.Ok, error) {
-	appDir, err := a.worktreeAppDir(appID, path)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	if err := native.OpenInEditor(editor, appDir); err != nil {
-		return types.Ok{}, err
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodGitWorktreeOpenEditor, map[string]any{"appID": appID, "path": path, "editor": editor}, &out)
+	return out, err
 }
 
 func (a *App) PortsList() (types.PortsListResult, error) {
-	procs, err := native.ListListeningProcesses()
-	if err != nil {
-		return types.PortsListResult{}, err
-	}
-	out := make([]types.ListeningProcess, 0, len(procs))
-	for _, p := range procs {
-		out = append(out, types.ListeningProcess{Port: p.Port, PID: p.PID, Name: p.Name})
-	}
-	return types.PortsListResult{Min: native.UserPortMin, Max: native.UserPortMax, Processes: out}, nil
+	var out types.PortsListResult
+	err := a.call(api.MethodPortsList, nil, &out)
+	return out, err
 }
 
 func (a *App) PortsKill(pid int64) (types.PortsKillResult, error) {
-	if err := native.KillPid(int(pid)); err != nil {
-		return types.PortsKillResult{}, err
-	}
-	return types.PortsKillResult{Ok: true, PID: pid}, nil
+	var out types.PortsKillResult
+	err := a.call(api.MethodPortsKill, map[string]any{"pid": pid}, &out)
+	return out, err
 }
 
 func (a *App) ReadyUrlPatternsList() ([]types.ReadyUrlPattern, error) {
-	return a.db.ListReadyURLPatternsT(a.ctx)
+	var out []types.ReadyUrlPattern
+	err := a.call(api.MethodReadyUrlPatternsList, nil, &out)
+	return out, err
 }
 
 func (a *App) ReadyUrlPatternsCreate(body types.ReadyUrlPatternCreateInput) (types.ReadyUrlPattern, error) {
-	label := strings.TrimSpace(body.Label)
-	pattern := strings.TrimSpace(body.Pattern)
-	if label == "" {
-		return types.ReadyUrlPattern{}, fmt.Errorf("label is required")
-	}
-	if pattern == "" {
-		return types.ReadyUrlPattern{}, fmt.Errorf("pattern is required")
-	}
-	flags := "i"
-	if body.Flags != nil {
-		flags = *body.Flags
-	}
-	normalized, err := db.NormalizeFlags(flags)
-	if err != nil {
-		return types.ReadyUrlPattern{}, err
-	}
-	if err := services.ValidateReadyURLPattern(pattern, normalized); err != nil {
-		return types.ReadyUrlPattern{}, err
-	}
-	row, err := a.db.CreateReadyURLPatternUser(a.ctx, label, pattern, normalized)
-	if err != nil {
-		return types.ReadyUrlPattern{}, err
-	}
-	services.InvalidateReadyURLPatternsCache()
-	return types.ReadyUrlPattern{ID: row.ID, Key: row.Key, Label: row.Label, Pattern: row.Pattern, Flags: row.Flags, SortOrder: row.SortOrder, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}, nil
+	var out types.ReadyUrlPattern
+	err := a.call(api.MethodReadyUrlPatternsCreate, body, &out)
+	return out, err
 }
 
 func (a *App) ReadyUrlPatternsUpdate(id int64, body types.ReadyUrlPatternUpdateInput) (types.ReadyUrlPattern, error) {
-	existing, err := a.db.GetReadyUrlPattern(a.ctx, id)
-	if err != nil {
-		return types.ReadyUrlPattern{}, fmt.Errorf("Pattern not found")
-	}
-	label, pattern, flags := existing.Label, existing.Pattern, existing.Flags
-	if body.Label != nil {
-		label = strings.TrimSpace(*body.Label)
-	}
-	if body.Pattern != nil {
-		pattern = strings.TrimSpace(*body.Pattern)
-	}
-	if body.Flags != nil {
-		flags, err = db.NormalizeFlags(*body.Flags)
-		if err != nil {
-			return types.ReadyUrlPattern{}, err
-		}
-	}
-	if label == "" {
-		return types.ReadyUrlPattern{}, fmt.Errorf("label cannot be empty")
-	}
-	if pattern == "" {
-		return types.ReadyUrlPattern{}, fmt.Errorf("pattern cannot be empty")
-	}
-	if err := services.ValidateReadyURLPattern(pattern, flags); err != nil {
-		return types.ReadyUrlPattern{}, err
-	}
-	row, err := a.db.UpdateReadyUrlPattern(a.ctx, db.UpdateReadyUrlPatternParams{Label: label, Pattern: pattern, Flags: flags, ID: id})
-	if err != nil {
-		return types.ReadyUrlPattern{}, err
-	}
-	services.InvalidateReadyURLPatternsCache()
-	return types.ReadyUrlPattern{ID: row.ID, Key: row.Key, Label: row.Label, Pattern: row.Pattern, Flags: row.Flags, SortOrder: row.SortOrder, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}, nil
+	var out types.ReadyUrlPattern
+	err := a.call(api.MethodReadyUrlPatternsUpdate, map[string]any{"id": id, "body": body}, &out)
+	return out, err
 }
 
 func (a *App) ReadyUrlPatternsDelete(id int64) (types.Ok, error) {
-	n, err := a.db.DeleteReadyUrlPattern(a.ctx, id)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	if n == 0 {
-		return types.Ok{}, fmt.Errorf("Pattern not found")
-	}
-	services.InvalidateReadyURLPatternsCache()
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodReadyUrlPatternsDelete, map[string]any{"id": id}, &out)
+	return out, err
 }
 
 func (a *App) SettingsGet() (map[string]string, error) {
-	return a.db.SettingsMap(a.ctx)
+	var out map[string]string
+	err := a.call(api.MethodSettingsGet, nil, &out)
+	return out, err
 }
 
 func (a *App) SettingsSet(key string, value string) (map[string]string, error) {
-	key = strings.TrimSpace(key)
-	if key == "" {
-		return nil, fmt.Errorf("key is required")
-	}
-	if err := a.db.UpsertSetting(a.ctx, db.UpsertSettingParams{Key: key, Value: value}); err != nil {
-		return nil, err
-	}
-	return a.db.SettingsMap(a.ctx)
+	var out map[string]string
+	err := a.call(api.MethodSettingsSet, map[string]any{"key": key, "value": value}, &out)
+	return out, err
 }
 
 // aiConnectionInfo maps a stored connection to what the UI sees (no API key).
@@ -1095,6 +519,9 @@ func aiConfigInfo(store ai.AIStore) types.AIConfigInfo {
 	}
 	return info
 }
+
+// The AI methods run in this process against the same package the daemon uses;
+// they are the only code allowed to touch a.db.
 
 func (a *App) AIConfigGet() (types.AIConfigInfo, error) {
 	store, err := ai.LoadAIStore()
@@ -1212,6 +639,16 @@ func (a *App) AITest(body types.AITestInput) (types.AITestResult, error) {
 	return types.AITestResult{Ok: true, Text: text}, nil
 }
 
+// appByID reads one app through the server. The in-process file dialogs and
+// the env import need its project path, which only the server owns.
+func (a *App) appByID(id int64) (types.App, error) {
+	var app types.App
+	err := a.call(api.MethodAppsGet, map[string]any{"id": id}, &app)
+	return app, err
+}
+
+// FsValidatePath stays in this process: it only checks a path, so it works
+// without the server.
 func (a *App) FsValidatePath(path string) (types.ValidatePathResult, error) {
 	if path == "" {
 		return types.ValidatePathResult{}, fmt.Errorf("path is required")
@@ -1245,7 +682,7 @@ func (a *App) FsPickFile(body types.FsPickFileInput) (types.PickFileResult, erro
 	}
 	var projectRoot string
 	if body.AppID != nil {
-		app, err := a.db.GetAppT(a.ctx, *body.AppID)
+		app, err := a.appByID(*body.AppID)
 		if err != nil {
 			return types.PickFileResult{}, err
 		}
@@ -1276,7 +713,7 @@ func (a *App) FsPickFile(body types.FsPickFileInput) (types.PickFileResult, erro
 }
 
 func (a *App) FsPickAppFile(appID int64) (types.PickFileResult, error) {
-	app, err := a.db.GetAppT(a.ctx, appID)
+	app, err := a.appByID(appID)
 	if err != nil {
 		return types.PickFileResult{}, err
 	}
@@ -1298,50 +735,45 @@ func (a *App) FsPickAppFile(appID int64) (types.PickFileResult, error) {
 	return types.PickFileResult{Path: picked.Path, RelativePath: rel, Content: string(data)}, nil
 }
 
+// FsReadAppFile reads a file of the app's project, which the server does so it
+// can resolve the path against the app it owns.
 func (a *App) FsReadAppFile(appID int64, path string) (types.ReadAppFileResult, error) {
-	app, err := a.db.GetAppT(a.ctx, appID)
-	if err != nil {
-		return types.ReadAppFileResult{}, err
-	}
-	if strings.TrimSpace(path) == "" {
-		return types.ReadAppFileResult{}, fmt.Errorf("path is required")
-	}
-	content, rel, errMsg := lib.ReadProjectFile(app.ProjectPath, path)
-	if errMsg != "" {
-		return types.ReadAppFileResult{}, fmt.Errorf("%s", errMsg)
-	}
-	return types.ReadAppFileResult{Ok: true, Content: content, RelativePath: rel}, nil
+	var out types.ReadAppFileResult
+	err := a.call(api.MethodFsReadAppFile, map[string]any{"appID": appID, "path": path}, &out)
+	return out, err
 }
 
 func (a *App) OpenExternal(url string) (types.Ok, error) {
-	if strings.TrimSpace(url) == "" {
+	url = strings.TrimSpace(url)
+	if url == "" {
 		return types.Ok{}, fmt.Errorf("url is required")
 	}
-	native.OpenURL(strings.TrimSpace(url))
+	runtime.BrowserOpenURL(a.ctx, url)
 	return types.Ok{Ok: true}, nil
 }
 
 func (a *App) BlueprintsList() ([]types.Blueprint, error) {
-	return a.db.ListBlueprintsT(a.ctx)
+	var out []types.Blueprint
+	err := a.call(api.MethodBlueprintsList, nil, &out)
+	return out, err
 }
 
 func (a *App) BlueprintsCreate(body types.BlueprintInput) (types.Blueprint, error) {
-	return a.db.CreateBlueprintT(a.ctx, body)
+	var out types.Blueprint
+	err := a.call(api.MethodBlueprintsCreate, body, &out)
+	return out, err
 }
 
 func (a *App) BlueprintsUpdate(id int64, body types.BlueprintInput) (types.Blueprint, error) {
-	return a.db.UpdateBlueprintT(a.ctx, id, body)
+	var out types.Blueprint
+	err := a.call(api.MethodBlueprintsUpdate, map[string]any{"id": id, "body": body}, &out)
+	return out, err
 }
 
 func (a *App) BlueprintsDelete(id int64) (types.Ok, error) {
-	n, err := a.db.DeleteBlueprint(a.ctx, id)
-	if err != nil {
-		return types.Ok{}, err
-	}
-	if n == 0 {
-		return types.Ok{}, fmt.Errorf("Blueprint not found")
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodBlueprintsDelete, map[string]any{"id": id}, &out)
+	return out, err
 }
 
 // BlueprintsAIPropose asks the AI for a blueprint, or for a change to the one
@@ -1357,32 +789,45 @@ func (a *App) BlueprintsAIPropose(body types.BlueprintAIInput) (types.BlueprintA
 // BlueprintsCreateApp runs a blueprint to completion (logs stream on the
 // "blueprintEvent" event) and returns the created app.
 func (a *App) BlueprintsCreateApp(body types.BlueprintRunInput) (types.BlueprintRunResult, error) {
-	return a.blueprints.Run(a.ctx, body)
+	var out types.BlueprintRunResult
+	err := a.call(api.MethodBlueprintsCreateApp, body, &out)
+	return out, err
 }
 
 // BlueprintsResolve answers a run that paused on a failed command: action is
 // "skip" (continue with the next command) or "abort".
 func (a *App) BlueprintsResolve(runID, action string) types.Ok {
-	a.blueprints.Resolve(runID, action)
-	return types.Ok{Ok: true}
+	var out types.Ok
+	if err := a.call(api.MethodBlueprintsResolve, map[string]any{"runID": runID, "action": action}, &out); err != nil {
+		log.Println("workspace-manager: resolving blueprint run:", err)
+		return types.Ok{}
+	}
+	return out
 }
 
 // BlueprintsSendInput writes keystrokes to the terminal of the command a run is
 // executing.
 func (a *App) BlueprintsSendInput(runID, data string) (types.Ok, error) {
-	if err := a.blueprints.Write(runID, data); err != nil {
-		return types.Ok{}, err
-	}
-	return types.Ok{Ok: true}, nil
+	var out types.Ok
+	err := a.call(api.MethodBlueprintsSendInput, map[string]any{"runID": runID, "data": data}, &out)
+	return out, err
 }
 
 // BlueprintsResize sets the size of a run's terminal.
 func (a *App) BlueprintsResize(runID string, cols, rows int) types.Ok {
-	a.blueprints.Resize(runID, cols, rows)
-	return types.Ok{Ok: true}
+	var out types.Ok
+	if err := a.call(api.MethodBlueprintsResize, map[string]any{"runID": runID, "cols": cols, "rows": rows}, &out); err != nil {
+		log.Println("workspace-manager: resizing blueprint terminal:", err)
+		return types.Ok{}
+	}
+	return out
 }
 
 func (a *App) BlueprintsCancel(runID string) types.Ok {
-	a.blueprints.Cancel(runID)
-	return types.Ok{Ok: true}
+	var out types.Ok
+	if err := a.call(api.MethodBlueprintsCancel, map[string]any{"runID": runID}, &out); err != nil {
+		log.Println("workspace-manager: cancelling blueprint run:", err)
+		return types.Ok{}
+	}
+	return out
 }
