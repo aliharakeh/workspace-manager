@@ -291,6 +291,8 @@ func newBlueprintNewCmd() *cobra.Command {
 			}
 
 			runID := fmt.Sprintf("cli-%d", os.Getpid())
+			// "ask" and "skip" both pause on a failed command so a decision
+			// can be made; "abort" lets the run stop with the error.
 			in := types.BlueprintRunInput{
 				RunID:        runID,
 				BlueprintID:  bp.ID,
@@ -299,7 +301,7 @@ func newBlueprintNewCmd() *cobra.Command {
 				ParentPath:   opts.parent,
 				FolderName:   folder,
 				CreateFolder: bp.CreateFolder,
-				AskOnError:   opts.onError == "ask",
+				AskOnError:   opts.onError != "abort",
 			}
 			return runBlueprint(cmd, in, opts.onError)
 		},

@@ -106,7 +106,7 @@ Needs [Go](https://go.dev/) 🐹, [Wails](https://wails.io/) v2 and [Bun](https:
 From the repo root:
 
 ```bash
-go build ./...                      # every module
+go build ./api/... ./server/... ./cli/... ./gui/...   # every module
 go test ./api/... ./server/...      # unit and protocol tests
 go build -o build/bin/wmd ./server/cmd/wmd
 go build -o build/bin/wm  ./cli/cmd/wm

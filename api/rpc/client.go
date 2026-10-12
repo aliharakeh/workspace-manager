@@ -37,6 +37,16 @@ type Conn struct {
 	events  func(event string, data json.RawMessage)
 	closed  bool
 	done    chan struct{}
+	// eventCh hands notifications to a dedicated dispatcher goroutine, so an
+	// event handler may call back into the connection. Handling events on the
+	// read loop would deadlock any handler that makes a call, because the
+	// reply could only be read by the loop it is blocking.
+	eventCh chan notification
+}
+
+type notification struct {
+	event string
+	data  json.RawMessage
 }
 
 // Dial connects to the socket at path. The caller should send hello before
@@ -51,8 +61,10 @@ func Dial(path string) (*Conn, error) {
 		w:       bufio.NewWriter(nc),
 		pending: map[int64]chan Message{},
 		done:    make(chan struct{}),
+		eventCh: make(chan notification, 1024),
 	}
 	go c.readLoop()
+	go c.dispatchEvents()
 	return c, nil
 }
 
@@ -72,11 +84,10 @@ func (c *Conn) readLoop() {
 			msg := Message{}
 			if err := json.Unmarshal(bytesTrim(line), &msg); err == nil {
 				if msg.Event != "" {
-					c.mu.Lock()
-					fn := c.events
-					c.mu.Unlock()
-					if fn != nil {
-						fn(msg.Event, msg.Data)
+					select {
+					case c.eventCh <- notification{event: msg.Event, data: msg.Data}:
+					case <-c.done:
+						return
 					}
 					continue
 				}
@@ -95,6 +106,23 @@ func (c *Conn) readLoop() {
 		if err != nil {
 			c.fail(errors.New("connection to the server closed"))
 			return
+		}
+	}
+}
+
+// dispatchEvents delivers notifications in order on its own goroutine.
+func (c *Conn) dispatchEvents() {
+	for {
+		select {
+		case <-c.done:
+			return
+		case n := <-c.eventCh:
+			c.mu.Lock()
+			fn := c.events
+			c.mu.Unlock()
+			if fn != nil {
+				fn(n.event, n.data)
+			}
 		}
 	}
 }
