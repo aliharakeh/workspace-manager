@@ -6,6 +6,10 @@ export function AIAppChat(arg1) {
   return window['go']['main']['App']['AIAppChat'](arg1);
 }
 
+export function AIApplyPatch(arg1) {
+  return window['go']['main']['App']['AIApplyPatch'](arg1);
+}
+
 export function AIChat(arg1) {
   return window['go']['main']['App']['AIChat'](arg1);
 }

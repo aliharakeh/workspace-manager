@@ -4,6 +4,8 @@ import {types} from '../models';
 
 export function AIAppChat(arg1:types.AppAIChatInput):Promise<types.AppAIChatResult>;
 
+export function AIApplyPatch(arg1:types.AIApplyPatchInput):Promise<types.Ok>;
+
 export function AIChat(arg1:types.AIChatInput):Promise<types.AIChatResult>;
 
 export function AIConfigActivate(arg1:types.AIActivateInput):Promise<types.AIConfigInfo>;

@@ -387,6 +387,15 @@ type AITestInput struct {
 	OpenCodeSession bool     `json:"opencodeSession,omitempty"`
 }
 
+// AIApplyPatchInput carries an agent's staged changes for the server to write.
+// The patch is applied in one call, so the changes cannot half-land while the
+// review UI is still running.
+type AIApplyPatchInput struct {
+	AppID       int64      `json:"appId"`
+	ConfigSetID int64      `json:"configSetId"`
+	Patch       AppAIPatch `json:"patch"`
+}
+
 type AIChatResult struct {
 	Text string `json:"text"`
 }
