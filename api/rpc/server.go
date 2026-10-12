@@ -128,6 +128,14 @@ func (s *Server) Broadcast(ev api.Event) {
 	}
 }
 
+// ClientCount reports how many clients are connected. The daemon uses it to
+// stay up while someone is listening, even with nothing running.
+func (s *Server) ClientCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.conns)
+}
+
 // Close drops every connection and closes the listener.
 func (s *Server) Close() error {
 	s.mu.Lock()
