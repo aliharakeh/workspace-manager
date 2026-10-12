@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workspace Manager: how the clients talk to the daemon</title>
+<style>
+  /* Fallbacks so the file also reads well outside T3 (the theme vars win when present). */
+  :root{
+    --background:#ffffff; --foreground:#1f2328; --muted:#f6f8fa; --muted-foreground:#59636e;
+    --card:#ffffff; --card-foreground:#1f2328; --border:#d1d9e0; --warning:#9a6700; --warning-surface:#fff8c5;
+    --radius:10px; --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --chart-1:#3b82f6; --chart-2:#10b981; --chart-3:#8b5cf6; --chart-4:#f59e0b; --chart-5:#ef4444; --chart-6:#0ea5e9;
+  }
+  *{box-sizing:border-box}
+  body{font-family:var(--font-sans);color:var(--foreground);line-height:1.45;background:var(--background);margin:0;padding:8px 0}
+  .top{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 18px}
+  .fact{font-size:12.5px;color:var(--muted-foreground);border:1px solid var(--border);border-radius:999px;padding:4px 12px;background:color-mix(in srgb, var(--card) 60%, transparent)}
+  .fact b{color:var(--foreground);font-weight:600}
+  .card{border:1px solid var(--border);border-radius:var(--radius);padding:18px 18px 14px;margin:0 0 18px;background:color-mix(in srgb, var(--card) 45%, transparent)}
+  .kicker{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-foreground);margin-bottom:4px}
+  h2{font-size:17px;margin:0 0 6px;font-weight:600}
+  .intro{font-size:13.5px;color:var(--muted-foreground);margin:0 0 4px;max-width:70ch}
+  .where{font-family:var(--font-mono);font-size:11.5px;color:var(--muted-foreground);margin:6px 0 10px}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted-foreground);margin:0 0 14px;align-items:center}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{display:inline-block;width:26px;height:0;border-top:2px solid var(--foreground)}
+  .sw.reply{border-top:2px dashed var(--muted-foreground)}
+  .sw.event{border-top:2px solid var(--warning)}
+  .sw.note{border-top:2px dashed color-mix(in srgb, var(--warning) 60%, var(--border));height:10px;border-left:0;border-right:0;background:var(--warning-surface);border-radius:3px}
+  .diagram{margin:2px 0 0}
+  .cap{font-size:12.5px;color:var(--muted-foreground);margin-top:6px}
+  .lifeline{stroke:var(--border);stroke-dasharray:3 5}
+  .sv-head{fill:var(--card);stroke:var(--border);stroke-width:1.2}
+  .kind-cli .sv-head{fill:color-mix(in srgb, var(--chart-1) 12%, var(--card));stroke:color-mix(in srgb, var(--chart-1) 55%, var(--border))}
+  .kind-gui .sv-head{fill:color-mix(in srgb, var(--chart-2) 12%, var(--card));stroke:color-mix(in srgb, var(--chart-2) 55%, var(--border))}
+  .kind-daemon .sv-head{fill:color-mix(in srgb, var(--chart-3) 14%, var(--card));stroke:color-mix(in srgb, var(--chart-3) 60%, var(--border))}
+  .kind-data .sv-head{fill:color-mix(in srgb, var(--chart-4) 12%, var(--card));stroke:color-mix(in srgb, var(--chart-4) 55%, var(--border))}
+  .kind-os .sv-head{fill:color-mix(in srgb, var(--chart-5) 12%, var(--card));stroke:color-mix(in srgb, var(--chart-5) 55%, var(--border))}
+  .kind-ext .sv-head{fill:color-mix(in srgb, var(--chart-6) 12%, var(--card));stroke:color-mix(in srgb, var(--chart-6) 55%, var(--border))}
+  .sv-ptitle{text-anchor:middle;font:600 12.5px var(--font-sans);fill:var(--card-foreground)}
+  .sv-psub{font:400 10.5px var(--font-mono);fill:var(--muted-foreground);text-anchor:middle}
+  .m-call{stroke:var(--foreground);stroke-width:1.5}
+  .m-reply{stroke:var(--muted-foreground);stroke-width:1.4;stroke-dasharray:5 4}
+  .m-event{stroke:var(--warning);stroke-width:1.6}
+  .m-self{stroke:var(--foreground);stroke-width:1.5}
+  .t-msg{font:500 12.5px var(--font-mono);fill:var(--foreground);text-anchor:middle}
+  .t-self{text-anchor:start}
+  .t-event{fill:var(--warning);font-weight:600}
+  .t-note{font:italic 12.5px var(--font-sans);fill:var(--muted-foreground);text-anchor:middle}
+  .rowno{font:500 10.5px var(--font-mono);fill:var(--muted-foreground)}
+  .n-rect{fill:var(--warning-surface);stroke:color-mix(in srgb, var(--warning) 45%, var(--border));stroke-dasharray:4 3}
+  .topo .lbl{font:600 13px var(--font-sans);fill:var(--foreground)}
+  .topo .sub{font:400 11px var(--font-mono);fill:var(--muted-foreground)}
+  .topo .box{fill:color-mix(in srgb, var(--card) 70%, transparent);stroke:var(--border);stroke-width:1.2}
+  .topo .wire{stroke:var(--muted-foreground);stroke-width:1.5;fill:none}
+  .topo .wire-daemon{stroke:color-mix(in srgb, var(--chart-3) 70%, var(--border));stroke-width:1.5;fill:none}
+  .topo .wire-lbl{font:500 11.5px var(--font-mono);fill:var(--muted-foreground);text-anchor:middle}
+  .topo .hub{fill:color-mix(in srgb, var(--chart-3) 12%, var(--card));stroke:color-mix(in srgb, var(--chart-3) 60%, var(--border));stroke-width:1.4}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="fact">one hub: <b>wmd</b>, one instance per data folder</div>
+  <div class="fact">clients talk over a <b>unix socket</b>, not a TCP port</div>
+  <div class="fact">requests are <b>answered</b>; state changes are <b>pushed</b></div>
+</div>
+
+<div class="card">
+  <div class="kicker">Overview</div>
+  <h2>Topology: two clients, one hub</h2>
+  <p class="intro">The CLI and the desktop app speak the same protocol to the same daemon. The daemon owns the runner, the database, git, blueprints and the AI; clients never write app state themselves.</p>
+  <div class="legend">
+    <span><span class="sw"></span> request / reply line</span>
+    <span><span class="sw reply"></span> reply</span>
+    <span><span class="sw event"></span> pushed event</span>
+    <span><span class="sw note"></span> annotation</span>
+  </div>
+  <div class="diagram">
+  <svg viewBox="0 0 1240 500" style="width:100%;height:auto;display:block" class="topo" aria-label="Clients connect to the wmd daemon over a unix socket">
+    <defs>
+      <marker id="t-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted-foreground)"/></marker>
+      <marker id="t-arr-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="color-mix(in srgb, var(--chart-3) 70%, var(--border))"/></marker>
+    </defs>
+    <rect class="box" x="30" y="96" width="250" height="78" rx="10"/>
+    <text class="lbl" x="155" y="126" text-anchor="middle">wm CLI</text>
+    <text class="sub" x="155" y="146" text-anchor="middle">cli/cmd/wm + api/client</text>
+    <rect class="box" x="30" y="252" width="250" height="118" rx="10"/>
+    <text class="lbl" x="155" y="280" text-anchor="middle">Desktop app</text>
+    <text class="sub" x="155" y="302" text-anchor="middle">React UI (frontend/)</text>
+    <text class="sub" x="155" y="320" text-anchor="middle">Go shell (gui/bind.go)</text>
+    <text class="sub" x="155" y="338" text-anchor="middle">api/client</text>
+    <rect class="hub" x="512" y="132" width="270" height="240" rx="12"/>
+    <text class="lbl" x="647" y="164" text-anchor="middle">wmd daemon</text>
+    <text class="sub" x="647" y="192" text-anchor="middle">handlers &#8594; ops &#8594; db</text>
+    <text class="sub" x="647" y="212" text-anchor="middle">runner (PTY sessions)</text>
+    <text class="sub" x="647" y="232" text-anchor="middle">blueprints &#183; git &#183; AI</text>
+    <text class="sub" x="647" y="252" text-anchor="middle">event fan-out to subscribers</text>
+    <text class="sub" x="647" y="284" text-anchor="middle">one per data folder (wmd.lock)</text>
+    <text class="sub" x="647" y="304" text-anchor="middle">exits when idle, no clients, nothing running</text>
+    <text class="sub" x="647" y="336" text-anchor="middle">started on demand by any client</text>
+    <text class="sub" x="647" y="356" text-anchor="middle">WM_DATA_DIR moves everything</text>
+    <line class="wire" x1="280" y1="122" x2="512" y2="196" marker-end="url(#t-arr)"/>
+    <line class="wire" x1="512" y1="224" x2="280" y2="300" marker-end="url(#t-arr)"/>
+    <line class="wire" x1="280" y1="300" x2="512" y2="240" marker-end="url(#t-arr)"/>
+    <line class="wire" x1="512" y1="262" x2="280" y2="320" marker-end="url(#t-arr)"/>
+    <text class="wire-lbl" x="392" y="146">JSON lines over wmd.sock</text>
+    <text class="wire-lbl" x="392" y="170">hello, requests, pushed events</text>
+    <rect class="box" x="960" y="40" width="250" height="52" rx="10"/>
+    <text class="lbl" x="1085" y="62" text-anchor="middle">SQLite</text>
+    <text class="sub" x="1085" y="79" text-anchor="middle">the single writer</text>
+    <rect class="box" x="960" y="108" width="250" height="52" rx="10"/>
+    <text class="lbl" x="1085" y="130" text-anchor="middle">app processes</text>
+    <text class="sub" x="1085" y="147" text-anchor="middle">your dev servers, on a PTY</text>
+    <rect class="box" x="960" y="176" width="250" height="52" rx="10"/>
+    <text class="lbl" x="1085" y="198" text-anchor="middle">git</text>
+    <text class="sub" x="1085" y="215" text-anchor="middle">branches, worktrees, links</text>
+    <rect class="box" x="960" y="244" width="250" height="52" rx="10"/>
+    <text class="lbl" x="1085" y="266" text-anchor="middle">blueprints</text>
+    <text class="sub" x="1085" y="283" text-anchor="middle">create apps from recipes</text>
+    <rect class="box" x="960" y="312" width="250" height="52" rx="10"/>
+    <text class="lbl" x="1085" y="334" text-anchor="middle">AI</text>
+    <text class="sub" x="1085" y="351" text-anchor="middle">served to the GUI only</text>
+    <rect class="box" x="960" y="380" width="250" height="52" rx="10"/>
+    <text class="lbl" x="1085" y="402" text-anchor="middle">OS notifications</text>
+    <text class="sub" x="1085" y="419" text-anchor="middle">on ready / error / idle</text>
+    <line class="wire-daemon" x1="782" y1="196" x2="960" y2="66" marker-end="url(#t-arr-d)"/>
+    <line class="wire-daemon" x1="782" y1="212" x2="960" y2="134" marker-end="url(#t-arr-d)"/>
+    <line class="wire-daemon" x1="782" y1="228" x2="960" y2="202" marker-end="url(#t-arr-d)"/>
+    <line class="wire-daemon" x1="782" y1="244" x2="960" y2="270" marker-end="url(#t-arr-d)"/>
+    <line class="wire-daemon" x1="782" y1="260" x2="960" y2="338" marker-end="url(#t-arr-d)"/>
+    <line class="wire-daemon" x1="782" y1="276" x2="960" y2="406" marker-end="url(#t-arr-d)"/>
+  </svg>
+  </div>
+  <p class="cap">Try it: <span style="font-family:var(--font-mono)">wm app list</span> and the app window show the same data, because both read from the same daemon. Start a run in the window and <span style="font-family:var(--font-mono)">wm logs &lt;app&gt; -f</span> shows the same output.</p>
+</div>
+
+<div class="card">
+  <div class="kicker">Sequence 1 &#183; launch</div>
+  <h2>Cold start: the app dials the hub</h2>
+  <p class="intro">The desktop app is a client before it is anything else: it dials, handshakes, subscribes to events, and only then loads the UI.</p>
+  <p class="where">gui/main.go &#183; gui/app.go &#183; api/client &#183; server/daemon</p>
+  <div class="diagram" id="seq-cold"></div>
+</div>
+
+<div class="card">
+  <div class="kicker">Sequence 2 &#183; a page</div>
+  <h2>Opening the workspace screen</h2>
+  <p class="intro">A page load is a few request/reply calls; after that, updates are pushed events, with a slow poll as a safety net.</p>
+  <p class="where">frontend/App.tsx &#183; hooks/use-app-statuses.ts &#183; host.ts &#183; server/handlers</p>
+  <div class="diagram" id="seq-page"></div>
+</div>
+
+<div class="card">
+  <div class="kicker">Sequence 3 &#183; a run</div>
+  <h2>Running an app from the UI</h2>
+  <p class="intro">The click is one call; everything after it is pushed. The daemon applies templates, spawns the PTY, watches for the ready URL, and broadcasts.</p>
+  <p class="where">server/services/runner.go &#183; server/handlers/runner.go &#183; frontend/hooks/use-runner-status.ts</p>
+  <div class="diagram" id="seq-run"></div>
+</div>
+
+<div class="card">
+  <div class="kicker">Sequence 4 &#183; the terminal</div>
+  <h2>The Logs tab: catch up, then stream</h2>
+  <p class="intro">Each terminal loads the buffered output first, then appends live chunks; offsets let it drop what it already has.</p>
+  <p class="where">frontend/components/logs-panel.tsx &#183; server/services/terminal.go</p>
+  <div class="diagram" id="seq-term"></div>
+</div>
+
+<div class="card">
+  <div class="kicker">Sequence 5 &#183; the CLI</div>
+  <h2>The same run from the CLI</h2>
+  <p class="intro">The CLI is the same client with a different face: dial (starting the daemon if needed), subscribe, act, and let an event or a timeout end the command.</p>
+  <p class="where">cli/cmd/wm/runner.go &#183; api/client &#183; server/handlers/runner.go</p>
+  <div class="diagram" id="seq-cli"></div>
+</div>
+
+<div class="card">
+  <div class="kicker">Sequence 6 &#183; git</div>
+  <h2>Git tab: adding a worktree</h2>
+  <p class="intro">One call does several filesystem steps; the reply carries the result and a dataChanged event tells every client to refresh.</p>
+  <p class="where">server/services/git.go &#183; server/services/worktreelinks.go &#183; frontend/components/git-panel.tsx</p>
+  <div class="diagram" id="seq-git"></div>
+</div>
+
+<div class="card">
+  <div class="kicker">Sequence 7 &#183; AI</div>
+  <h2>AI agent, review, then one write call</h2>
+  <p class="intro">The agent runs in the GUI process and stages changes; applying them is a single call to the daemon, which owns the write path.</p>
+  <p class="where">server/ai &#183; gui/bind.go (AIAppChat, AIApplyPatch) &#183; frontend/components/app-ai-panel.tsx</p>
+  <div class="diagram" id="seq-ai"></div>
+</div>
+
+<script>
+var P = {
+  user:  {label:'User', kind:'os'},
+  react: {label:'React UI', kind:'gui', sub:'frontend/'},
+  shell: {label:'Go shell', kind:'gui', sub:'gui/bind.go + api/client'},
+  wmd:   {label:'wmd daemon', kind:'daemon', sub:'server/handlers'},
+  sql:   {label:'SQLite', kind:'data', sub:'server/db'},
+  run:   {label:'PTY / app process', kind:'os', sub:'ConPTY / pty'},
+  git:   {label:'git + files', kind:'os', sub:'subprocess'},
+  model: {label:'Model via Genkit', kind:'ext', sub:'server/ai'},
+  wm:    {label:'wm CLI', kind:'cli', sub:'cli/cmd/wm + api/client'}
+};
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function twoLines(t){
+  if(t.length<=50) return [t];
+  var mid=Math.floor(t.length/2), left=t.lastIndexOf(' ',mid), right=t.indexOf(' ',mid);
+  var cut=(left>-1&&mid-left<18)?left:(right>-1?right:mid);
+  return [t.slice(0,cut).trim(), t.slice(cut+1).trim()];
+}
+function markers(){
+  function m(id,color){return '<marker id="'+id+'" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="'+color+'"/></marker>';}
+  return '<defs>'+m('ah-call','var(--foreground)')+m('ah-reply','var(--muted-foreground)')+m('ah-event','var(--warning)')+'</defs>';
+}
+function markFor(s){return s==='reply'?'ah-reply':(s==='event'?'ah-event':'ah-call');}
+function seqSvg(spec){
+  var W=1240,PAD=74,ids=spec.participants,n=ids.length,lane=(W-PAD*2)/(n-1);
+  function X(i){return PAD+lane*i;}
+  var HEAD_TOP=8,HEAD_H=56,laneTop=HEAD_TOP+HEAD_H+4,y=laneTop+30,rows=[],step=0;
+  spec.rows.forEach(function(r){
+    if(r.n){rows.push({kind:'note',text:r.n,y:y});y+=52;}
+    else{step++;rows.push({kind:'msg',m:r.m,no:step,y:y});y+=62;}
+  });
+  var H=y+12,s='';
+  s+='<svg viewBox="0 0 '+W+' '+H+'" aria-label="'+esc(spec.title)+'" style="width:100%;height:auto;display:block">'+markers();
+  var i;
+  for(i=0;i<n;i++){s+='<line class="lifeline" x1="'+X(i)+'" y1="'+laneTop+'" x2="'+X(i)+'" y2="'+(H-10)+'"/>';}
+  for(i=0;i<n;i++){
+    var p=P[ids[i]],lines=[p.label];if(p.sub)lines.push(p.sub);
+    var wd=Math.max(140,Math.min(lane-22,Math.max.apply(null,lines.map(function(l){return l.length;}))*7.8+34)),x=X(i);
+    s+='<g class="part kind-'+p.kind+'"><rect class="sv-head" x="'+(x-wd/2)+'" y="'+HEAD_TOP+'" width="'+wd+'" height="'+HEAD_H+'" rx="10"/>';
+    s+='<text class="sv-ptitle" x="'+x+'" y="'+(HEAD_TOP+(p.sub?21:32))+'">'+esc(p.label)+'</text>';
+    if(p.sub){s+='<text class="sv-psub" x="'+x+'" y="'+(HEAD_TOP+38)+'">'+esc(p.sub)+'</text>';}
+    s+='</g>';
+  }
+  rows.forEach(function(row){
+    if(row.kind==='note'){
+      s+='<rect class="n-rect" x="'+(PAD-40)+'" y="'+row.y+'" width="'+(W-2*(PAD-40))+'" height="30" rx="8"/>';
+      s+='<text class="t-note" x="'+(W/2)+'" y="'+(row.y+19.5)+'">'+esc(row.text)+'</text>';
+      return;
+    }
+    var m=row.m,a=ids.indexOf(m.from),b=ids.indexOf(m.to),style=m.style||'call',cls='m-'+style,tcls='t-msg'+(style==='event'?' t-event':''),arrowY=row.y+30,labelY=row.y+18;
+    s+='<text class="rowno" x="14" y="'+labelY+'">'+row.no+'</text>';
+    if(a===b){
+      var xa=X(a);
+      s+='<path class="m-self" d="M '+xa+' '+labelY+' h 30 v 16 h -24" fill="none" marker-end="url(#ah-call)"/>';
+      var l1=twoLines(m.text);
+      l1.forEach(function(t,li){s+='<text class="'+tcls+' t-self" x="'+(xa+40)+'" y="'+(labelY+(li?15:0))+'">'+esc(t)+'</text>';});
+    }else{
+      s+='<line class="'+cls+'" x1="'+X(a)+'" y1="'+arrowY+'" x2="'+X(b)+'" y2="'+arrowY+'" marker-end="url(#'+markFor(style)+')"/>';
+      var mid=(X(a)+X(b))/2,l2=twoLines(m.text);
+      l2.forEach(function(t,li){
+        var ty=arrowY-(l2.length>1?((li===0)?22:9):8);
+        s+='<text class="'+tcls+'" x="'+mid+'" y="'+ty+'">'+esc(t)+'</text>';
+      });
+    }
+  });
+  return s+'</svg>';
+}
+var DIAGRAMS=[
+{id:'seq-cold',title:'Cold start: the app dials the hub',participants:['user','shell','wmd'],
+ rows:[
+  {m:{from:'user',to:'shell',text:'start the app (wails.Run)'}},
+  {m:{from:'shell',to:'shell',text:'open SQLite for the AI features (migration lock)'}},
+  {m:{from:'shell',to:'wmd',text:'dial the data folder wmd.sock'}},
+  {n:'nothing listening? spawn wmd detached, then retry for up to ~3 s'},
+  {m:{from:'shell',to:'wmd',text:'hello {kind: "gui", version: "dev"}'}},
+  {m:{from:'wmd',to:'shell',text:'server info: version, data folder',style:'reply'}},
+  {m:{from:'shell',to:'wmd',text:'events.subscribe: runner, blueprint, appAI'}},
+  {m:{from:'wmd',to:'shell',text:'ok, and every future event arrives here',style:'reply'}},
+  {m:{from:'shell',to:'shell',text:'forwardEvents(): re-emit as Wails events'}},
+  {n:'the WebView then loads, React mounts, and starts calling bound methods (next diagram)'}
+]},
+{id:'seq-page',title:'Opening the workspace screen',participants:['user','react','shell','wmd','sql'],
+ rows:[
+  {m:{from:'user',to:'react',text:'open the workspace screen'}},
+  {m:{from:'react',to:'shell',text:'api.workspaces.list()'}},
+  {m:{from:'shell',to:'wmd',text:'workspaces.list'}},
+  {m:{from:'wmd',to:'sql',text:'SELECT workspaces'}},
+  {m:{from:'sql',to:'wmd',text:'rows',style:'reply'}},
+  {m:{from:'wmd',to:'shell',text:'[workspaces]',style:'reply'}},
+  {m:{from:'react',to:'shell',text:'apps.list(ws) xN + runner.workspaceStatus(ws) xN'}},
+  {m:{from:'shell',to:'wmd',text:'apps.list, runner.workspaceStatus (parallel)'}},
+  {m:{from:'wmd',to:'shell',text:'apps + status per workspace',style:'reply'}},
+  {n:'steady state: pushed runnerEvent(status) updates badges instantly; a 4 s poll re-reads statuses as a safety net'},
+  {m:{from:'wmd',to:'shell',text:'runnerEvent: status (a run started elsewhere)',style:'event'}},
+  {m:{from:'shell',to:'react',text:"EventsOn('runnerEvent') -> setState",style:'event'}}
+]},
+{id:'seq-run',title:'Running an app from the UI',participants:['user','react','shell','wmd','run'],
+ rows:[
+  {m:{from:'user',to:'react',text:'press Run'}},
+  {m:{from:'react',to:'shell',text:'api.runner.run(appId)'}},
+  {m:{from:'shell',to:'wmd',text:'runner.run'}},
+  {m:{from:'wmd',to:'wmd',text:'resolve config set, apply templates (back up originals)'}},
+  {m:{from:'wmd',to:'run',text:'start each command on a PTY'}},
+  {m:{from:'wmd',to:'shell',text:'status {running, processes}',style:'reply'}},
+  {m:{from:'run',to:'wmd',text:'prints "Local: http://localhost:5173"'}},
+  {m:{from:'wmd',to:'wmd',text:'ready-URL pattern matches the line'}},
+  {m:{from:'wmd',to:'shell',text:'runnerEvent: log chunk + status {url}',style:'event'}},
+  {m:{from:'shell',to:'react',text:'badges, terminal, Open link update',style:'event'}},
+  {n:'the same events reach every other client, e.g. wm logs -f in a terminal'}
+]},
+{id:'seq-term',title:'The Logs tab: catch up, then stream',participants:['user','react','shell','wmd'],
+ rows:[
+  {m:{from:'user',to:'react',text:'open the Logs tab'}},
+  {m:{from:'react',to:'shell',text:'api.runner.output(appId, commandId)'}},
+  {m:{from:'shell',to:'wmd',text:'runner.output'}},
+  {m:{from:'wmd',to:'shell',text:'backlog (base64, last 1 MB) + end offset',style:'reply'}},
+  {m:{from:'react',to:'react',text:'render backlog into xterm; drop chunks below end'}},
+  {m:{from:'wmd',to:'shell',text:'runnerEvent: log chunk at offset (per PTY flush)',style:'event'}},
+  {m:{from:'shell',to:'react',text:'append bytes to xterm',style:'event'}},
+  {m:{from:'react',to:'shell',text:'api.runner.resize(cols, rows) when the panel resizes'}},
+  {n:'output is read-only: nothing is ever written back to the app\u2019s stdin'}
+]},
+{id:'seq-cli',title:'The same run from the CLI',participants:['wm','wmd','run'],
+ rows:[
+  {m:{from:'wm',to:'wmd',text:'dial; start wmd detached when nothing answers'}},
+  {m:{from:'wm',to:'wmd',text:'hello {kind: "cli"}'}},
+  {m:{from:'wm',to:'wmd',text:'events.subscribe: runnerEvent for this app'}},
+  {m:{from:'wm',to:'wmd',text:'runner.run {appId}'}},
+  {m:{from:'wmd',to:'run',text:'start the session'}},
+  {m:{from:'wmd',to:'wm',text:'status {running}',style:'reply'}},
+  {m:{from:'run',to:'wmd',text:'prints "Local: http://localhost:3000"'}},
+  {m:{from:'wmd',to:'wm',text:'runnerEvent: status {url}',style:'event'}},
+  {m:{from:'wm',to:'wm',text:'print the url and exit 0 (--wait-ready)'}},
+  {n:'without --wait-ready it exits after the first status; wm logs -f keeps streaming; wm stop ends it'}
+]},
+{id:'seq-git',title:'Git tab: adding a worktree',participants:['user','react','shell','wmd','git'],
+ rows:[
+  {m:{from:'user',to:'react',text:'Add worktree (feature-x, link shared paths on)'}},
+  {m:{from:'react',to:'shell',text:'api.git.worktreeAdd(appId, body)'}},
+  {m:{from:'shell',to:'wmd',text:'git.worktree.add'}},
+  {m:{from:'wmd',to:'git',text:'git worktree add -b feature-x <path>'}},
+  {m:{from:'wmd',to:'git',text:'link shared paths (symlink, else junction/hard link)'}},
+  {m:{from:'wmd',to:'git',text:'info/exclude anchors + the worktree\u2019s own links file'}},
+  {m:{from:'wmd',to:'shell',text:'{path, links[]}',style:'reply'}},
+  {m:{from:'wmd',to:'shell',text:'dataChanged {entity: "git"}',style:'event'}},
+  {m:{from:'shell',to:'react',text:'refresh GitInfo'}},
+  {n:'shared paths keep node_modules, .env and friends pointing at the app\u2019s own folder'}
+]},
+{id:'seq-ai',title:'AI agent, review, then one write call',participants:['user','react','shell','model','wmd'],
+ rows:[
+  {m:{from:'user',to:'react',text:'ask the config agent'}},
+  {m:{from:'react',to:'shell',text:'api.ai.appChat({appId, configSetId, history, instruction})'}},
+  {n:'the AI is the one feature that runs inside the GUI process; the CLI has no AI commands'},
+  {m:{from:'shell',to:'model',text:'generate (tools: list_vars, get_run_config, search_files, ...)'}},
+  {m:{from:'model',to:'shell',text:'tool calls',style:'reply'}},
+  {m:{from:'shell',to:'shell',text:'read-only tools read SQLite in-process'}},
+  {m:{from:'shell',to:'react',text:'appAIEvent: streamed text + tool progress',style:'event'}},
+  {m:{from:'model',to:'shell',text:'final text + staged patch',style:'reply'}},
+  {m:{from:'react',to:'react',text:'buildAppAIDiff; show Apply / Discard'}},
+  {m:{from:'user',to:'react',text:'Apply'}},
+  {m:{from:'react',to:'shell',text:'api.ai.applyPatch({appId, configSetId, patch})'}},
+  {m:{from:'shell',to:'wmd',text:'ai.applyPatch: env, templates, commands, worktrees'}},
+  {m:{from:'wmd',to:'shell',text:'dataChanged -> the panels refresh',style:'event'}}
+]}
+];
+document.addEventListener('DOMContentLoaded',function(){
+  var i,d,host;
+  for(i=0;i<DIAGRAMS.length;i++){d=DIAGRAMS[i];host=document.getElementById(d.id);if(host){host.innerHTML=seqSvg(d);}}
+  console.log('rendered '+DIAGRAMS.length+' sequence diagrams');
+});
+</script>
+</body>
+</html>
