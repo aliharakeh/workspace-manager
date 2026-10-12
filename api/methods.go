@@ -244,10 +244,11 @@ var Methods = []Method{
 	{Name: MethodBlueprintsDelete, CLI: true},
 	{Name: MethodBlueprintsAIPropose, CLI: false},
 	{Name: MethodBlueprintsCreateApp, CLI: true},
-	{Name: MethodBlueprintsResolve, CLI: false},
-	{Name: MethodBlueprintsSendInput, CLI: false},
+	{Name: MethodBlueprintsResolve, CLI: true},
+	{Name: MethodBlueprintsSendInput, CLI: true},
+	// Resizing is only useful to a terminal UI; the CLI never sends one.
 	{Name: MethodBlueprintsResize, CLI: false},
-	{Name: MethodBlueprintsCancel, CLI: false},
+	{Name: MethodBlueprintsCancel, CLI: true},
 }
 
 // CLIMethods returns the methods the CLI exposes, in registry order.

@@ -173,7 +173,11 @@ func (c *serverConn) serve(ctx context.Context) {
 		if len(line) > 0 {
 			var msg Message
 			if err := json.Unmarshal(bytesTrim(line), &msg); err == nil && msg.Method != "" {
-				c.dispatch(ctx, msg)
+				// Requests run concurrently: a long call (a blueprint run, an app
+				// start) must not block the control calls that drive it, such as
+				// blueprints.resolve or blueprints.sendInput, which arrive on
+				// the same connection.
+				go c.dispatch(ctx, msg)
 			}
 		}
 		if err != nil {
