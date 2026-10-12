@@ -181,8 +181,8 @@ func (d *Daemon) Run(ctx context.Context) error {
 	return err
 }
 
-// watchIdle cancels the context once nothing is running and no client has
-// spoken for IdleExit.
+// watchIdle cancels the context once nothing is running, no client is
+// connected, and no client has spoken for IdleExit.
 func (d *Daemon) watchIdle(ctx context.Context, cancel context.CancelFunc) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -192,6 +192,12 @@ func (d *Daemon) watchIdle(ctx context.Context, cancel context.CancelFunc) {
 			return
 		case <-ticker.C:
 			if d.hasRunningApps() {
+				d.touch()
+				continue
+			}
+			// A connected client (the desktop app, say) needs the server even
+			// while nothing runs, so it counts as activity.
+			if d.server.ClientCount() > 0 {
 				d.touch()
 				continue
 			}

@@ -37,7 +37,7 @@ local socket. `api/` is the contract every side shares.
   them. Any new secret-like value needs the same treatment in
   `server/handlers`.
 - The daemon takes a lock in the data folder, so there is one instance per
-  data folder. It exits after ten idle minutes with nothing running. Clients
+  data folder. It exits after ten idle minutes with no client connected and nothing running. Clients
   start it on demand (`api/client.StartDaemon`), and `WM_DATA_DIR` moves both
   the daemon and its clients to another data folder, which is how tests and
   sandboxes stay isolated.
