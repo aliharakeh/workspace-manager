@@ -44,11 +44,13 @@ func (a *App) startup(ctx context.Context) {
 		log.Println("workspace-manager: could not reach the server:", err)
 		return
 	}
+	log.Println("workspace-manager: connected to the server")
 	a.conn = c
 	go a.forwardEvents()
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	log.Println("workspace-manager: shutdown")
 	runtime.CleanupNotifications(ctx)
 	if a.conn != nil {
 		_ = a.conn.Close()
@@ -85,6 +87,7 @@ func (a *App) forwardEvents() {
 	for {
 		select {
 		case <-a.conn.Done():
+			log.Println("workspace-manager: the server connection closed")
 			return
 		case raw := <-events:
 			a.forwardEvent(raw)

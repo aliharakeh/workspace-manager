@@ -37,6 +37,6 @@ func main() {
 		Bind:       []interface{}{app},
 	})
 	if err != nil {
-		println("Error:", err.Error())
+		log.Println("workspace-manager: wails.Run:", err)
 	}
 }
