@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"workspace-manager/types"
+	"workspace-manager/api/types"
 )
 
 func TestRunnerStreamsTerminalOutput(t *testing.T) {

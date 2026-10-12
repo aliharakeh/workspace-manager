@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"workspace-manager/types"
+	"workspace-manager/api/types"
 )
 
 func TestNormalizeWorktreeLinks(t *testing.T) {

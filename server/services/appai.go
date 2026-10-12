@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"workspace-manager/db"
-	"workspace-manager/lib"
-	"workspace-manager/types"
+	"workspace-manager/server/db"
+	"workspace-manager/api/lib"
+	"workspace-manager/api/types"
 
 	"github.com/firebase/genkit/go/ai"
 )

@@ -9,11 +9,11 @@ import (
 	"sort"
 	"strings"
 
-	"workspace-manager/db"
-	"workspace-manager/lib"
-	"workspace-manager/native"
-	"workspace-manager/services"
-	"workspace-manager/types"
+	"workspace-manager/server/db"
+	"workspace-manager/api/lib"
+	"workspace-manager/server/native"
+	"workspace-manager/server/services"
+	"workspace-manager/api/types"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"workspace-manager/types"
+	"workspace-manager/api/types"
 )
 
 func workspaceFrom(row Workspace) types.Workspace {

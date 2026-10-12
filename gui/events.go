@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	"workspace-manager/types"
+	"workspace-manager/api/types"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )

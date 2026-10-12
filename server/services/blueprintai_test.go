@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"workspace-manager/types"
+	"workspace-manager/api/types"
 )
 
 func TestValidateBlueprintProposal(t *testing.T) {

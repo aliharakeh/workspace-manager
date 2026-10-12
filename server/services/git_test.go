@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"workspace-manager/db"
-	"workspace-manager/types"
+	"workspace-manager/server/db"
+	"workspace-manager/api/types"
 )
 
 func TestParseWorktrees(t *testing.T) {

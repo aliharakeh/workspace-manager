@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"workspace-manager/types"
+	"workspace-manager/api/types"
 )
 
 // lockfileManagers maps a lockfile to its package manager, checked in order.

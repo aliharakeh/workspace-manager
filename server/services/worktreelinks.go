@@ -10,8 +10,8 @@ import (
 	"runtime"
 	"strings"
 
-	"workspace-manager/native"
-	"workspace-manager/types"
+	"workspace-manager/server/native"
+	"workspace-manager/api/types"
 )
 
 // Worktree link states, as reported in types.WorktreeLinkState.State.

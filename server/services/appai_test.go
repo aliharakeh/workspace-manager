@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"workspace-manager/types"
+	"workspace-manager/api/types"
 )
 
 func TestAppAIStatePatch(t *testing.T) {

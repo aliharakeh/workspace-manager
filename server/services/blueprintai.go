@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	"workspace-manager/types"
+	"workspace-manager/api/types"
 
 	"github.com/firebase/genkit/go/ai"
 )

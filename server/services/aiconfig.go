@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"workspace-manager/db"
+	"workspace-manager/server/db"
 )
 
 // AI provider settings live in ai.json next to the SQLite database. Multiple

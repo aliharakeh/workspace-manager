@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"workspace-manager/types"
+	"workspace-manager/api/types"
 )
 
 func blueprintFrom(row Blueprint) (types.Blueprint, error) {
