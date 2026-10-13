@@ -1,11 +1,10 @@
 #!/usr/bin/env pwsh
-# Builds the daemon, the CLI and the GUI into build/bin.
+# Builds the daemon, the MCP server and the GUI into build/bin.
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
 # Windows locks running executables, so the daemon must stop before wmd is rebuilt.
 if (Get-Process wmd -ErrorAction SilentlyContinue) {
-  if (Test-Path build/bin/wm.exe) { & build/bin/wm.exe server stop | Out-Null }
   Get-Process wmd -ErrorAction SilentlyContinue | Stop-Process -Force
   Start-Sleep -Milliseconds 500
 }
@@ -13,8 +12,6 @@ if (Get-Process wmd -ErrorAction SilentlyContinue) {
 New-Item -ItemType Directory build/bin -Force | Out-Null
 
 go build -o build/bin/wmd.exe ./server/cmd/wmd
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-go build -o build/bin/wm.exe ./cli/cmd/wm
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 go build -o build/bin/wm-mcp.exe ./mcp/cmd/wm-mcp
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

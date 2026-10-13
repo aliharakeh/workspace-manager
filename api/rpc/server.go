@@ -19,7 +19,7 @@ import (
 type Handler func(ctx context.Context, params json.RawMessage) (any, error)
 
 // Hello tells the server a client has connected. The info selects the client's
-// kind ("cli" or "gui"), which decides what it may call.
+// kind ("agent" or "gui"), which decides what it may call.
 type Hello func(params json.RawMessage) (info api.ClientInfo, result any, err error)
 
 // Permit decides whether a client kind may call a method. It is called for
@@ -163,7 +163,7 @@ type serverConn struct {
 	mu     sync.Mutex
 	w      *bufio.Writer
 	closed bool
-	kind   string // "cli" or "gui", set by hello
+	kind   string // "agent" or "gui", set by hello
 	filter api.SubscribeInput
 }
 
@@ -258,7 +258,7 @@ func (c *serverConn) dispatch(ctx context.Context, msg Message) {
 		reply(nil, api.Errf(api.KindUnavailable, "method %q is not available to this client", msg.Method))
 		return
 	}
-	// The client kind travels in the context so a handler can tell a CLI
+	// The client kind travels in the context so a handler can tell an agent
 	// caller from the GUI, which decides whether AI-excluded values are shown.
 	ctx = context.WithValue(ctx, ClientKindContextKey{}, c.Kind())
 	res, err := h(ctx, msg.Params)

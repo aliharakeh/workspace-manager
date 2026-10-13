@@ -2,7 +2,7 @@
 
 Three Go modules plus a Wails app, tied together by `go.work`. The background
 server `wmd` owns the database, the process runner, the blueprints and the AI;
-the `wm` CLI and the desktop app are both clients of it and talk JSON over a
+the MCP server and the desktop app are both clients of it and talk JSON over a
 local socket. `api/` is the contract every side shares.
 
 ## Layout
@@ -12,16 +12,15 @@ local socket. `api/` is the contract every side shares.
 | `api/` | Shared contract: `types` (JSON payloads), `methods` (the method registry), `rpc` (wire protocol and both connection ends), `client` (dial, handshake, auto-start, subscriptions), `lib` (pure helpers). |
 | `server/cmd/wmd` | The daemon's entry point: opens the database, runs the server. |
 | `server/daemon` | Lifecycle: data-folder lock, socket, idle exit, notifications, method table wiring. |
-| `server/handlers` | One handler per API method; applies the client-kind rules (AI is GUI-only, `include_in_ai` values are hidden from the CLI). |
+| `server/handlers` | One handler per API method; applies the client-kind rules (AI is GUI-only, `include_in_ai` values are hidden from agent clients). |
 | `server/ops` | Every write operation, ported from the old Wails bindings, with validation. |
 | `server/services` | Runner, templates, git/worktrees, worktree links, ready URLs, blueprints, notifier. |
 | `server/ai` | AI connections and the two agents. They run in the GUI's process but are served to GUI clients only. |
 | `server/db` | SQLite via sqlc: `schema.sql` (run at every startup), `queries.sql`, generated code, explicit upgrades. |
 | `server/native` | OS helpers: process, ports, editor, folder, browser, notifications, PTY (`pty*.go`). |
-| `cli/cmd/wm` | The CLI: one Cobra command group per domain. |
 | `mcp/` | The MCP server (`wm-mcp`): curated tools over the daemon API for external agents. |
 | `gui/` | The Wails app. `bind.go` proxies to the server; `frontend/` is the React UI. |
-| `go.work` | Development workspace tying `api`, `server`, `cli`, `gui` and `mcp`. |
+| `go.work` | Development workspace tying `api`, `server`, `gui` and `mcp`. |
 
 ## How the pieces talk
 
@@ -31,10 +30,10 @@ local socket. `api/` is the contract every side shares.
   notifications. Requests run concurrently per connection, so a client can
   call `blueprints.resolve` while its own `blueprints.createApp` is still in
   flight.
-- Every client's first call is `hello`, which states `cli` or `gui`. That
-  decides two things: methods marked `CLI: false` in `api/methods.go` are
-  refused to the CLI (the AI), and env vars/templates with
-  `include_in_ai=false` are blanked for CLI clients and refuse writes from
+- Every client's first call is `hello`, which states `agent` or `gui`. That
+  decides two things: methods marked `Agent: false` in `api/methods.go` are
+  refused to agent clients (the AI), and env vars/templates with
+  `include_in_ai=false` are blanked for agent clients and refuse writes from
   them. Any new secret-like value needs the same treatment in
   `server/handlers`.
 - The daemon takes a lock in the data folder, so there is one instance per
@@ -61,13 +60,13 @@ local socket. `api/` is the contract every side shares.
 ## Rules
 
 - Adding a server operation: add the method constant in `api/methods.go`
-  (set `CLI`), put the operation in `server/ops` (or a service), and register
+  (set `Agent`), put the operation in `server/ops` (or a service), and register
   a handler in `server/handlers`. The daemon refuses to start if a method has
   no handler, or a handler has no method, so nothing can drift.
-- Adding a CLI command: a Cobra command in `cli/cmd/wm` that calls the API
-  method. Errors come back typed; map them with `api.KindOf` and the exit
-  codes (0 ok, 1 failed, 2 usage, 3 not found, 4 conflict, 5 unavailable).
-  `--json` output is written by `printJSON`.
+- Adding an MCP tool: a tool in `mcp/cmd/wm-mcp/tools.go` that calls an API
+  method. `wm_call` derives its allowlist from `api.AgentMethods()`, so a new
+  method only needs `Agent: true` to be reachable. Errors come back typed; map
+  them with `api.KindOf` where the message matters.
 - Changing the GUI's bound surface: edit `gui/bind.go`, then run
   `wails generate module` from `gui/` and check `frontend/host.ts`. Most
   methods proxy to the server; only the file dialogs, `OpenExternal`, and the
@@ -77,7 +76,7 @@ local socket. `api/` is the contract every side shares.
   then run `sqlc generate` from the repo root. `schema.sql` runs at every
   startup with `IF NOT EXISTS` statements, so it only creates missing tables:
   a change to an existing table needs explicit upgrade code in
-  `server/db/schema.go`. Because the daemon, the GUI and the CLI all open the
+  `server/db/schema.go`. Because the daemon and the GUI both open the
   database, migrations run under a file lock (`server/db/migratelock*.go`).
 - A config set holds three command lists of the same shape: a **run** config,
   a **build** config and a **setup** config, told apart by `run_configs.kind`.
@@ -111,11 +110,10 @@ local socket. `api/` is the contract every side shares.
 From the repo root (note: `go build ./...` does not work at a workspace root):
 
 ```bash
-go build ./api/... ./server/... ./cli/... ./gui/... ./mcp/...
+go build ./api/... ./server/... ./gui/... ./mcp/...
 go test ./api/... ./server/...
-.\build.ps1                     # daemon + CLI + MCP + GUI -> build/bin
+.\build.ps1                     # daemon + MCP + GUI -> build/bin
 go build -o build/bin/wmd ./server/cmd/wmd
-go build -o build/bin/wm  ./cli/cmd/wm
 go build -o build/bin/wm-mcp ./mcp/cmd/wm-mcp
 sqlc generate                   # after schema/query edits
 ```

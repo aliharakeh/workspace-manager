@@ -52,7 +52,7 @@ func startServer(t *testing.T) *client.Client {
 	// Wait for the socket, then connect.
 	var c *client.Client
 	for i := 0; i < 50; i++ {
-		c, err = client.Dial(client.Options{Kind: "cli", Version: "test"})
+		c, err = client.Dial(client.Options{Kind: "agent", Version: "test"})
 		if err == nil {
 			t.Cleanup(func() { _ = c.Close() })
 			return c
@@ -187,7 +187,7 @@ func TestRunnerSessionOverTheProtocol(t *testing.T) {
 	}
 }
 
-func TestCLIClientCannotSeeHiddenValues(t *testing.T) {
+func TestAgentClientCannotSeeHiddenValues(t *testing.T) {
 	c := startServer(t)
 	app := makeApp(t, c)
 
@@ -199,7 +199,7 @@ func TestCLIClientCannotSeeHiddenValues(t *testing.T) {
 		t.Fatalf("create hidden var: %v", err)
 	}
 
-	// The value is blanked for a CLI client.
+	// The value is blanked for an agent client.
 	var vars []types.EnvVar
 	if err := c.Call(api.MethodEnvVarsList, map[string]any{"appID": app.ID}, &vars); err != nil {
 		t.Fatalf("list vars: %v", err)
@@ -207,7 +207,7 @@ func TestCLIClientCannotSeeHiddenValues(t *testing.T) {
 	for _, v := range vars {
 		if v.Key == "SECRET" {
 			if v.Value != "" {
-				t.Errorf("a hidden value leaked to a CLI client: %q", v.Value)
+				t.Errorf("a hidden value leaked to an agent client: %q", v.Value)
 			}
 			return
 		}

@@ -6,7 +6,7 @@ import (
 )
 
 // Open runs the startup migrations under a file lock, because more than one
-// process opens the database: the daemon, the GUI and the CLI. The schema
+// process opens the database: the daemon and the GUI. The schema
 // upgrade checks for a column and then alters the table, which must not happen
 // twice at once.
 func withMigrationLock(fn func() error) error {

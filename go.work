@@ -2,9 +2,7 @@ go 1.25.0
 
 use (
 	./api
-	./server
-	./cli
 	./gui
 	./mcp
+	./server
 )
-

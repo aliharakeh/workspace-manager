@@ -1,5 +1,5 @@
 // Package ai holds the AI connections and agents. It is served to GUI clients
-// only: the CLI has no AI commands, because agents drive the CLI directly.
+// only: an agent client (the MCP server) has no AI methods.
 package ai
 
 import (
@@ -11,8 +11,8 @@ import (
 	"workspace-manager/server/db"
 )
 
-// ErrHidden is what a CLI client sees for a value excluded from AI: the same
-// "not found" a missing item gives, so an agent cannot tell what exists.
+// ErrHidden is what an agent client sees for a value excluded from AI: the
+// same "not found" a missing item gives, so an agent cannot tell what exists.
 func ErrHidden() error {
 	return api.Errf(api.KindNotFound, "not found")
 }
