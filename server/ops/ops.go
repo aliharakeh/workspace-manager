@@ -17,6 +17,8 @@ type Publisher interface {
 	// Publish sends an event to subscribers. appID 0 means not app-specific.
 	Publish(typ string, appID int64, data any)
 	// Changed tells clients that an entity was written, so a UI can refresh.
+	// ids are the app ids (workspace ids for a workspace) the write touched;
+	// with none the client reloads the entity.
 	Changed(entity string, ids ...int64)
 }
 
@@ -46,10 +48,20 @@ func (o *Ops) publish(typ string, appID int64, data any) {
 	}
 }
 
+// changed announces a write so clients can refresh; ids are the app ids
+// (workspace ids for a workspace) it touched. A zero id means "unknown", and
+// is dropped so clients read an empty list as "reload the entity".
 func (o *Ops) changed(entity string, ids ...int64) {
-	if o.Pub != nil {
-		o.Pub.Changed(entity, ids...)
+	if o.Pub == nil {
+		return
 	}
+	kept := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id != 0 {
+			kept = append(kept, id)
+		}
+	}
+	o.Pub.Changed(entity, kept...)
 }
 
 // Ctx is the context operations run with. Most calls only need a background

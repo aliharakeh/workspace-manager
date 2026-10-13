@@ -110,13 +110,15 @@ go build ./api/... ./server/... ./cli/... ./gui/...   # every module
 go test ./api/... ./server/...      # unit and protocol tests
 go build -o build/bin/wmd ./server/cmd/wmd
 go build -o build/bin/wm  ./cli/cmd/wm
+.\build.ps1                         # daemon + CLI + GUI -> build/bin
 ```
 
 From `gui/`:
 
 ```bash
 wails dev                  # Wails + Vite (port 5174)
-wails build                # production native app -> gui/build/bin
+wails build -o ../../../build/bin/workspace-manager.exe
+                           # production native app -> build/bin
 wails generate module      # regenerate gui/frontend/wailsjs after Go changes
 ```
 

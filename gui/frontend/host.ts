@@ -7,6 +7,7 @@ import type {
     BlueprintRunInput,
     CommandKind,
     CopyParts,
+    DataChangedEvent,
     GitInfo,
     GitPullResult,
     GitWorktreeAddInput,
@@ -39,6 +40,13 @@ export function onRunnerEvent(handler: RunnerEventHandler, appId?: number) {
 
 export function onBlueprintLog(handler: (event: BlueprintLogEvent) => void) {
     return EventsOn('blueprintEvent', (event: BlueprintLogEvent) => {
+        if (event) handler(event)
+    })
+}
+
+/** Calls `handler` for every write the server reports, whoever made it. */
+export function onDataChanged(handler: (event: DataChangedEvent) => void) {
+    return EventsOn('dataChanged', (event: DataChangedEvent) => {
         if (event) handler(event)
     })
 }

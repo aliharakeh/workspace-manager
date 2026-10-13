@@ -22,7 +22,7 @@ func Open() (*DB, error) {
 	}
 
 	path := DBPath()
-	dsn := fmt.Sprintf("file:%s?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)", filepath.ToSlash(path))
+	dsn := fmt.Sprintf("file:%s?_pragma=foreign_keys(1)&_pragma=journal_mode(DELETE)&_pragma=busy_timeout(5000)", filepath.ToSlash(path))
 	sqlDB, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err

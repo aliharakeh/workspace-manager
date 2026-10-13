@@ -356,3 +356,13 @@ export type BlueprintLogEvent = {
     data: string
     ts: number
 }
+
+/**
+ * A write the server reported. `entity` names the data ("app", "workspace",
+ * "envVar", ...); for an app's own data `ids` are app ids, for a workspace
+ * workspace ids, and an empty list means the write spans rows (reload it all).
+ */
+export type DataChangedEvent = {
+    entity: string
+    ids: number[] | null
+}
