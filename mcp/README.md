@@ -4,10 +4,10 @@ An MCP server over stdio that lets any coding agent drive workspace-manager:
 list workspaces and apps, read and edit config, run apps, manage git
 worktrees, scaffold from blueprints.
 
-It talks to the `wmd` daemon through the same API client as the `wm` CLI and
-starts the daemon on demand, so there is nothing to run by hand. It identifies
-as a `cli` client: AI methods stay unavailable and values with
-`include_in_ai=false` stay hidden, exactly as for `wm`.
+It talks to the `wmd` daemon through `api/client` and starts the daemon on
+demand, so there is nothing to run by hand. It identifies as an `agent` client:
+AI methods stay unavailable and values with `include_in_ai=false` stay hidden,
+exactly as for any external agent.
 
 ## Build
 
@@ -17,7 +17,7 @@ From the repo root:
 go build -o build/bin/wm-mcp ./mcp/cmd/wm-mcp
 ```
 
-`.\build.ps1` builds it alongside the daemon, the CLI and the GUI.
+`.\build.ps1` builds it alongside the daemon and the GUI.
 
 ## Configure a client
 
@@ -34,7 +34,7 @@ Point any MCP client at the binary:
 Claude Code: `claude mcp add workspace-manager -- C:/path/to/wm-mcp.exe`
 
 Environment is inherited, so the server uses your normal data folder. Set
-`WM_DATA_DIR` to isolate it (same variable as the daemon and CLI), or
+`WM_DATA_DIR` to isolate it (same variable as the daemon and the GUI), or
 `WM_SOCKET` to point at a specific daemon socket.
 
 ## Tools
@@ -51,7 +51,7 @@ Environment is inherited, so the server uses your normal data folder. Set
 | `wm_blueprint` | Blueprints: list, show, create, update, delete, create_app (fails fast), resolve, cancel |
 | `wm_ports` | List listening ports, stop a process |
 | `wm_system` | Settings, path validation, reading app files, opening URLs |
-| `wm_call` | Raw escape hatch: any CLI-available daemon method |
+| `wm_call` | Raw escape hatch: any daemon method available to an agent client |
 
-Apps, workspaces and config sets accept an id or a name; the server resolves
-names the same way `wm` does and reports ambiguity instead of guessing.
+Apps, workspaces and config sets accept an id or a name; ambiguity is reported
+instead of guessed.

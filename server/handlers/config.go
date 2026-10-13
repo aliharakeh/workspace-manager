@@ -172,9 +172,9 @@ func (r *Registry) templates() {
 	}))
 }
 
-// maskDetail blanks AI-excluded values and contents for CLI clients.
+// maskDetail blanks AI-excluded values and contents for agent clients.
 func maskDetail(kind string, d types.ConfigSetDetail) types.ConfigSetDetail {
-	if kind != ClientCLI {
+	if kind != ClientAgent {
 		return d
 	}
 	d.EnvVars = hideEnvVars(kind, d.EnvVars)
@@ -182,7 +182,7 @@ func maskDetail(kind string, d types.ConfigSetDetail) types.ConfigSetDetail {
 	return d
 }
 
-// errHidden is what a CLI client sees for an AI-excluded item: the same
+// errHidden is what an agent client sees for an AI-excluded item: the same
 // "not found" a GUI user would get for a missing one, so an agent cannot
 // tell what exists.
 func errHidden() error {
@@ -190,7 +190,7 @@ func errHidden() error {
 }
 
 func requireVisibleVarKey(kind string, o *ops.Ops, appID int64, key string) error {
-	if kind != ClientCLI {
+	if kind != ClientAgent {
 		return nil
 	}
 	vars, err := o.EnvVarsList(appID)
@@ -206,7 +206,7 @@ func requireVisibleVarKey(kind string, o *ops.Ops, appID int64, key string) erro
 }
 
 func requireVisibleVarID(kind string, o *ops.Ops, id int64) error {
-	if kind != ClientCLI {
+	if kind != ClientAgent {
 		return nil
 	}
 	v, err := o.GetEnvVarByID(id)
@@ -220,7 +220,7 @@ func requireVisibleVarID(kind string, o *ops.Ops, id int64) error {
 }
 
 func requireVisibleTemplateID(kind string, o *ops.Ops, id int64) error {
-	if kind != ClientCLI {
+	if kind != ClientAgent {
 		return nil
 	}
 	t, err := o.GetTemplateByID(id)
@@ -234,7 +234,7 @@ func requireVisibleTemplateID(kind string, o *ops.Ops, id int64) error {
 }
 
 func hideEnvVars(kind string, vars []types.EnvVar) []types.EnvVar {
-	if kind != ClientCLI {
+	if kind != ClientAgent {
 		return vars
 	}
 	out := make([]types.EnvVar, len(vars))
@@ -248,14 +248,14 @@ func hideEnvVars(kind string, vars []types.EnvVar) []types.EnvVar {
 }
 
 func hideEnvVar(kind string, v types.EnvVar) types.EnvVar {
-	if kind == ClientCLI && !v.IncludeInAI {
+	if kind == ClientAgent && !v.IncludeInAI {
 		v.Value = ""
 	}
 	return v
 }
 
 func hideTemplates(kind string, tpls []types.Template) []types.Template {
-	if kind != ClientCLI {
+	if kind != ClientAgent {
 		return tpls
 	}
 	out := make([]types.Template, len(tpls))
@@ -269,7 +269,7 @@ func hideTemplates(kind string, tpls []types.Template) []types.Template {
 }
 
 func hideTemplate(kind string, t types.Template) types.Template {
-	if kind == ClientCLI && !t.IncludeInAI {
+	if kind == ClientAgent && !t.IncludeInAI {
 		t.Content = ""
 	}
 	return t

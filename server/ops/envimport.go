@@ -12,9 +12,8 @@ import (
 )
 
 // EnvVarsImport imports a .env or YAML file into the app's active config set,
-// and stores a matching template. path must be inside the app's project folder,
-// which the GUI guarantees by reading it from its file picker and the CLI by
-// validating it here.
+// and stores a matching template. path must be inside the app's project folder:
+// the GUI gets it from its file picker and every caller is validated here.
 func (o *Ops) EnvVarsImport(appID int64, path string) (types.ImportEnvResult, error) {
 	app, err := o.DB.GetAppT(o.Ctx(), appID)
 	if err != nil {

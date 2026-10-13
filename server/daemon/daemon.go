@@ -107,7 +107,7 @@ func (d *Daemon) hello(raw json.RawMessage) (api.ClientInfo, any, error) {
 	return in, map[string]any{"ok": true, "server": info}, nil
 }
 
-// permit decides what a client may call: methods marked CLI are for both
+// permit decides what a client may call: methods marked Agent are for both
 // clients, everything else is GUI-only, and server.stop is local shutdown.
 func (d *Daemon) permit(kind, method string) bool {
 	if method == api.MethodHello || method == api.MethodSubscribe || method == api.MethodStop {
@@ -115,7 +115,7 @@ func (d *Daemon) permit(kind, method string) bool {
 	}
 	for _, m := range api.Methods {
 		if m.Name == method {
-			if m.CLI {
+			if m.Agent {
 				return true
 			}
 			return kind == handlers.ClientGUI
@@ -124,7 +124,7 @@ func (d *Daemon) permit(kind, method string) bool {
 	return false
 }
 
-// handleStop asks the daemon to stop; it is the CLI's `wm server stop`.
+// handleStop asks the daemon to stop; a client uses it to shut the daemon down.
 func (d *Daemon) handleStop(context.Context, json.RawMessage) (any, error) {
 	go func() {
 		// Let the reply reach the client before the socket goes away.

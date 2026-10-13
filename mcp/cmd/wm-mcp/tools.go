@@ -458,7 +458,7 @@ func splitComma(s string) []string {
 func envTool() mcpTool {
 	return mcpTool{
 		Name:        "wm_env",
-		Description: "Manage an app's environment variables on its active config set. Values with include_in_ai=false are hidden from this MCP, same as for the CLI.",
+		Description: "Manage an app's environment variables on its active config set. Values with include_in_ai=false are hidden from this MCP server.",
 		Schema: schema("Environment variables", map[string]any{
 			"action":    map[string]any{"type": "string", "description": "list, set (create or update), delete, import", "enum": []string{"list", "set", "delete", "import"}},
 			"app":       strProp(appRefDesc),
@@ -1179,12 +1179,12 @@ func systemTool() mcpTool {
 
 func callTool() mcpTool {
 	allowed := map[string]bool{}
-	for _, m := range api.CLIMethods() {
+	for _, m := range api.AgentMethods() {
 		allowed[m.Name] = true
 	}
 	return mcpTool{
 		Name:        "wm_call",
-		Description: "Call any CLI-available daemon method directly with raw params. Escape hatch for what the curated tools do not cover; prefer them when they fit.",
+		Description: "Call any daemon method available to an agent client directly with raw params. Escape hatch for what the curated tools do not cover; prefer them when they fit.",
 		Schema: schema("Raw daemon call", map[string]any{
 			"method": strProp("daemon method, e.g. apps.list (see wm_call with method \"\" for the full list)"),
 			"params": map[string]any{"type": "object", "description": "method params object"},
@@ -1193,7 +1193,7 @@ func callTool() mcpTool {
 			method := argStr(args, "method")
 			if method == "" {
 				names := make([]string, 0, len(allowed))
-				for _, m := range api.CLIMethods() {
+				for _, m := range api.AgentMethods() {
 					names = append(names, m.Name)
 				}
 				return names, nil

@@ -52,7 +52,7 @@ type ServerInfo struct {
 	Socket    string `json:"socket"`
 }
 
-// ClientInfo identifies a connecting client. Kind is "cli" or "gui"; the
+// ClientInfo identifies a connecting client. Kind is "agent" or "gui"; the
 // server uses it to decide whether to hide AI-excluded values.
 type ClientInfo struct {
 	Kind    string `json:"kind"`
@@ -60,8 +60,8 @@ type ClientInfo struct {
 	Version string `json:"version"`
 }
 
-// Kind classifies an error so a client can react without parsing the message.
-// The CLI maps kinds to exit codes.
+// Kind classifies an error so a client can react without parsing the
+// message; rpc carries it over the wire.
 type Kind string
 
 const (
@@ -70,16 +70,6 @@ const (
 	KindConflict    Kind = "conflict"
 	KindUnavailable Kind = "unavailable"
 	KindFailed      Kind = "failed"
-)
-
-// Exit codes used by the CLI.
-const (
-	ExitOK          = 0
-	ExitError       = 1
-	ExitUsage       = 2
-	ExitNotFound    = 3
-	ExitConflict    = 4
-	ExitUnavailable = 5
 )
 
 // Err is an error with a kind. Handlers return these and the server sends the
@@ -113,18 +103,4 @@ func KindOf(err error) Kind {
 		}
 	}
 	return KindFailed
-}
-
-// ExitCode maps a kind to the CLI's exit code.
-func (k Kind) ExitCode() int {
-	switch k {
-	case KindNotFound:
-		return ExitNotFound
-	case KindConflict:
-		return ExitConflict
-	case KindUnavailable:
-		return ExitUnavailable
-	default:
-		return ExitError
-	}
 }

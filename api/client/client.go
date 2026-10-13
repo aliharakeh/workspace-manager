@@ -1,5 +1,5 @@
-// Package client is what the CLI and the GUI use to talk to the daemon: dial,
-// handshake, then call methods and receive events.
+// Package client is what the GUI and the MCP server use to talk to the daemon:
+// dial, handshake, then call methods and receive events.
 package client
 
 import (
@@ -15,15 +15,15 @@ import (
 
 // Options configure a connection.
 type Options struct {
-	// Kind is "cli" or "gui". It decides what the server allows and whether
+	// Kind is "agent" or "gui". It decides what the server allows and whether
 	// AI-excluded values are shown.
 	Kind string
 	// Version is the client's build version, sent in hello.
 	Version string
 	// Socket overrides the default socket path.
 	Socket string
-	// Start, when set, is invoked if the socket is not reachable. The CLI uses
-	// it to launch wmd. Tests leave it nil.
+	// Start, when set, is invoked if the socket is not reachable, so a client
+	// can launch wmd on demand. Tests leave it nil.
 	Start func() error
 }
 

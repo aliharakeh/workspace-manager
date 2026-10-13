@@ -143,7 +143,7 @@ function AppContent() {
         return apps
     }, [])
 
-    // Reload every workspace and its apps: a write by another client (the CLI,
+    // Reload every workspace and its apps: a write by another client (an agent,
     // another window) can move an app between workspaces or remove one, so a
     // reload is the only way to be sure the sidebar is right.
     const reloadLists = useCallback(async () => {

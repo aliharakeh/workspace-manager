@@ -1,6 +1,6 @@
 // Package api is the contract between the server and its clients: the request
-// and response types, the method registry, and the error model. The CLI and
-// the GUI both depend on it; neither imports server code.
+// and response types, the method registry, and the error model. The GUI and
+// the MCP server both depend on it; neither imports server code.
 package api
 
 // Method names are "group.operation". Each one matches a server handler.
@@ -101,7 +101,7 @@ const (
 	MethodSettingsGet = "settings.get"
 	MethodSettingsSet = "settings.set"
 
-	// AI connections and agents. GUI clients only; the CLI has no AI commands.
+	// AI connections and agents. GUI clients only; agent clients have no AI commands.
 	MethodAIConfigGet    = "ai.config.get"
 	MethodAIConfigSave   = "ai.config.save"
 	MethodAIConfigDelete = "ai.config.delete"
@@ -134,128 +134,130 @@ const (
 // Method describes one method: its group, and who may call it.
 type Method struct {
 	Name string
-	// CLI is true when the method is available to the CLI. AI methods are
-	// GUI-only, as is the raw blueprint terminal.
-	CLI bool
+	// Agent is true when an agent client (the MCP server) may call the method
+	// as well as the GUI. AI methods are GUI-only, as is the raw blueprint
+	// terminal.
+	Agent bool
 }
 
-// Methods lists every server method. The CLI builds its commands from this
-// registry, so help output and what the server accepts cannot drift apart.
+// Methods lists every server method. The MCP server builds its tools from this
+// registry, so what it can call and what the server accepts cannot drift
+// apart.
 var Methods = []Method{
-	{Name: MethodHello, CLI: true},
-	{Name: MethodStop, CLI: true},
-	{Name: MethodSubscribe, CLI: true},
+	{Name: MethodHello, Agent: true},
+	{Name: MethodStop, Agent: true},
+	{Name: MethodSubscribe, Agent: true},
 
-	{Name: MethodWorkspacesList, CLI: true},
-	{Name: MethodWorkspacesCreate, CLI: true},
-	{Name: MethodWorkspacesUpdate, CLI: true},
-	{Name: MethodWorkspacesDelete, CLI: true},
+	{Name: MethodWorkspacesList, Agent: true},
+	{Name: MethodWorkspacesCreate, Agent: true},
+	{Name: MethodWorkspacesUpdate, Agent: true},
+	{Name: MethodWorkspacesDelete, Agent: true},
 
-	{Name: MethodAppsList, CLI: true},
-	{Name: MethodAppsGet, CLI: true},
-	{Name: MethodAppsCreate, CLI: true},
-	{Name: MethodAppsUpdate, CLI: true},
-	{Name: MethodAppsReorder, CLI: true},
-	{Name: MethodAppsDelete, CLI: true},
-	{Name: MethodAppsOpenFolder, CLI: true},
-	{Name: MethodAppsEditors, CLI: true},
-	{Name: MethodAppsOpenInEditor, CLI: true},
+	{Name: MethodAppsList, Agent: true},
+	{Name: MethodAppsGet, Agent: true},
+	{Name: MethodAppsCreate, Agent: true},
+	{Name: MethodAppsUpdate, Agent: true},
+	{Name: MethodAppsReorder, Agent: true},
+	{Name: MethodAppsDelete, Agent: true},
+	{Name: MethodAppsOpenFolder, Agent: true},
+	{Name: MethodAppsEditors, Agent: true},
+	{Name: MethodAppsOpenInEditor, Agent: true},
 
-	{Name: MethodConfigSetsList, CLI: true},
-	{Name: MethodConfigSetsDetail, CLI: true},
-	{Name: MethodConfigSetsCreate, CLI: true},
-	{Name: MethodConfigSetsUpdate, CLI: true},
-	{Name: MethodConfigSetsDelete, CLI: true},
-	{Name: MethodConfigSetsActivate, CLI: true},
-	{Name: MethodConfigSetsCopyFrom, CLI: true},
+	{Name: MethodConfigSetsList, Agent: true},
+	{Name: MethodConfigSetsDetail, Agent: true},
+	{Name: MethodConfigSetsCreate, Agent: true},
+	{Name: MethodConfigSetsUpdate, Agent: true},
+	{Name: MethodConfigSetsDelete, Agent: true},
+	{Name: MethodConfigSetsActivate, Agent: true},
+	{Name: MethodConfigSetsCopyFrom, Agent: true},
 
-	{Name: MethodEnvVarsList, CLI: true},
-	{Name: MethodEnvVarsCreate, CLI: true},
-	{Name: MethodEnvVarsUpdate, CLI: true},
-	{Name: MethodEnvVarsDelete, CLI: true},
-	{Name: MethodEnvVarsImport, CLI: true},
+	{Name: MethodEnvVarsList, Agent: true},
+	{Name: MethodEnvVarsCreate, Agent: true},
+	{Name: MethodEnvVarsUpdate, Agent: true},
+	{Name: MethodEnvVarsDelete, Agent: true},
+	{Name: MethodEnvVarsImport, Agent: true},
 
-	{Name: MethodTemplatesList, CLI: true},
-	{Name: MethodTemplatesCreate, CLI: true},
-	{Name: MethodTemplatesUpdate, CLI: true},
-	{Name: MethodTemplatesDelete, CLI: true},
+	{Name: MethodTemplatesList, Agent: true},
+	{Name: MethodTemplatesCreate, Agent: true},
+	{Name: MethodTemplatesUpdate, Agent: true},
+	{Name: MethodTemplatesDelete, Agent: true},
 
-	{Name: MethodPackageScriptsList, CLI: true},
+	{Name: MethodPackageScriptsList, Agent: true},
 
-	{Name: MethodRunConfigGet, CLI: true},
-	{Name: MethodRunConfigSave, CLI: true},
+	{Name: MethodRunConfigGet, Agent: true},
+	{Name: MethodRunConfigSave, Agent: true},
 
-	{Name: MethodRunnerStatus, CLI: true},
-	{Name: MethodRunnerWorkspaceStatus, CLI: true},
-	{Name: MethodRunnerOutput, CLI: true},
-	{Name: MethodRunnerResize, CLI: false},
-	{Name: MethodRunnerRun, CLI: true},
-	{Name: MethodRunnerBuild, CLI: true},
-	{Name: MethodRunnerSetup, CLI: true},
-	{Name: MethodRunnerStop, CLI: true},
-	{Name: MethodRunnerReload, CLI: true},
+	{Name: MethodRunnerStatus, Agent: true},
+	{Name: MethodRunnerWorkspaceStatus, Agent: true},
+	{Name: MethodRunnerOutput, Agent: true},
+	{Name: MethodRunnerResize, Agent: false},
+	{Name: MethodRunnerRun, Agent: true},
+	{Name: MethodRunnerBuild, Agent: true},
+	{Name: MethodRunnerSetup, Agent: true},
+	{Name: MethodRunnerStop, Agent: true},
+	{Name: MethodRunnerReload, Agent: true},
 
-	{Name: MethodGitInfo, CLI: true},
-	{Name: MethodGitFetchAll, CLI: true},
-	{Name: MethodGitBranchCreate, CLI: true},
-	{Name: MethodGitBranchRename, CLI: true},
-	{Name: MethodGitBranchCheckout, CLI: true},
-	{Name: MethodGitBranchPull, CLI: true},
-	{Name: MethodGitBranchPush, CLI: true},
-	{Name: MethodGitBranchDelete, CLI: true},
-	{Name: MethodGitFileOpenInEditor, CLI: true},
-	{Name: MethodGitWorktreeAdd, CLI: true},
-	{Name: MethodGitWorktreeRemove, CLI: true},
-	{Name: MethodGitWorktreePrune, CLI: true},
-	{Name: MethodGitWorktreeStart, CLI: true},
-	{Name: MethodGitWorktreeOpenFolder, CLI: true},
-	{Name: MethodGitWorktreeOpenEditor, CLI: true},
-	{Name: MethodGitWorktreeLinks, CLI: true},
-	{Name: MethodWorktreeLinksGet, CLI: true},
-	{Name: MethodWorktreeLinksSave, CLI: true},
+	{Name: MethodGitInfo, Agent: true},
+	{Name: MethodGitFetchAll, Agent: true},
+	{Name: MethodGitBranchCreate, Agent: true},
+	{Name: MethodGitBranchRename, Agent: true},
+	{Name: MethodGitBranchCheckout, Agent: true},
+	{Name: MethodGitBranchPull, Agent: true},
+	{Name: MethodGitBranchPush, Agent: true},
+	{Name: MethodGitBranchDelete, Agent: true},
+	{Name: MethodGitFileOpenInEditor, Agent: true},
+	{Name: MethodGitWorktreeAdd, Agent: true},
+	{Name: MethodGitWorktreeRemove, Agent: true},
+	{Name: MethodGitWorktreePrune, Agent: true},
+	{Name: MethodGitWorktreeStart, Agent: true},
+	{Name: MethodGitWorktreeOpenFolder, Agent: true},
+	{Name: MethodGitWorktreeOpenEditor, Agent: true},
+	{Name: MethodGitWorktreeLinks, Agent: true},
+	{Name: MethodWorktreeLinksGet, Agent: true},
+	{Name: MethodWorktreeLinksSave, Agent: true},
 
-	{Name: MethodPortsList, CLI: true},
-	{Name: MethodPortsKill, CLI: true},
+	{Name: MethodPortsList, Agent: true},
+	{Name: MethodPortsKill, Agent: true},
 
-	{Name: MethodReadyUrlPatternsList, CLI: true},
-	{Name: MethodReadyUrlPatternsCreate, CLI: true},
-	{Name: MethodReadyUrlPatternsUpdate, CLI: true},
-	{Name: MethodReadyUrlPatternsDelete, CLI: true},
+	{Name: MethodReadyUrlPatternsList, Agent: true},
+	{Name: MethodReadyUrlPatternsCreate, Agent: true},
+	{Name: MethodReadyUrlPatternsUpdate, Agent: true},
+	{Name: MethodReadyUrlPatternsDelete, Agent: true},
 
-	{Name: MethodSettingsGet, CLI: true},
-	{Name: MethodSettingsSet, CLI: true},
+	{Name: MethodSettingsGet, Agent: true},
+	{Name: MethodSettingsSet, Agent: true},
 
-	{Name: MethodAIConfigGet, CLI: false},
-	{Name: MethodAIConfigSave, CLI: false},
-	{Name: MethodAIConfigDelete, CLI: false},
-	{Name: MethodAIConfigActivate, CLI: false},
-	{Name: MethodAIChat, CLI: false},
-	{Name: MethodAIAppChat, CLI: false},
-	{Name: MethodAITest, CLI: false},
-	{Name: MethodAIApplyPatch, CLI: false},
+	{Name: MethodAIConfigGet, Agent: false},
+	{Name: MethodAIConfigSave, Agent: false},
+	{Name: MethodAIConfigDelete, Agent: false},
+	{Name: MethodAIConfigActivate, Agent: false},
+	{Name: MethodAIChat, Agent: false},
+	{Name: MethodAIAppChat, Agent: false},
+	{Name: MethodAITest, Agent: false},
+	{Name: MethodAIApplyPatch, Agent: false},
 
-	{Name: MethodFsValidatePath, CLI: true},
-	{Name: MethodFsReadAppFile, CLI: true},
-	{Name: MethodOpenExternal, CLI: true},
+	{Name: MethodFsValidatePath, Agent: true},
+	{Name: MethodFsReadAppFile, Agent: true},
+	{Name: MethodOpenExternal, Agent: true},
 
-	{Name: MethodBlueprintsList, CLI: true},
-	{Name: MethodBlueprintsCreate, CLI: true},
-	{Name: MethodBlueprintsUpdate, CLI: true},
-	{Name: MethodBlueprintsDelete, CLI: true},
-	{Name: MethodBlueprintsAIPropose, CLI: false},
-	{Name: MethodBlueprintsCreateApp, CLI: true},
-	{Name: MethodBlueprintsResolve, CLI: true},
-	{Name: MethodBlueprintsSendInput, CLI: true},
-	// Resizing is only useful to a terminal UI; the CLI never sends one.
-	{Name: MethodBlueprintsResize, CLI: false},
-	{Name: MethodBlueprintsCancel, CLI: true},
+	{Name: MethodBlueprintsList, Agent: true},
+	{Name: MethodBlueprintsCreate, Agent: true},
+	{Name: MethodBlueprintsUpdate, Agent: true},
+	{Name: MethodBlueprintsDelete, Agent: true},
+	{Name: MethodBlueprintsAIPropose, Agent: false},
+	{Name: MethodBlueprintsCreateApp, Agent: true},
+	{Name: MethodBlueprintsResolve, Agent: true},
+	{Name: MethodBlueprintsSendInput, Agent: true},
+	// Resizing is only useful to a terminal UI; an agent client never sends one.
+	{Name: MethodBlueprintsResize, Agent: false},
+	{Name: MethodBlueprintsCancel, Agent: true},
 }
 
-// CLIMethods returns the methods the CLI exposes, in registry order.
-func CLIMethods() []Method {
+// AgentMethods returns the methods an agent client may call, in registry order.
+func AgentMethods() []Method {
 	out := make([]Method, 0, len(Methods))
 	for _, m := range Methods {
-		if m.CLI {
+		if m.Agent {
 			out = append(out, m)
 		}
 	}

@@ -25,7 +25,7 @@ func EventsEmitBlueprint(ctx context.Context, event types.BlueprintLogEvent) {
 }
 
 // EventsEmitDataChanged tells the frontend that an entity was written, so it
-// reloads it: the writer may be another client (the CLI, another window).
+// reloads it: the writer may be another client (an agent, another window).
 func EventsEmitDataChanged(ctx context.Context, event api.DataChanged) {
 	runtime.EventsEmit(ctx, "dataChanged", event)
 }

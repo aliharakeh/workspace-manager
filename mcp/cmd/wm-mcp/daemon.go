@@ -13,7 +13,7 @@ import (
 // server is stateless across tool calls, so every call dials fresh: simple,
 // and the daemon idles out on its own when nobody uses it.
 func dial() (*client.Client, error) {
-	opts := client.Options{Kind: "cli", Version: version, Start: client.StartDaemon()}
+	opts := client.Options{Kind: "agent", Version: version, Start: client.StartDaemon()}
 	if socket := os.Getenv("WM_SOCKET"); socket != "" {
 		opts.Socket = socket
 	}
@@ -101,7 +101,7 @@ func need(args map[string]any, key, what string) (string, error) {
 	return v, nil
 }
 
-// ---- id-or-name resolution, mirroring cli/cmd/wm/resolve.go ----
+// ---- id-or-name resolution, matching an id or a name ----
 
 type idName struct {
 	ID   int64

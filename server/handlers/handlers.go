@@ -1,6 +1,6 @@
 // Package handlers maps API methods to server operations, applying the
 // client-kind rules: AI methods are GUI-only, and env var values and template
-// contents excluded from AI are hidden from CLI clients.
+// contents excluded from AI are hidden from agent clients.
 package handlers
 
 import (
@@ -14,10 +14,11 @@ import (
 	"workspace-manager/server/ops"
 )
 
-// Client kinds known to the server.
+// Client kinds known to the server. An "agent" client (the MCP server) is not
+// the GUI: AI methods are refused and AI-excluded values are hidden.
 const (
-	ClientCLI = "cli"
-	ClientGUI = "gui"
+	ClientAgent = "agent"
+	ClientGUI   = "gui"
 )
 
 // Registry is the method table the daemon serves.
@@ -137,8 +138,8 @@ func typedCtx[In any, Out any](fn func(context.Context, In) (Out, error)) rpc.Ha
 	}
 }
 
-// withKind wraps a handler that needs to know whether the caller is the CLI or
-// the GUI, which decides whether AI-excluded values are shown.
+// withKind wraps a handler that needs to know whether the caller is an agent
+// client or the GUI, which decides whether AI-excluded values are shown.
 func withKind(fn func(kind string, raw Params) (any, error)) rpc.Handler {
 	return func(ctx context.Context, raw Params) (any, error) {
 		return fn(clientKind(ctx), raw)
