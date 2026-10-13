@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -219,6 +220,96 @@ func TestUnknownMethodFails(t *testing.T) {
 	err := c.Call("nope.notAMethod", nil, nil)
 	if err == nil {
 		t.Fatal("an unknown method succeeded")
+	}
+}
+
+// dataChanged matches one entity's changed event, so a test can wait for it.
+func dataChanged(entity string) func(json.RawMessage) (api.DataChanged, bool) {
+	return func(raw json.RawMessage) (api.DataChanged, bool) {
+		var re struct {
+			Type api.EventType   `json:"type"`
+			Data api.DataChanged `json:"data"`
+		}
+		if err := json.Unmarshal(raw, &re); err != nil || re.Type != api.EventDataChanged || re.Data.Entity != entity {
+			return api.DataChanged{}, false
+		}
+		return re.Data, true
+	}
+}
+
+// TestWritesAreAnnouncedAsDataChanged covers the event clients reload from: a
+// write names the app it belongs to, so the GUI knows whose data changed.
+func TestWritesAreAnnouncedAsDataChanged(t *testing.T) {
+	c := startServer(t)
+	app := makeApp(t, c)
+
+	events, err := c.SubscribeRaw(api.SubscribeInput{Types: []api.EventType{api.EventDataChanged}})
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+
+	// Deleting an app reports its id.
+	if err := c.Call(api.MethodAppsDelete, map[string]any{"id": app.ID}, nil); err != nil {
+		t.Fatalf("delete app: %v", err)
+	}
+	deleted := waitEvent(t, events, dataChanged("app"))
+	found := false
+	for _, id := range deleted.IDs {
+		if id == app.ID {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the deleted app id is missing from %v", deleted.IDs)
+	}
+
+	// A write to an app's own data (an env var lives in its config set) reports
+	// the app id, not the row's or the config set's id. A second config set
+	// makes those ids differ, so a regression cannot pass by coincidence.
+	other := makeApp(t, c)
+	var set types.ConfigSet
+	if err := c.Call(api.MethodConfigSetsCreate, map[string]any{
+		"appID": other.ID,
+		"body":  types.ConfigSetCreateInput{Name: "extra"},
+	}, &set); err != nil {
+		t.Fatalf("create config set: %v", err)
+	}
+	if set.ID == other.ID {
+		t.Fatalf("the test needs a config set id that differs from the app id (both %d)", set.ID)
+	}
+	value := "3000"
+	visible := true
+	var created types.EnvVar
+	if err := c.Call(api.MethodEnvVarsCreate, map[string]any{
+		"appID": other.ID,
+		"body":  types.EnvVarCreateInput{Key: "PORT", Value: &value, IncludeInAI: &visible},
+	}, &created); err != nil {
+		t.Fatalf("create env var: %v", err)
+	}
+	// Consume the create event: the update and delete below must each announce
+	// the app themselves.
+	if got := waitEvent(t, events, dataChanged("envVar")); !slices.Contains(got.IDs, other.ID) {
+		t.Errorf("creating an env var reported ids %v, want the app id %d", got.IDs, other.ID)
+	}
+
+	next := "4000"
+	if err := c.Call(api.MethodEnvVarsUpdate, map[string]any{
+		"id":   created.ID,
+		"body": types.EnvVarUpdateInput{Value: &next},
+	}, nil); err != nil {
+		t.Fatalf("update env var: %v", err)
+	}
+	updated := waitEvent(t, events, dataChanged("envVar"))
+	if !slices.Contains(updated.IDs, other.ID) || slices.Contains(updated.IDs, set.ID) {
+		t.Errorf("updating an env var reported ids %v, want the app id %d", updated.IDs, other.ID)
+	}
+
+	if err := c.Call(api.MethodEnvVarsDelete, map[string]any{"id": created.ID}, nil); err != nil {
+		t.Fatalf("delete env var: %v", err)
+	}
+	removed := waitEvent(t, events, dataChanged("envVar"))
+	if !slices.Contains(removed.IDs, other.ID) || slices.Contains(removed.IDs, set.ID) {
+		t.Errorf("deleting an env var reported ids %v, want the app id %d", removed.IDs, other.ID)
 	}
 }
 

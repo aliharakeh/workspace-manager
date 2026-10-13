@@ -74,7 +74,7 @@ func (d *Daemon) Publish(typ string, appID int64, data any) {
 
 // Changed pushes a lightweight "this entity changed" event.
 func (d *Daemon) Changed(entity string, ids ...int64) {
-	d.broadcast(api.EventDataChanged, 0, map[string]any{"entity": entity, "ids": ids})
+	d.broadcast(api.EventDataChanged, 0, api.DataChanged{Entity: entity, IDs: ids})
 }
 
 func (d *Daemon) broadcast(t api.EventType, appID int64, data any) {

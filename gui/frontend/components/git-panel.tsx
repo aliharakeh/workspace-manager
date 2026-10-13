@@ -88,6 +88,8 @@ import { OpenFolderButton } from "@/components/open-folder-button"
 type GitPanelProps = {
   appId: number
   active: boolean
+  /** Bumped when another client writes this app's git state, to reload it. */
+  dataEpoch: number
   /** The app's active config set: the default for a worktree with none chosen. */
   activeConfigSetId: number | null
   status: StatusEvent | null
@@ -214,6 +216,7 @@ function defaultWorktreePath(mainPath: string, branch: string): string {
 export function GitPanel({
   appId,
   active,
+  dataEpoch,
   activeConfigSetId,
   status,
   onStatus,
@@ -292,6 +295,8 @@ export function GitPanel({
     }
   }
 
+  // Load when the tab opens first, on an app switch, and after another client
+  // wrote this app's git state (dataEpoch).
   useEffect(() => {
     if (!active) return
     let cancelled = false
@@ -310,7 +315,7 @@ export function GitPanel({
     return () => {
       cancelled = true
     }
-  }, [active, appId])
+  }, [active, appId, dataEpoch])
 
   async function handleFetch() {
     setFetching(true)

@@ -19,8 +19,9 @@ local socket. `api/` is the contract every side shares.
 | `server/db` | SQLite via sqlc: `schema.sql` (run at every startup), `queries.sql`, generated code, explicit upgrades. |
 | `server/native` | OS helpers: process, ports, editor, folder, browser, notifications, PTY (`pty*.go`). |
 | `cli/cmd/wm` | The CLI: one Cobra command group per domain. |
+| `mcp/` | The MCP server (`wm-mcp`): curated tools over the daemon API for external agents. |
 | `gui/` | The Wails app. `bind.go` proxies to the server; `frontend/` is the React UI. |
-| `go.work` | Development workspace tying `api`, `server`, `cli` and `gui`. |
+| `go.work` | Development workspace tying `api`, `server`, `cli`, `gui` and `mcp`. |
 
 ## How the pieces talk
 
@@ -42,8 +43,16 @@ local socket. `api/` is the contract every side shares.
   the daemon and its clients to another data folder, which is how tests and
   sandboxes stay isolated.
 - Events are the frontend's contract: `runnerEvent` carries `{appId, event}`,
-  `blueprintEvent` a `BlueprintLogEvent`, `appAIEvent` an `AppAIStreamEvent`.
-  Keep those names and payload shapes in `server/daemon` and `gui/app.go`.
+  `blueprintEvent` a `BlueprintLogEvent`, `appAIEvent` an `AppAIStreamEvent`,
+  `dataChanged` an `api.DataChanged`. Keep those names and payload shapes in
+  `server/daemon` and `gui/app.go`.
+- Every write goes through `ops`, which announces it as a `dataChanged` event
+  (`api.DataChanged{Entity, IDs}`) so any client refreshes: the GUI reloads the
+  lists on `app`/`workspace` and the open app's panels when its ids include the
+  selected app. `ops.changed` ids are app ids (workspace ids for a workspace),
+  never row or config set ids — resolve them when the write only knows a child
+  row. Add an entity to `APP_DATA_ENTITIES` in `App.tsx` when a new kind of app
+  data appears.
 - The runner's terminal output is raw bytes, base64-encoded in `LogEvent`;
   `services/terminal.go` keeps a plain-text copy for line-based work such as
   ready-URL detection. The GUI feeds `runnerEvent` into xterm.js
@@ -102,19 +111,22 @@ local socket. `api/` is the contract every side shares.
 From the repo root (note: `go build ./...` does not work at a workspace root):
 
 ```bash
-go build ./api/... ./server/... ./cli/... ./gui/...
+go build ./api/... ./server/... ./cli/... ./gui/... ./mcp/...
 go test ./api/... ./server/...
+.\build.ps1                     # daemon + CLI + MCP + GUI -> build/bin
 go build -o build/bin/wmd ./server/cmd/wmd
 go build -o build/bin/wm  ./cli/cmd/wm
+go build -o build/bin/wm-mcp ./mcp/cmd/wm-mcp
 sqlc generate                   # after schema/query edits
 ```
 
-From `gui/`: `wails dev` (Vite on port 5174), `wails build`,
-`wails generate module`.
+From `gui/`: `wails dev` (Vite on port 5174),
+`wails build -o ../../../build/bin/workspace-manager.exe` (wails joins `-o`
+with `gui/build/bin`), `wails generate module`.
 
 From `gui/frontend/`: `bun install`, `bun run dev`, `bun run build`,
 `bun run lint`, `bun run typecheck`.
 
-Development tip: in `wails dev` the app runs from a temporary build folder, so
-`wmd` must be findable — next to the app binary (`gui/build/bin`) or on PATH.
-`api/client` looks next to its own executable first, then on PATH.
+Development tip: `wails dev` needs `wmd` findable — next to the dev app binary
+(`gui/build/bin/wmd.exe`, which `build.ps1` writes) or on PATH. `api/client`
+looks next to its own executable first, then on PATH.

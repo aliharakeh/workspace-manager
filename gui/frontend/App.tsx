@@ -25,7 +25,7 @@ import { DeleteWorkspaceDialog, WorkspaceDialog } from '@/components/workspace-d
 import { useAppStatuses } from '@/hooks/use-app-statuses'
 import { useRoute } from '@/hooks/use-route'
 import { useRunnerStatus } from '@/hooks/use-runner-status'
-import { api, onFileDrop } from '@/lib/api'
+import { api, onDataChanged, onFileDrop } from '@/lib/api'
 import { formatRoute, type AppTab } from '@/lib/routes'
 import {
     DEFAULT_SHORTCUTS,
@@ -36,10 +36,22 @@ import {
     matchesShortcut,
     shortcutParts,
 } from '@/lib/shortcuts'
-import type { App as AppEntity, StatusEvent, Workspace } from '@/lib/types'
+import type { App as AppEntity, DataChangedEvent, StatusEvent, Workspace } from '@/lib/types'
 import { FolderIcon, LayoutTemplateIcon, PlusIcon, SearchIcon } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+
+// Entities whose writes touch one app's data; their ids are app ids (see
+// api.DataChanged), so a dataChanged event tells which app to refresh.
+const APP_DATA_ENTITIES = new Set([
+    'app',
+    'envVar',
+    'template',
+    'configSet',
+    'runConfig',
+    'git',
+    'worktreeLinks',
+])
 
 // Last path segment, e.g. "C:\code\my-app\" -> "my-app". Falls back to the
 // whole path for roots like "C:\".
@@ -69,6 +81,9 @@ function AppContent() {
     const selectedWorkspaceId = route.workspaceId
     const selectedAppId = route.appId
     const [loading, setLoading] = useState(true)
+    // Bumped when another client writes the open app's data, so its panels
+    // remount and refetch.
+    const [appDataEpoch, setAppDataEpoch] = useState(0)
 
     const [workspaceDialogOpen, setWorkspaceDialogOpen] = useState(false)
     const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null)
@@ -127,6 +142,42 @@ function AppContent() {
         setAppsByWorkspace(prev => ({ ...prev, [workspaceId]: apps }))
         return apps
     }, [])
+
+    // Reload every workspace and its apps: a write by another client (the CLI,
+    // another window) can move an app between workspaces or remove one, so a
+    // reload is the only way to be sure the sidebar is right.
+    const reloadLists = useCallback(async () => {
+        try {
+            const list = (await api.workspaces.list()) as Workspace[]
+            setWorkspaces(list)
+            const next: Record<number, AppEntity[]> = {}
+            await Promise.all(
+                list.map(async workspace => {
+                    next[workspace.id] = (await api.apps.list(workspace.id)) as AppEntity[]
+                }),
+            )
+            setAppsByWorkspace(next)
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to reload data')
+        }
+    }, [])
+
+    const handleDataChanged = useCallback(
+        (event: DataChangedEvent) => {
+            if (event.entity === 'workspace' || event.entity === 'app') {
+                void reloadLists()
+                return
+            }
+            if (selectedAppId == null || !APP_DATA_ENTITIES.has(event.entity)) return
+            const ids = event.ids ?? []
+            // No ids: the write spans rows, so refresh the open app's panels.
+            if (ids.length > 0 && !ids.includes(selectedAppId)) return
+            setAppDataEpoch(epoch => epoch + 1)
+        },
+        [reloadLists, selectedAppId],
+    )
+
+    useEffect(() => onDataChanged(handleDataChanged), [handleDataChanged])
 
     const bootstrap = useCallback(async () => {
         setLoading(true)
@@ -543,6 +594,7 @@ function AppContent() {
                             app={selectedApp}
                             status={status ?? statusByAppId[selectedApp.id] ?? null}
                             tab={route.tab ?? 'env'}
+                            dataEpoch={appDataEpoch}
                             onTabChange={handleTabChange}
                             onEdit={() => {
                                 setAppDialogWorkspaceId(selectedApp.workspace_id)

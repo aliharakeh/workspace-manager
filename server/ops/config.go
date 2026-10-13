@@ -16,6 +16,16 @@ func (o *Ops) ConfigSetsList(appID int64) ([]types.ConfigSet, error) {
 	return o.DB.ListConfigSetsByAppT(o.Ctx(), appID)
 }
 
+// appForConfigSet returns the app a config set belongs to, 0 when it cannot be
+// read: a changed event then carries no id and clients reload the entity.
+func (o *Ops) appForConfigSet(setID int64) int64 {
+	set, err := o.DB.GetConfigSetT(o.Ctx(), setID)
+	if err != nil {
+		return 0
+	}
+	return set.AppID
+}
+
 func (o *Ops) ConfigSetsGetDetail(id int64) (types.ConfigSetDetail, error) {
 	set, err := o.DB.GetConfigSetT(o.Ctx(), id)
 	if err != nil {
@@ -53,7 +63,7 @@ func (o *Ops) ConfigSetsCreate(appID int64, body types.ConfigSetCreateInput) (ty
 	if body.Activate == nil || *body.Activate {
 		_, _ = o.DB.SetActiveConfigSetT(o.Ctx(), appID, set.ID)
 	}
-	o.changed("configSet", set.ID)
+	o.changed("configSet", appID)
 	return set, nil
 }
 
@@ -64,7 +74,7 @@ func (o *Ops) ConfigSetsUpdate(id int64, body types.ConfigSetUpdateInput) (types
 	}
 	set, err := o.DB.UpdateConfigSetT(o.Ctx(), id, name)
 	if err == nil {
-		o.changed("configSet", set.ID)
+		o.changed("configSet", set.AppID)
 	}
 	return set, err
 }
@@ -91,7 +101,7 @@ func (o *Ops) ConfigSetsDelete(id int64) (types.Ok, error) {
 			_, _ = o.DB.SetActiveConfigSetT(o.Ctx(), set.AppID, next[0].ID)
 		}
 	}
-	o.changed("configSet", id)
+	o.changed("configSet", set.AppID)
 	return types.Ok{Ok: true}, nil
 }
 
@@ -104,7 +114,7 @@ func (o *Ops) ConfigSetsActivate(id int64) (types.ConfigSetActivateResult, error
 	if err != nil {
 		return types.ConfigSetActivateResult{}, err
 	}
-	o.changed("configSet", set.ID)
+	o.changed("configSet", set.AppID)
 	return types.ConfigSetActivateResult{ID: set.ID, AppID: set.AppID, Name: set.Name, App: app}, nil
 }
 
@@ -123,7 +133,7 @@ func (o *Ops) ConfigSetsCopyFrom(id, sourceID int64, parts *types.CopyParts) (ty
 	if err := o.DB.CopyFrom(o.Ctx(), sourceID, id, parts); err != nil {
 		return types.ConfigSet{}, err
 	}
-	o.changed("configSet", id)
+	o.changed("configSet", target.AppID)
 	return o.DB.GetConfigSetT(o.Ctx(), id)
 }
 
@@ -192,19 +202,19 @@ func (o *Ops) EnvVarsUpdate(id int64, body types.EnvVarUpdateInput) (types.EnvVa
 	if err != nil {
 		return types.EnvVar{}, db.UniqueErr(err, "Env var key already exists for this config set")
 	}
-	o.changed("envVar", existing.ConfigSetID)
+	o.changed("envVar", o.appForConfigSet(existing.ConfigSetID))
 	return templateEnvVar(row), nil
 }
 
 func (o *Ops) EnvVarsDelete(id int64) (types.Ok, error) {
-	n, err := o.DB.DeleteEnvVar(o.Ctx(), id)
+	existing, err := o.DB.GetEnvVar(o.Ctx(), id)
 	if err != nil {
-		return types.Ok{}, err
-	}
-	if n == 0 {
 		return types.Ok{}, fmt.Errorf("Env var not found")
 	}
-	o.changed("envVar")
+	if _, err := o.DB.DeleteEnvVar(o.Ctx(), id); err != nil {
+		return types.Ok{}, err
+	}
+	o.changed("envVar", o.appForConfigSet(existing.ConfigSetID))
 	return types.Ok{Ok: true}, nil
 }
 
@@ -277,18 +287,18 @@ func (o *Ops) TemplatesUpdate(id int64, body types.TemplateUpdateInput) (types.T
 	if err != nil {
 		return types.Template{}, db.UniqueErr(err, "Template for this file already exists")
 	}
-	o.changed("template", existing.ConfigSetID)
+	o.changed("template", o.appForConfigSet(existing.ConfigSetID))
 	return templateResult(row), nil
 }
 
 func (o *Ops) TemplatesDelete(id int64) (types.Ok, error) {
-	n, err := o.DB.DeleteTemplate(o.Ctx(), id)
+	existing, err := o.DB.GetTemplate(o.Ctx(), id)
 	if err != nil {
-		return types.Ok{}, err
-	}
-	if n == 0 {
 		return types.Ok{}, fmt.Errorf("Template not found")
 	}
-	o.changed("template")
+	if _, err := o.DB.DeleteTemplate(o.Ctx(), id); err != nil {
+		return types.Ok{}, err
+	}
+	o.changed("template", o.appForConfigSet(existing.ConfigSetID))
 	return types.Ok{Ok: true}, nil
 }

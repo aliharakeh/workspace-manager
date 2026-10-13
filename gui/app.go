@@ -78,7 +78,12 @@ func (a *App) call(method string, params, out any) error {
 // already listens for.
 func (a *App) forwardEvents() {
 	events, err := a.conn.SubscribeRaw(api.SubscribeInput{
-		Types: []api.EventType{api.EventRunner, api.EventBlueprint, api.EventAppAI},
+		Types: []api.EventType{
+			api.EventRunner,
+			api.EventBlueprint,
+			api.EventAppAI,
+			api.EventDataChanged,
+		},
 	})
 	if err != nil {
 		log.Println("workspace-manager: subscribing to server events:", err)
@@ -126,6 +131,11 @@ func (a *App) forwardEvent(raw json.RawMessage) {
 		var ai types.AppAIStreamEvent
 		if err := json.Unmarshal(ev.Data, &ai); err == nil {
 			EventsEmitAppAI(a.ctx, ai)
+		}
+	case api.EventDataChanged:
+		var changed api.DataChanged
+		if err := json.Unmarshal(ev.Data, &changed); err == nil {
+			EventsEmitDataChanged(a.ctx, changed)
 		}
 	}
 }

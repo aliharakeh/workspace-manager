@@ -34,6 +34,8 @@ type AppDetailProps = {
   app: App
   status: StatusEvent | null
   tab: AppTab
+  /** Bumped when another client writes this app's data (see api.DataChanged). */
+  dataEpoch: number
   onTabChange: (tab: AppTab) => void
   onEdit: () => void
   onDelete: () => void
@@ -45,6 +47,7 @@ export function AppDetail({
   app,
   status,
   tab,
+  dataEpoch,
   onTabChange,
   onEdit,
   onDelete,
@@ -70,7 +73,7 @@ export function AppDetail({
     setPanelEpoch((n) => n + 1)
   }
 
-  const panelKey = `${app.active_config_set_id ?? "none"}-${panelEpoch}`
+  const panelKey = `${app.active_config_set_id ?? "none"}-${panelEpoch}-${dataEpoch}`
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 md:p-6">
@@ -208,6 +211,7 @@ export function AppDetail({
           <GitPanel
             appId={app.id}
             active={tab === "git"}
+            dataEpoch={dataEpoch}
             activeConfigSetId={app.active_config_set_id ?? null}
             status={status}
             onStatus={handleStatus}
