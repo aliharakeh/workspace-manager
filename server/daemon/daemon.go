@@ -95,7 +95,9 @@ func (d *Daemon) hello(raw json.RawMessage) (api.ClientInfo, any, error) {
 		_ = json.Unmarshal(raw, &in)
 	}
 	if in.Kind == "" {
-		in.Kind = handlers.ClientGUI
+		// Least privilege: a client that does not say what it is is treated as
+		// an agent, never the GUI.
+		in.Kind = handlers.ClientAgent
 	}
 	d.touch()
 	info := api.ServerInfo{
@@ -109,6 +111,7 @@ func (d *Daemon) hello(raw json.RawMessage) (api.ClientInfo, any, error) {
 
 // permit decides what a client may call: methods marked Agent are for both
 // clients, everything else is GUI-only, and server.stop is local shutdown.
+// Only hello runs before a client has a kind; the rpc layer refuses the rest.
 func (d *Daemon) permit(kind, method string) bool {
 	if method == api.MethodHello || method == api.MethodSubscribe || method == api.MethodStop {
 		return true

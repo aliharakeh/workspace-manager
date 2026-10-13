@@ -225,12 +225,21 @@ func (c *serverConn) dispatch(ctx context.Context, msg Message) {
 		if err == nil {
 			c.mu.Lock()
 			if info.Kind == "" {
-				info.Kind = "gui"
+				// Least privilege: a client that does not say what it is is
+				// treated as an agent, never the GUI.
+				info.Kind = "agent"
 			}
 			c.kind = info.Kind
 			c.mu.Unlock()
 		}
 		reply(result, err)
+		return
+	}
+
+	// The kind decides what a client may call and what is hidden from it, so
+	// nothing runs before hello sets it.
+	if c.Kind() == "" {
+		reply(nil, api.Errf(api.KindUnavailable, "client must send hello before %q", msg.Method))
 		return
 	}
 

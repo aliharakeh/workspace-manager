@@ -22,8 +22,7 @@ type Error struct {
 
 func (e *Error) Error() string { return e.Message }
 
-// ErrorKind exposes the server's error kind so api.KindOf can map it to an
-// exit code.
+// ErrorKind exposes the server's error kind so api.KindOf can classify it.
 func (e *Error) ErrorKind() string { return e.Kind }
 
 // Conn is a client connection to the daemon.
@@ -49,8 +48,8 @@ type notification struct {
 	data  json.RawMessage
 }
 
-// Dial connects to the socket at path. The caller should send hello before
-// other calls.
+// Dial connects to the socket at path. The caller must send hello before any
+// other call.
 func Dial(path string) (*Conn, error) {
 	nc, err := net.DialTimeout("unix", path, 5*time.Second)
 	if err != nil {

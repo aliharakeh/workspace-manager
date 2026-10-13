@@ -30,12 +30,13 @@ local socket. `api/` is the contract every side shares.
   notifications. Requests run concurrently per connection, so a client can
   call `blueprints.resolve` while its own `blueprints.createApp` is still in
   flight.
-- Every client's first call is `hello`, which states `agent` or `gui`. That
-  decides two things: methods marked `Agent: false` in `api/methods.go` are
-  refused to agent clients (the AI), and env vars/templates with
-  `include_in_ai=false` are blanked for agent clients and refuse writes from
-  them. Any new secret-like value needs the same treatment in
-  `server/handlers`.
+- Every client's first call is `hello`, which states `agent` or `gui`; the rpc
+  layer refuses every other call until it has. That decides two things: methods
+  marked `Agent: false` in `api/methods.go` are refused to agent clients (the
+  AI), and env vars/templates with `include_in_ai=false` are blanked for agent
+  clients and refuse writes from them. A client that omits its kind is treated
+  as an agent, the least-privileged kind, never the GUI. Any new secret-like
+  value needs the same treatment in `server/handlers`.
 - The daemon takes a lock in the data folder, so there is one instance per
   data folder. It exits after ten idle minutes with no client connected and nothing running. Clients
   start it on demand (`api/client.StartDaemon`), and `WM_DATA_DIR` moves both

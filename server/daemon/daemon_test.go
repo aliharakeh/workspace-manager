@@ -13,6 +13,7 @@ import (
 
 	"workspace-manager/api"
 	"workspace-manager/api/client"
+	"workspace-manager/api/rpc"
 	"workspace-manager/api/types"
 	"workspace-manager/server/daemon"
 	"workspace-manager/server/db"
@@ -213,6 +214,76 @@ func TestAgentClientCannotSeeHiddenValues(t *testing.T) {
 		}
 	}
 	t.Fatalf("the hidden var is missing from the list")
+}
+
+// TestUnnamedClientIsTreatedAsAgent covers the least-privilege defaults: a
+// client that omits its kind is an agent, so AI-excluded values stay hidden.
+func TestUnnamedClientIsTreatedAsAgent(t *testing.T) {
+	c := startServer(t)
+	app := makeApp(t, c)
+
+	hidden := false
+	value := "s3cret"
+	if err := c.Call(api.MethodEnvVarsCreate, map[string]any{
+		"appID": app.ID,
+		"body":  types.EnvVarCreateInput{Key: "SECRET", Value: &value, IncludeInAI: &hidden},
+	}, nil); err != nil {
+		t.Fatalf("create hidden var: %v", err)
+	}
+
+	unnamed, err := client.Dial(client.Options{Version: "test"})
+	if err != nil {
+		t.Fatalf("dial unnamed: %v", err)
+	}
+	t.Cleanup(func() { _ = unnamed.Close() })
+	if kind := unnamed.Kind(); kind != "agent" {
+		t.Errorf("an unnamed client is %q, want %q", kind, "agent")
+	}
+
+	var vars []types.EnvVar
+	if err := unnamed.Call(api.MethodEnvVarsList, map[string]any{"appID": app.ID}, &vars); err != nil {
+		t.Fatalf("list vars: %v", err)
+	}
+	for _, v := range vars {
+		if v.Key == "SECRET" {
+			if v.Value != "" {
+				t.Errorf("a hidden value leaked to an unnamed client: %q", v.Value)
+			}
+			return
+		}
+	}
+	t.Fatalf("the hidden var is missing from the list")
+}
+
+// TestCallsBeforeHelloAreRefused covers the handshake rule: the server does not
+// know a client's kind until hello, so it refuses everything before it. A
+// client cannot skip the handshake and be mistaken for the GUI.
+func TestCallsBeforeHelloAreRefused(t *testing.T) {
+	startServer(t)
+
+	raw, err := rpc.Dial(api.SocketPath())
+	if err != nil {
+		t.Fatalf("dial raw: %v", err)
+	}
+	t.Cleanup(func() { _ = raw.Close() })
+
+	var ws []types.Workspace
+	err = raw.Call(api.MethodWorkspacesList, nil, &ws)
+	if err == nil {
+		t.Fatalf("an un-hellod client called workspaces.list: %v", ws)
+	}
+	if kind := api.KindOf(err); kind != api.KindUnavailable {
+		t.Errorf("kind = %q, want %q", kind, api.KindUnavailable)
+	}
+
+	// The same connection works once it has handshaked, so the rule is only
+	// about order.
+	if err := raw.Call(api.MethodHello, api.ClientInfo{Kind: "agent", Version: "test"}, nil); err != nil {
+		t.Fatalf("hello: %v", err)
+	}
+	if err := raw.Call(api.MethodWorkspacesList, nil, &ws); err != nil {
+		t.Fatalf("workspaces.list after hello: %v", err)
+	}
 }
 
 func TestUnknownMethodFails(t *testing.T) {
