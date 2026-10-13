@@ -147,9 +147,11 @@ func withKind(fn func(kind string, raw Params) (any, error)) rpc.Handler {
 }
 
 // clientKind reads the client kind the daemon attached to the request context.
+// A request without one is treated as an agent, so nothing is shown to a client
+// that never said what it is.
 func clientKind(ctx context.Context) string {
 	if v, ok := ctx.Value(rpc.ClientKindContextKey{}).(string); ok && v != "" {
 		return v
 	}
-	return ClientGUI
+	return ClientAgent
 }

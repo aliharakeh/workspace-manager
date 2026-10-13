@@ -16,7 +16,7 @@ import (
 // Options configure a connection.
 type Options struct {
 	// Kind is "agent" or "gui". It decides what the server allows and whether
-	// AI-excluded values are shown.
+	// AI-excluded values are shown. Empty means "agent".
 	Kind string
 	// Version is the client's build version, sent in hello.
 	Version string
@@ -39,7 +39,8 @@ type Client struct {
 func Dial(opts Options) (*Client, error) {
 	kind := opts.Kind
 	if kind == "" {
-		kind = "gui"
+		// Least privilege: an unnamed client is an agent, not the GUI.
+		kind = "agent"
 	}
 	socket := opts.Socket
 	if socket == "" {
