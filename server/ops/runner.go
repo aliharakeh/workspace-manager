@@ -7,17 +7,16 @@ import (
 	"workspace-manager/api/types"
 )
 
-// checkConfigKind rejects anything but the three kinds of command list.
+// checkConfigKind rejects unknown command lists.
 func checkConfigKind(kind string) error {
 	switch kind {
-	case types.KindRun, types.KindBuild, types.KindSetup:
+	case types.KindDev, types.KindProd, types.KindBuild, types.KindSetup:
 		return nil
 	}
-	return fmt.Errorf("kind must be %s, %s or %s", types.KindRun, types.KindBuild, types.KindSetup)
+	return fmt.Errorf("kind must be dev, prod, build or setup")
 }
 
-// RunConfigGet returns the active config set's command list of a kind: "run"
-// (starts the app), "build" (builds it) or "setup" (prepares it).
+// RunConfigGet returns the active config set's dev, prod, build or setup commands.
 func (o *Ops) RunConfigGet(appID int64, kind string) (types.RunConfig, error) {
 	if err := checkConfigKind(kind); err != nil {
 		return types.RunConfig{}, err
@@ -96,7 +95,14 @@ func (o *Ops) RunnerRun(appID int64) (types.StatusEvent, error) {
 	if _, err := o.DB.GetAppT(o.Ctx(), appID); err != nil {
 		return types.StatusEvent{}, err
 	}
-	return o.Runner.Start(o.Ctx(), appID, types.KindRun)
+	return o.Runner.Start(o.Ctx(), appID, types.KindDev)
+}
+
+func (o *Ops) RunnerProd(appID int64) (types.StatusEvent, error) {
+	if _, err := o.DB.GetAppT(o.Ctx(), appID); err != nil {
+		return types.StatusEvent{}, err
+	}
+	return o.Runner.Start(o.Ctx(), appID, types.KindProd)
 }
 
 // RunnerBuild runs the active config set's build commands. It shares the app's

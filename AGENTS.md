@@ -74,14 +74,15 @@ local socket. `api/` is the contract every side shares.
   AI methods run in the GUI process, and only the AI methods touch the
   database directly there.
 - Schema or query changes: edit `server/db/schema.sql` / `server/db/queries.sql`,
-  then run `sqlc generate` from the repo root. `schema.sql` runs at every
+  then run `sqlc generate` from `server/`. `schema.sql` runs at every
   startup with `IF NOT EXISTS` statements, so it only creates missing tables:
   a change to an existing table needs explicit upgrade code in
   `server/db/schema.go`. Because the daemon and the GUI both open the
   database, migrations run under a file lock (`server/db/migratelock*.go`).
-- A config set holds three command lists of the same shape: a **run** config,
-  a **build** config and a **setup** config, told apart by `run_configs.kind`.
-  An app has one runner session at a time (`runner.run`/`build`/`setup` fail
+- A config set holds four command lists of the same shape: **setup**, **dev**,
+  **build** and **prod**, told apart by `run_configs.kind`. Existing `run`
+  commands migrate to `dev`; `runner.run` remains a legacy alias for dev.
+  An app has one runner session at a time (`runner.dev`/`prod`/`build`/`setup` fail
   while any is going) because all apply and restore templates; a build or
   setup skips ready-URL and idle detection.
 - Apps are listed by `apps.sort_order` (per workspace), not by name: new apps

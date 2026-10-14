@@ -28,11 +28,15 @@ func schema(desc string, props map[string]any, required ...string) map[string]an
 	return s
 }
 
-func strProp(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
+func strProp(desc string) map[string]any {
+	return map[string]any{"type": "string", "description": desc}
+}
 func boolProp(desc string) map[string]any {
 	return map[string]any{"type": "boolean", "description": desc}
 }
-func numProp(desc string) map[string]any { return map[string]any{"type": "number", "description": desc} }
+func numProp(desc string) map[string]any {
+	return map[string]any{"type": "number", "description": desc}
+}
 func arrProp(desc, item string) map[string]any {
 	return map[string]any{"type": "array", "description": desc, "items": map[string]any{"type": item}}
 }
@@ -269,18 +273,18 @@ func appTool() mcpTool {
 func configTool() mcpTool {
 	return mcpTool{
 		Name:        "wm_config",
-		Description: "Manage config sets and an app's run/build/setup command lists.",
+		Description: "Manage config sets and an app's setup/dev/build/prod command lists.",
 		Schema: schema("Config sets and command lists", map[string]any{
-			"action":    map[string]any{"type": "string", "description": "list, detail, create, rename, activate, copy, delete, get_commands, save_commands, scripts", "enum": []string{"list", "detail", "create", "rename", "activate", "copy", "delete", "get_commands", "save_commands", "scripts"}},
-			"app":       strProp(appRefDesc),
-			"set":       strProp(setRefDesc),
-			"name":      strProp("config set name (create/rename)"),
-			"kind":      strProp("run, build or setup (get_commands/save_commands)"),
-			"from":      strProp("source config set id or name (create/copy)"),
-			"parts":     strProp("comma list: env,templates,run,build,setup (create/copy, default all)"),
+			"action":     map[string]any{"type": "string", "description": "list, detail, create, rename, activate, copy, delete, get_commands, save_commands, scripts", "enum": []string{"list", "detail", "create", "rename", "activate", "copy", "delete", "get_commands", "save_commands", "scripts"}},
+			"app":        strProp(appRefDesc),
+			"set":        strProp(setRefDesc),
+			"name":       strProp("config set name (create/rename)"),
+			"kind":       strProp("dev, prod, build or setup (get_commands/save_commands)"),
+			"from":       strProp("source config set id or name (create/copy)"),
+			"parts":      strProp("comma list: env,templates,dev,prod,build,setup (create/copy, default all)"),
 			"noActivate": boolProp("do not make the new set active (create)"),
-			"mode":      strProp("parallel or sequential (save_commands)"),
-			"commands":  map[string]any{"type": "array", "description": "command lines in order (save_commands)", "items": map[string]any{"type": "object", "properties": map[string]any{"command": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}}}},
+			"mode":       strProp("parallel or sequential (save_commands)"),
+			"commands":   map[string]any{"type": "array", "description": "command lines in order (save_commands)", "items": map[string]any{"type": "object", "properties": map[string]any{"command": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}}}},
 		}, "action"),
 		Handler: func(args map[string]any) (any, error) {
 			action := argStr(args, "action")
@@ -412,12 +416,12 @@ func configTool() mcpTool {
 
 func copyParts(list string) map[string]any {
 	if list == "" {
-		list = "env,templates,run,build,setup"
+		list = "env,templates,dev,prod,build,setup"
 	}
 	parts := map[string]any{}
 	for _, p := range splitComma(list) {
 		switch p {
-		case "env", "templates", "run", "build", "setup":
+		case "env", "templates", "dev", "prod", "build", "setup":
 			parts[p] = true
 		}
 	}
@@ -426,10 +430,10 @@ func copyParts(list string) map[string]any {
 
 func checkKind(kind string) error {
 	switch kind {
-	case "run", "build", "setup":
+	case "dev", "prod", "build", "setup":
 		return nil
 	}
-	return fmt.Errorf("kind must be run, build or setup, got %q", kind)
+	return fmt.Errorf("kind must be dev, prod, build or setup, got %q", kind)
 }
 
 func splitComma(s string) []string {
@@ -653,7 +657,7 @@ func runTool() mcpTool {
 		Name:        "wm_run",
 		Description: "Run, build and stop apps; check runner status; read terminal output. An app runs one session at a time.",
 		Schema: schema("Runner", map[string]any{
-			"action":    map[string]any{"type": "string", "description": "run, build, setup, stop, reload, status, logs", "enum": []string{"run", "build", "setup", "stop", "reload", "status", "logs"}},
+			"action":    map[string]any{"type": "string", "description": "dev, prod, build, setup, stop, reload, status, logs (run is a legacy alias for dev)", "enum": []string{"dev", "prod", "run", "build", "setup", "stop", "reload", "status", "logs"}},
 			"app":       strProp(appRefDesc),
 			"configSet": strProp("config set id or name (only used with worktree)"),
 			"worktree":  strProp("run inside this git worktree path instead of the app folder"),
@@ -667,8 +671,11 @@ func runTool() mcpTool {
 			}
 			appID := appIDOf(app)
 			switch argStr(args, "action") {
-			case "run", "build", "setup":
+			case "dev", "prod", "run", "build", "setup":
 				kind := argStr(args, "action")
+				if kind == "run" {
+					kind = "dev"
+				}
 				if wt, ok := argOpt(args, "worktree"); ok {
 					params := map[string]any{"appID": appID, "path": wt, "kind": kind}
 					if cs, ok := argOpt(args, "configSet"); ok {
@@ -680,8 +687,10 @@ func runTool() mcpTool {
 					}
 					return daoCall(api.MethodGitWorktreeStart, params)
 				}
-				method := api.MethodRunnerRun
+				method := api.MethodRunnerDev
 				switch kind {
+				case "prod":
+					method = api.MethodRunnerProd
 				case "build":
 					method = api.MethodRunnerBuild
 				case "setup":
@@ -761,7 +770,7 @@ func gitTool() mcpTool {
 			"path":       strProp("worktree path (worktree_add/remove/start, links_status)"),
 			"linkShared": boolProp("link the app's shared paths into the worktree (worktree_add, default true)"),
 			"links":      arrProp("shared paths: per-worktree override (worktree_add) or the app's new set (links_save)", "string"),
-			"kind":       strProp("run, build or setup (worktree_start, default setup)"),
+			"kind":       strProp("dev, prod, build or setup (worktree_start, default setup)"),
 			"configSet":  strProp(setRefDesc + " (worktree_start)"),
 			"create":     boolProp("link the missing shared paths first (links_status)"),
 		}, "action"),
@@ -892,18 +901,18 @@ func blueprintTool() mcpTool {
 		Name:        "wm_blueprint",
 		Description: "Blueprints: the recipes that scaffold new apps. Creating an app runs synchronously and fails fast on the first failing command.",
 		Schema: schema("Blueprints", map[string]any{
-			"action":      map[string]any{"type": "string", "description": "list, show, create, update, delete, create_app, resolve, cancel", "enum": []string{"list", "show", "create", "update", "delete", "create_app", "resolve", "cancel"}},
-			"blueprint":   strProp("blueprint id or name"),
-			"name":        strProp("blueprint name (create) or new app name (create_app)"),
-			"description": strProp("one sentence about what the blueprint creates (create/update)"),
-			"sampleName":  strProp("example app name for the new-app dialog (create/update)"),
+			"action":       map[string]any{"type": "string", "description": "list, show, create, update, delete, create_app, resolve, cancel", "enum": []string{"list", "show", "create", "update", "delete", "create_app", "resolve", "cancel"}},
+			"blueprint":    strProp("blueprint id or name"),
+			"name":         strProp("blueprint name (create) or new app name (create_app)"),
+			"description":  strProp("one sentence about what the blueprint creates (create/update)"),
+			"sampleName":   strProp("example app name for the new-app dialog (create/update)"),
 			"createFolder": boolProp("commands run in the parent folder and the app folder is created first (create/update, default true)"),
-			"commands":    map[string]any{"type": "array", "description": "shell lines in order; {{app_name}}, {{folder_name}} and {{app_dir}} are substituted (create/update)", "items": map[string]any{"type": "object", "properties": map[string]any{"command": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}}}},
-			"workspace":   strProp(wsRefDesc + " (create_app)"),
-			"parent":      strProp("parent folder for the new app (create_app, required)"),
-			"folder":      strProp("folder name (create_app, default: slug of the app name)"),
-			"runID":       strProp("run id to answer or stop (resolve/cancel)"),
-			"decision":    map[string]any{"type": "string", "description": "skip or abort (resolve)", "enum": []string{"skip", "abort"}},
+			"commands":     map[string]any{"type": "array", "description": "shell lines in order; {{app_name}}, {{folder_name}} and {{app_dir}} are substituted (create/update)", "items": map[string]any{"type": "object", "properties": map[string]any{"command": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}}}},
+			"workspace":    strProp(wsRefDesc + " (create_app)"),
+			"parent":       strProp("parent folder for the new app (create_app, required)"),
+			"folder":       strProp("folder name (create_app, default: slug of the app name)"),
+			"runID":        strProp("run id to answer or stop (resolve/cancel)"),
+			"decision":     map[string]any{"type": "string", "description": "skip or abort (resolve)", "enum": []string{"skip", "abort"}},
 		}, "action"),
 		Handler: func(args map[string]any) (any, error) {
 			switch argStr(args, "action") {
@@ -957,7 +966,7 @@ func blueprintTool() mcpTool {
 				cmds, _ := blueprintCmds()
 				return daoCall(api.MethodBlueprintsCreate, map[string]any{
 					"name": name, "description": argStr(args, "description"),
-					"sample_name": argStr(args, "sampleName"),
+					"sample_name":   argStr(args, "sampleName"),
 					"create_folder": argBool(args, "createFolder", true),
 					"commands":      cmds,
 				})
@@ -1026,7 +1035,7 @@ func blueprintTool() mcpTool {
 				bpid, _ := bp["id"].(float64)
 				createFolder, _ := bp["create_folder"].(bool)
 				return daoCall(api.MethodBlueprintsCreateApp, map[string]any{
-					"run_id": fmt.Sprintf("mcp-%d-%d", os.Getpid(), time.Now().UnixNano()),
+					"run_id":       fmt.Sprintf("mcp-%d-%d", os.Getpid(), time.Now().UnixNano()),
 					"blueprint_id": int64(bpid), "workspace_id": ws.ID,
 					"name": name, "parent_path": parent, "folder_name": folder,
 					"create_folder": createFolder, "ask_on_error": false,

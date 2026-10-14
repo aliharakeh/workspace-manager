@@ -221,8 +221,7 @@ func (a *App) PackageScriptsList(appID int64) (types.PackageScripts, error) {
 	return out, err
 }
 
-// RunConfigGet returns the active config set's command list of a kind: "run"
-// (starts the app), "build" (builds it) or "setup" (prepares it).
+// RunConfigGet returns the active config set's dev, prod, build or setup commands.
 func (a *App) RunConfigGet(appID int64, kind string) (types.RunConfig, error) {
 	var out types.RunConfig
 	err := a.call(api.MethodRunConfigGet, map[string]any{"appID": appID, "kind": kind}, &out)
@@ -277,6 +276,18 @@ func (a *App) RunnerResize(appID, commandID int64, cols, rows int) types.Ok {
 func (a *App) RunnerRun(appID int64) (types.StatusEvent, error) {
 	var out types.StatusEvent
 	err := a.call(api.MethodRunnerRun, map[string]any{"appID": appID}, &out)
+	return out, err
+}
+
+func (a *App) RunnerDev(appID int64) (types.StatusEvent, error) {
+	var out types.StatusEvent
+	err := a.call(api.MethodRunnerDev, map[string]any{"appID": appID}, &out)
+	return out, err
+}
+
+func (a *App) RunnerProd(appID int64) (types.StatusEvent, error) {
+	var out types.StatusEvent
+	err := a.call(api.MethodRunnerProd, map[string]any{"appID": appID}, &out)
 	return out, err
 }
 

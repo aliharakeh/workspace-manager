@@ -31,10 +31,30 @@ func applySchema(sqlDB *sql.DB) error {
 	if _, err := sqlDB.Exec(schemaSQL); err != nil {
 		return err
 	}
+	if err := splitRunConfig(sqlDB); err != nil {
+		return err
+	}
 	if err := restoreBlueprints(sqlDB); err != nil {
 		return err
 	}
 	return addBlueprintSampleName(sqlDB)
+}
+
+// splitRunConfig preserves existing commands and ids as development commands.
+func splitRunConfig(sqlDB *sql.DB) error {
+	tx, err := sqlDB.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(`
+		UPDATE run_configs SET kind = 'dev' WHERE kind = 'run';
+		INSERT INTO run_configs (config_set_id, kind, mode)
+		SELECT id, 'prod', 'parallel' FROM config_sets WHERE true
+		ON CONFLICT (config_set_id, kind) DO NOTHING;`); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // addRunConfigKind upgrades a run_configs table created before build configs

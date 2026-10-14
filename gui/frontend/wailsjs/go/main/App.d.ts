@@ -70,6 +70,8 @@ export function ConfigSetsList(arg1:number):Promise<Array<types.ConfigSet>>;
 
 export function ConfigSetsUpdate(arg1:number,arg2:types.ConfigSetUpdateInput):Promise<types.ConfigSet>;
 
+export function ConnectServer():Promise<void>;
+
 export function EnvVarsCreate(arg1:number,arg2:types.EnvVarCreateInput):Promise<types.EnvVar>;
 
 export function EnvVarsDelete(arg1:number):Promise<types.Ok>;
@@ -144,7 +146,11 @@ export function RunConfigSave(arg1:number,arg2:string,arg3:types.RunConfigSaveIn
 
 export function RunnerBuild(arg1:number):Promise<types.StatusEvent>;
 
+export function RunnerDev(arg1:number):Promise<types.StatusEvent>;
+
 export function RunnerOutput(arg1:number,arg2:number):Promise<types.RunnerOutput>;
+
+export function RunnerProd(arg1:number):Promise<types.StatusEvent>;
 
 export function RunnerReload(arg1:number):Promise<types.StatusEvent>;
 
@@ -159,6 +165,8 @@ export function RunnerStatus(arg1:number):Promise<types.StatusEvent>;
 export function RunnerStop(arg1:number):Promise<types.StatusEvent>;
 
 export function RunnerWorkspaceStatus(arg1:number):Promise<Array<types.StatusEvent>>;
+
+export function ServerConnected():Promise<boolean>;
 
 export function SettingsGet():Promise<Record<string, string>>;
 

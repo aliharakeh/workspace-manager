@@ -160,7 +160,7 @@ export const api = {
         list: (appId: number) => call(() => Go.PackageScriptsList(appId)),
     },
 
-    /** The active config set's run, build or setup command list, by `kind`. */
+    /** The active config set's setup, dev, build or prod commands, by `kind`. */
     runConfig: {
         get: (appId: number, kind: CommandKind) => call(() => Go.RunConfigGet(appId, kind)),
         save: (
@@ -180,6 +180,8 @@ export const api = {
         resize: (appId: number, commandId: number, cols: number, rows: number) =>
             call(() => Go.RunnerResize(appId, commandId, cols, rows)),
         run: (appId: number) => call(() => Go.RunnerRun(appId)),
+        dev: (appId: number) => call(() => Go.RunnerDev(appId)),
+        prod: (appId: number) => call(() => Go.RunnerProd(appId)),
         build: (appId: number) => call(() => Go.RunnerBuild(appId)),
         setup: (appId: number) => call(() => Go.RunnerSetup(appId)),
         stop: (appId: number) => call(() => Go.RunnerStop(appId)),
@@ -220,7 +222,7 @@ export const api = {
             call(() => Go.GitWorktreeOpenFolder(appId, path)),
         worktreeOpenInEditor: (appId: number, path: string, editor: string) =>
             call(() => Go.GitWorktreeOpenInEditor(appId, path, editor)),
-        /** Runs the app's run/build/setup config inside the worktree at `path`, with config set `configSetId` (0: the active one). */
+        /** Runs the app's commands inside the worktree at `path`, with config set `configSetId` (0: the active one). */
         worktreeStart: (appId: number, path: string, kind: CommandKind, configSetId: number) =>
             call(() => Go.GitWorktreeStart(appId, path, kind, configSetId)) as Promise<StatusEvent>,
         /** The app's shared paths (relative to its folder) that worktrees link to. */
@@ -295,6 +297,11 @@ export const api = {
     },
 
     openExternal: (url: string) => call(() => Go.OpenExternal(url)),
+
+    server: {
+        connect: () => call(() => Go.ConnectServer()),
+        connected: () => call(() => Go.ServerConnected()),
+    },
 }
 
 export { ApiError }

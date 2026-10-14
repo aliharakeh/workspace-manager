@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"workspace-manager/server/db"
 	"workspace-manager/api/lib"
-	"workspace-manager/server/services"
 	"workspace-manager/api/types"
+	"workspace-manager/server/db"
+	"workspace-manager/server/services"
 
 	"github.com/firebase/genkit/go/ai"
 )
@@ -20,7 +20,8 @@ You edit ONLY the currently selected config set of the current app.
 Use tools to inspect and change this set:
 - env vars: list_vars, get_var, update_var, delete_var
 - templates: list_templates, get_template, update_template (Handlebars {{VAR_NAME}} for env placeholders)
-- run config (commands that start the app): get_run_config, update_run_config
+- dev config (commands that start the app for development): get_dev_config, update_dev_config
+- prod config (commands that start the app in production): get_prod_config, update_prod_config
 - build config (commands that build it, run on demand): get_build_config, update_build_config
 - project files: search_files (glob; gitignored omitted), read_file (relative path)
 - git: git_fetch_all (runs "git fetch --all --prune" immediately), prune_worktrees (runs "git worktree prune" immediately),
@@ -33,7 +34,7 @@ You must NOT:
 - reformat template files unless the user asked
 - get, update, or delete env vars that list_vars returns without a value (AI-excluded)
 
-When updating run or build commands, send the full command list.
+When updating dev, prod or build commands, send the full command list.
 Only add or remove worktrees when the user asks. Never remove the main worktree. Use force on remove only when the user accepts losing uncommitted changes.
 Edits are staged for the user to review. Reply in short markdown (lists, inline code). No JSON. No headings.`
 
@@ -100,7 +101,8 @@ type appAIState struct {
 	hiddenEnv   map[string]bool
 	templates   map[string]string
 	origTmpl    map[string]string
-	run         commandList
+	dev         commandList
+	prod        commandList
 	build       commandList
 	wtAdd       []types.GitWorktreeAddInput
 	wtRemove    []types.AppAIWorktreeRemove
@@ -127,7 +129,8 @@ func newAppAIState(detail types.ConfigSetDetail, projectPath string) *appAIState
 		hiddenEnv:   map[string]bool{},
 		templates:   map[string]string{},
 		origTmpl:    map[string]string{},
-		run:         commandList{mode: "parallel"},
+		dev:         commandList{mode: "parallel"},
+		prod:        commandList{mode: "parallel"},
 		build:       commandList{mode: "sequential"},
 	}
 	for _, v := range detail.EnvVars {
@@ -145,10 +148,16 @@ func newAppAIState(detail types.ConfigSetDetail, projectPath string) *appAIState
 		s.templates[t.FilePath] = t.Content
 		s.origTmpl[t.FilePath] = t.Content
 	}
-	if detail.RunConfig != nil {
-		s.run.mode = detail.RunConfig.Mode
-		for _, c := range detail.RunConfig.Commands {
-			s.run.commands = append(s.run.commands, runCmd{Label: c.Label, Command: c.Command})
+	if detail.DevConfig != nil {
+		s.dev.mode = detail.DevConfig.Mode
+		for _, c := range detail.DevConfig.Commands {
+			s.dev.commands = append(s.dev.commands, runCmd{Label: c.Label, Command: c.Command})
+		}
+	}
+	if detail.ProdConfig != nil {
+		s.prod.mode = detail.ProdConfig.Mode
+		for _, c := range detail.ProdConfig.Commands {
+			s.prod.commands = append(s.prod.commands, runCmd{Label: c.Label, Command: c.Command})
 		}
 	}
 	if detail.BuildConfig != nil {
@@ -195,7 +204,8 @@ func (s *appAIState) patch() types.AppAIPatch {
 			p.Templates = append(p.Templates, types.AppAITemplatePatch{FilePath: path, Content: content})
 		}
 	}
-	p.Run = s.run.patch()
+	p.Dev = s.dev.patch()
+	p.Prod = s.prod.patch()
 	p.Build = s.build.patch()
 	if len(s.wtAdd) > 0 || len(s.wtRemove) > 0 {
 		p.Worktrees = &types.AppAIWorktreePatch{Add: s.wtAdd, Remove: s.wtRemove}
@@ -333,9 +343,11 @@ func (l *commandList) update(in updateRunIn) map[string]any {
 	return map[string]any{"ok": true, "mode": l.mode, "commands": l.commands}
 }
 
-func (s *appAIState) getRun() map[string]any                  { return s.run.get() }
-func (s *appAIState) updateRun(in updateRunIn) map[string]any { return s.run.update(in) }
-func (s *appAIState) getBuild() map[string]any                { return s.build.get() }
+func (s *appAIState) getDev() map[string]any                   { return s.dev.get() }
+func (s *appAIState) updateDev(in updateRunIn) map[string]any  { return s.dev.update(in) }
+func (s *appAIState) getProd() map[string]any                  { return s.prod.get() }
+func (s *appAIState) updateProd(in updateRunIn) map[string]any { return s.prod.update(in) }
+func (s *appAIState) getBuild() map[string]any                 { return s.build.get() }
 func (s *appAIState) updateBuild(in updateRunIn) map[string]any {
 	return s.build.update(in)
 }
@@ -479,13 +491,21 @@ func (s *appAIState) tools() []ai.ToolRef {
 			func(_ *ai.ToolContext, in updateTemplateIn) (any, error) {
 				return s.record("update_template", in, s.updateTemplate(in.FilePath, in.Content)), nil
 			}),
-		ai.NewTool("get_run_config", "Get run mode and commands for the active config set.",
+		ai.NewTool("get_dev_config", "Get dev mode and commands for the active config set.",
 			func(_ *ai.ToolContext, in emptyIn) (any, error) {
-				return s.record("get_run_config", in, s.getRun()), nil
+				return s.record("get_dev_config", in, s.getDev()), nil
 			}),
-		ai.NewTool("update_run_config", "Update run mode and/or replace the full command list for this config set.",
+		ai.NewTool("update_dev_config", "Update dev mode and/or replace the full command list for this config set.",
 			func(_ *ai.ToolContext, in updateRunIn) (any, error) {
-				return s.record("update_run_config", in, s.updateRun(in)), nil
+				return s.record("update_dev_config", in, s.updateDev(in)), nil
+			}),
+		ai.NewTool("get_prod_config", "Get prod mode and commands for the active config set.",
+			func(_ *ai.ToolContext, in emptyIn) (any, error) {
+				return s.record("get_prod_config", in, s.getProd()), nil
+			}),
+		ai.NewTool("update_prod_config", "Update prod mode and/or replace the full command list for this config set.",
+			func(_ *ai.ToolContext, in updateRunIn) (any, error) {
+				return s.record("update_prod_config", in, s.updateProd(in)), nil
 			}),
 		ai.NewTool("get_build_config", "Get build mode and commands for the active config set.",
 			func(_ *ai.ToolContext, in emptyIn) (any, error) {
@@ -495,7 +515,7 @@ func (s *appAIState) tools() []ai.ToolRef {
 			func(_ *ai.ToolContext, in updateRunIn) (any, error) {
 				return s.record("update_build_config", in, s.updateBuild(in)), nil
 			}),
-		ai.NewTool("search_files","Glob search under the app project directory. Respects .gitignore. Returns matching relative paths.",
+		ai.NewTool("search_files", "Glob search under the app project directory. Respects .gitignore. Returns matching relative paths.",
 			func(_ *ai.ToolContext, in searchIn) (any, error) {
 				return s.record("search_files", in, s.searchFiles(in.Pattern)), nil
 			}),
@@ -532,7 +552,7 @@ func (s *appAIState) tools() []ai.ToolRef {
 
 func buildAppAIAgentContext(appName, projectPath, setName string, setID int64) string {
 	return fmt.Sprintf(
-		"App: %s\nProject path: %s\n\nActive config set (ONLY edit this one):\nid: %d\nname: %s\n\nUse tools to read or edit env vars, templates, run config, and build config. Use search_files and read_file when you need project files. Use the git tools for fetching and worktrees.",
+		"App: %s\nProject path: %s\n\nActive config set (ONLY edit this one):\nid: %d\nname: %s\n\nUse tools to read or edit env vars, templates, dev config, prod config, and build config. Use search_files and read_file when you need project files. Use the git tools for fetching and worktrees.",
 		appName, projectPath, setID, setName,
 	)
 }
@@ -580,7 +600,7 @@ func patchHasEdits(p types.AppAIPatch) bool {
 	if len(p.Templates) > 0 {
 		return true
 	}
-	return p.Run != nil || p.Build != nil || p.Worktrees != nil
+	return p.Dev != nil || p.Prod != nil || p.Build != nil || p.Worktrees != nil
 }
 
 // AppChatAI runs the config-set agent with tools. Updates are staged in the
@@ -644,4 +664,3 @@ func AppChatAI(ctx context.Context, d *db.DB, appID, setID int64, history []type
 	}
 	return types.AppAIChatResult{Text: text, Patch: patch, ToolCalls: state.calls}, nil
 }
-

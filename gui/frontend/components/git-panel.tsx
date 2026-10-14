@@ -13,6 +13,7 @@ import {
   PlayIcon,
   PlusIcon,
   RefreshCwIcon,
+  RocketIcon,
   SquareIcon,
   Trash2Icon,
   WrenchIcon,
@@ -102,8 +103,9 @@ const START_KINDS: {
   Icon: typeof PlayIcon
 }[] = [
   { kind: "setup", label: "Setup", Icon: WrenchIcon },
-  { kind: "run", label: "Run", Icon: PlayIcon },
+  { kind: "dev", label: "Dev", Icon: PlayIcon },
   { kind: "build", label: "Build", Icon: HammerIcon },
+  { kind: "prod", label: "Prod", Icon: RocketIcon },
 ]
 
 /** An icon-only button; the label is its tooltip and accessible name. */

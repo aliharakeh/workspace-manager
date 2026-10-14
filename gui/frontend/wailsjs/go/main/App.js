@@ -138,6 +138,10 @@ export function ConfigSetsUpdate(arg1, arg2) {
   return window['go']['main']['App']['ConfigSetsUpdate'](arg1, arg2);
 }
 
+export function ConnectServer() {
+  return window['go']['main']['App']['ConnectServer']();
+}
+
 export function EnvVarsCreate(arg1, arg2) {
   return window['go']['main']['App']['EnvVarsCreate'](arg1, arg2);
 }
@@ -286,8 +290,16 @@ export function RunnerBuild(arg1) {
   return window['go']['main']['App']['RunnerBuild'](arg1);
 }
 
+export function RunnerDev(arg1) {
+  return window['go']['main']['App']['RunnerDev'](arg1);
+}
+
 export function RunnerOutput(arg1, arg2) {
   return window['go']['main']['App']['RunnerOutput'](arg1, arg2);
+}
+
+export function RunnerProd(arg1) {
+  return window['go']['main']['App']['RunnerProd'](arg1);
 }
 
 export function RunnerReload(arg1) {
@@ -316,6 +328,10 @@ export function RunnerStop(arg1) {
 
 export function RunnerWorkspaceStatus(arg1) {
   return window['go']['main']['App']['RunnerWorkspaceStatus'](arg1);
+}
+
+export function ServerConnected() {
+  return window['go']['main']['App']['ServerConnected']();
 }
 
 export function SettingsGet() {

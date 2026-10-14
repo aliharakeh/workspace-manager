@@ -65,6 +65,16 @@ func (r *Registry) runner() {
 	}) (types.StatusEvent, error) {
 		return o.RunnerBuild(in.AppID)
 	}))
+	r.handle(api.MethodRunnerDev, typed(func(in struct {
+		AppID int64 `json:"appID"`
+	}) (types.StatusEvent, error) {
+		return o.RunnerRun(in.AppID)
+	}))
+	r.handle(api.MethodRunnerProd, typed(func(in struct {
+		AppID int64 `json:"appID"`
+	}) (types.StatusEvent, error) {
+		return o.RunnerProd(in.AppID)
+	}))
 	r.handle(api.MethodRunnerSetup, typed(func(in struct {
 		AppID int64 `json:"appID"`
 	}) (types.StatusEvent, error) {

@@ -8,5 +8,7 @@ export function appStateLabel(running: boolean, kind?: string) {
   if (!running) return "Idle"
   if (kind === "build") return "Building"
   if (kind === "setup") return "Setting up"
+  if (kind === "dev") return "Running dev"
+  if (kind === "prod") return "Running prod"
   return "Running"
 }

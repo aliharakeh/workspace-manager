@@ -43,6 +43,9 @@ type AppDetailProps = {
   onAppChange: (app: App) => void
 }
 
+const TAB_TRIGGER =
+  "h-8 flex-none rounded-full border-transparent px-4 text-sm font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground data-active:border-border data-active:bg-background data-active:text-foreground data-active:shadow-sm dark:data-active:border-border dark:data-active:bg-background dark:data-active:text-foreground"
+
 export function AppDetail({
   app,
   status,
@@ -125,13 +128,14 @@ export function AppDetail({
             <p className="mt-2 text-sm text-destructive">{status.error}</p>
           ) : null}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <AppRunControls
             appId={app.id}
             running={running}
             kind={status?.kind}
             onStatus={handleStatus}
             variant="icon"
+            showSetup
           />
           <Separator orientation="vertical" className="hidden h-8 sm:block" />
           <OpenFolderButton appId={app.id} iconOnly />
@@ -176,15 +180,58 @@ export function AppDetail({
         }}
         className="min-h-0 flex-1 overflow-hidden"
       >
-        <TabsList>
-          <TabsTrigger value="env">Env</TabsTrigger>
-          <TabsTrigger value="templates">Templates</TabsTrigger>
-          <TabsTrigger value="setup">Setup</TabsTrigger>
-          <TabsTrigger value="run">Run</TabsTrigger>
-          <TabsTrigger value="build">Build</TabsTrigger>
-          <TabsTrigger value="git">Git</TabsTrigger>
-          <TabsTrigger value="ai">AI</TabsTrigger>
-          <TabsTrigger value="logs">Logs</TabsTrigger>
+        <TabsList className="max-w-full shrink-0 flex-wrap justify-start gap-1 rounded-full border border-border/60 bg-muted/70 p-1 group-data-horizontal/tabs:h-auto">
+          <TabsTrigger
+            value="env"
+            className={TAB_TRIGGER}
+          >
+            Env
+          </TabsTrigger>
+          <TabsTrigger
+            value="templates"
+            className={TAB_TRIGGER}
+          >
+            Templates
+          </TabsTrigger>
+          <TabsTrigger
+            value="setup"
+            className={TAB_TRIGGER}
+          >
+            Setup
+          </TabsTrigger>
+          <TabsTrigger
+            value="dev"
+            className={TAB_TRIGGER}
+          >
+            Dev
+          </TabsTrigger>
+          <TabsTrigger
+            value="build"
+            className={TAB_TRIGGER}
+          >
+            Build
+          </TabsTrigger>
+          <TabsTrigger value="prod" className={TAB_TRIGGER}>
+            Prod
+          </TabsTrigger>
+          <TabsTrigger
+            value="git"
+            className={TAB_TRIGGER}
+          >
+            Git
+          </TabsTrigger>
+          <TabsTrigger
+            value="ai"
+            className={TAB_TRIGGER}
+          >
+            AI
+          </TabsTrigger>
+          <TabsTrigger
+            value="logs"
+            className={TAB_TRIGGER}
+          >
+            Logs
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="env" className="mt-4 min-h-0 overflow-y-auto">
           <EnvVarsPanel key={panelKey} appId={app.id} />
@@ -197,12 +244,13 @@ export function AppDetail({
             key={panelKey}
             appId={app.id}
             kind="setup"
-            status={status}
-            onStatus={handleStatus}
           />
         </TabsContent>
-        <TabsContent value="run" className="mt-4 min-h-0 overflow-y-auto">
-          <CommandConfigPanel key={panelKey} appId={app.id} kind="run" />
+        <TabsContent value="dev" className="mt-4 min-h-0 overflow-y-auto">
+          <CommandConfigPanel key={panelKey} appId={app.id} kind="dev" />
+        </TabsContent>
+        <TabsContent value="prod" className="mt-4 min-h-0 overflow-y-auto">
+          <CommandConfigPanel key={panelKey} appId={app.id} kind="prod" />
         </TabsContent>
         <TabsContent value="build" className="mt-4 min-h-0 overflow-y-auto">
           <CommandConfigPanel key={panelKey} appId={app.id} kind="build" />

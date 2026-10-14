@@ -6,8 +6,8 @@ package api
 // Method names are "group.operation". Each one matches a server handler.
 const (
 	// Server lifecycle and streams.
-	MethodHello    = "hello"
-	MethodStop     = "server.stop"
+	MethodHello     = "hello"
+	MethodStop      = "server.stop"
 	MethodSubscribe = "events.subscribe"
 
 	// Workspaces.
@@ -17,24 +17,24 @@ const (
 	MethodWorkspacesDelete = "workspaces.delete"
 
 	// Apps.
-	MethodAppsList          = "apps.list"
-	MethodAppsGet           = "apps.get"
-	MethodAppsCreate        = "apps.create"
-	MethodAppsUpdate        = "apps.update"
-	MethodAppsReorder       = "apps.reorder"
-	MethodAppsDelete        = "apps.delete"
-	MethodAppsOpenFolder    = "apps.openFolder"
-	MethodAppsEditors       = "apps.editors"
-	MethodAppsOpenInEditor  = "apps.openInEditor"
+	MethodAppsList         = "apps.list"
+	MethodAppsGet          = "apps.get"
+	MethodAppsCreate       = "apps.create"
+	MethodAppsUpdate       = "apps.update"
+	MethodAppsReorder      = "apps.reorder"
+	MethodAppsDelete       = "apps.delete"
+	MethodAppsOpenFolder   = "apps.openFolder"
+	MethodAppsEditors      = "apps.editors"
+	MethodAppsOpenInEditor = "apps.openInEditor"
 
 	// Config sets.
-	MethodConfigSetsList       = "configSets.list"
-	MethodConfigSetsDetail     = "configSets.detail"
-	MethodConfigSetsCreate     = "configSets.create"
-	MethodConfigSetsUpdate     = "configSets.update"
-	MethodConfigSetsDelete     = "configSets.delete"
-	MethodConfigSetsActivate   = "configSets.activate"
-	MethodConfigSetsCopyFrom   = "configSets.copyFrom"
+	MethodConfigSetsList     = "configSets.list"
+	MethodConfigSetsDetail   = "configSets.detail"
+	MethodConfigSetsCreate   = "configSets.create"
+	MethodConfigSetsUpdate   = "configSets.update"
+	MethodConfigSetsDelete   = "configSets.delete"
+	MethodConfigSetsActivate = "configSets.activate"
+	MethodConfigSetsCopyFrom = "configSets.copyFrom"
 
 	// Env vars.
 	MethodEnvVarsList   = "envVars.list"
@@ -62,6 +62,8 @@ const (
 	MethodRunnerOutput          = "runner.output"
 	MethodRunnerResize          = "runner.resize"
 	MethodRunnerRun             = "runner.run"
+	MethodRunnerDev             = "runner.dev"
+	MethodRunnerProd            = "runner.prod"
 	MethodRunnerBuild           = "runner.build"
 	MethodRunnerSetup           = "runner.setup"
 	MethodRunnerStop            = "runner.stop"
@@ -102,14 +104,14 @@ const (
 	MethodSettingsSet = "settings.set"
 
 	// AI connections and agents. GUI clients only; agent clients have no AI commands.
-	MethodAIConfigGet    = "ai.config.get"
-	MethodAIConfigSave   = "ai.config.save"
-	MethodAIConfigDelete = "ai.config.delete"
+	MethodAIConfigGet      = "ai.config.get"
+	MethodAIConfigSave     = "ai.config.save"
+	MethodAIConfigDelete   = "ai.config.delete"
 	MethodAIConfigActivate = "ai.config.activate"
-	MethodAIChat         = "ai.chat"
-	MethodAIAppChat      = "ai.appChat"
-	MethodAITest         = "ai.test"
-	MethodAIApplyPatch   = "ai.applyPatch"
+	MethodAIChat           = "ai.chat"
+	MethodAIAppChat        = "ai.appChat"
+	MethodAITest           = "ai.test"
+	MethodAIApplyPatch     = "ai.applyPatch"
 
 	// Filesystem helpers.
 	MethodFsValidatePath = "fs.validatePath"
@@ -192,6 +194,8 @@ var Methods = []Method{
 	{Name: MethodRunnerOutput, Agent: true},
 	{Name: MethodRunnerResize, Agent: false},
 	{Name: MethodRunnerRun, Agent: true},
+	{Name: MethodRunnerDev, Agent: true},
+	{Name: MethodRunnerProd, Agent: true},
 	{Name: MethodRunnerBuild, Agent: true},
 	{Name: MethodRunnerSetup, Agent: true},
 	{Name: MethodRunnerStop, Agent: true},

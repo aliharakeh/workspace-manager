@@ -13,7 +13,7 @@ func TestAppAIStatePatch(t *testing.T) {
 	detail := types.ConfigSetDetail{
 		EnvVars:   []types.EnvVar{{Key: "PORT", Value: "3000", IncludeInAI: true}},
 		Templates: []types.Template{{FilePath: ".env", Content: "PORT=3000", IncludeInAI: true}},
-		RunConfig: &types.RunConfig{
+		DevConfig: &types.RunConfig{
 			Mode:     "parallel",
 			Commands: []types.RunCommand{{Label: &label, Command: "npm run dev"}},
 		},
@@ -23,7 +23,8 @@ func TestAppAIStatePatch(t *testing.T) {
 	s.updateVar("HOST", "localhost")
 	s.deleteVar("HOST")
 	s.updateTemplate(".env", "PORT={{PORT}}")
-	s.updateRun(updateRunIn{Mode: ptr("sequential")})
+	s.updateDev(updateRunIn{Mode: ptr("sequential")})
+	s.updateProd(updateRunIn{Commands: []runCmdIn{{Command: "npm start"}}})
 	p := s.patch()
 	if p.Env == nil || len(p.Env.Upsert) != 1 || p.Env.Upsert[0].Key != "PORT" {
 		t.Fatalf("env upsert: %+v", p.Env)
@@ -31,8 +32,11 @@ func TestAppAIStatePatch(t *testing.T) {
 	if len(p.Templates) != 1 || p.Templates[0].Content != "PORT={{PORT}}" {
 		t.Fatalf("templates: %+v", p.Templates)
 	}
-	if p.Run == nil || *p.Run.Mode != "sequential" {
-		t.Fatalf("run: %+v", p.Run)
+	if p.Dev == nil || *p.Dev.Mode != "sequential" {
+		t.Fatalf("dev: %+v", p.Dev)
+	}
+	if p.Prod == nil || len(p.Prod.Commands) != 1 || p.Prod.Commands[0].Command != "npm start" {
+		t.Fatalf("prod: %+v", p.Prod)
 	}
 	if err, _ := s.updateTemplate("nope", "x")["error"].(string); err == "" {
 		t.Fatal("expected unknown template error")

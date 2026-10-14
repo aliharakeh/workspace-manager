@@ -37,7 +37,7 @@ import {
     shortcutParts,
 } from '@/lib/shortcuts'
 import type { App as AppEntity, DataChangedEvent, StatusEvent, Workspace } from '@/lib/types'
-import { FolderIcon, LayoutTemplateIcon, PlusIcon, SearchIcon } from 'lucide-react'
+import { FolderIcon, LayoutTemplateIcon, PlusIcon, RefreshCwIcon, SearchIcon } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -81,6 +81,8 @@ function AppContent() {
     const selectedWorkspaceId = route.workspaceId
     const selectedAppId = route.appId
     const [loading, setLoading] = useState(true)
+    const [serverError, setServerError] = useState<string | null>(null)
+    const [connecting, setConnecting] = useState(false)
     // Bumped when another client writes the open app's data, so its panels
     // remount and refetch.
     const [appDataEpoch, setAppDataEpoch] = useState(0)
@@ -181,6 +183,7 @@ function AppContent() {
 
     const bootstrap = useCallback(async () => {
         setLoading(true)
+        setServerError(null)
         try {
             const list = await api.workspaces.list()
             setWorkspaces(list)
@@ -188,11 +191,27 @@ function AppContent() {
                 await Promise.all(list.map(w => loadApps(w.id)))
             }
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Failed to load data')
+            const message = err instanceof Error ? err.message : 'Failed to load data'
+            setServerError(message)
+            toast.error(message)
         } finally {
             setLoading(false)
         }
     }, [loadApps])
+
+    const retryServer = useCallback(async () => {
+        setConnecting(true)
+        try {
+            await api.server.connect()
+            await bootstrap()
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to connect to server'
+            setServerError(message)
+            toast.error(message)
+        } finally {
+            setConnecting(false)
+        }
+    }, [bootstrap])
 
     useEffect(() => {
         void bootstrap()
@@ -584,7 +603,24 @@ function AppContent() {
                         ) : null}
                     </header>
 
-                    {loading ? (
+                    {serverError ? (
+                        <div className="flex flex-1 items-center justify-center p-6">
+                            <Empty className="max-w-md border">
+                                <EmptyHeader>
+                                    <EmptyMedia variant="icon">
+                                        <RefreshCwIcon />
+                                    </EmptyMedia>
+                                    <EmptyTitle>Server not running</EmptyTitle>
+                                    <EmptyDescription>{serverError}</EmptyDescription>
+                                </EmptyHeader>
+                                <EmptyContent>
+                                    <Button onClick={() => void retryServer()} disabled={connecting}>
+                                        {connecting ? 'Connecting…' : 'Retry connection'}
+                                    </Button>
+                                </EmptyContent>
+                            </Empty>
+                        </div>
+                    ) : loading ? (
                         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
                             Loading…
                         </div>

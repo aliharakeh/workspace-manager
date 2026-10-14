@@ -207,8 +207,8 @@ func (o *Ops) GitWorktreePrune(appID int64) (types.GitOutput, error) {
 // the worktree at path, with config set configSetID (0: the app's active set).
 // It is the app's one runner session, like RunnerRun.
 func (o *Ops) GitWorktreeStart(appID int64, path string, kind string, configSetID int64) (types.StatusEvent, error) {
-	if kind != types.KindRun && kind != types.KindBuild && kind != types.KindSetup {
-		return types.StatusEvent{}, fmt.Errorf("unknown kind %q", kind)
+	if err := checkConfigKind(kind); err != nil {
+		return types.StatusEvent{}, err
 	}
 	dir, err := o.appProjectDir(appID)
 	if err != nil {

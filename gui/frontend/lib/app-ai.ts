@@ -50,7 +50,8 @@ export type AppAIPatch = {
     delete?: string[]
   }
   templates?: { file_path: string; content: string }[]
-  run?: AppAICommandPatch
+  dev?: AppAICommandPatch
+  prod?: AppAICommandPatch
   build?: AppAICommandPatch
   /** Git worktree changes; they run against the repo when the patch is applied. */
   worktrees?: {
@@ -70,7 +71,8 @@ export function patchHasEdits(patch: AppAIPatch): boolean {
     patch.env?.upsert?.length ||
     patch.env?.delete?.length ||
     patch.templates?.length ||
-    patch.run ||
+    patch.dev ||
+    patch.prod ||
     patch.build ||
     patch.worktrees?.add?.length ||
     patch.worktrees?.remove?.length
