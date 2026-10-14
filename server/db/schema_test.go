@@ -94,10 +94,10 @@ func TestApplySchemaAddsRunConfigKind(t *testing.T) {
 		}
 	}
 	var kind, mode string
-	if err := sqlDB.QueryRow(`SELECT kind, mode FROM run_configs`).Scan(&kind, &mode); err != nil {
+	if err := sqlDB.QueryRow(`SELECT kind, mode FROM run_configs WHERE config_set_id = 1 AND kind != 'prod'`).Scan(&kind, &mode); err != nil {
 		t.Fatal(err)
 	}
-	if kind != "run" || mode != "sequential" {
+	if kind != "dev" || mode != "sequential" {
 		t.Fatalf("row not preserved: %q %q", kind, mode)
 	}
 	// A config set can now hold a build config next to its run config, but only one of each.

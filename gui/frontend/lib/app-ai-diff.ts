@@ -44,7 +44,7 @@ export function normalizeNewlines(text: string): string {
 export function langForPath(path: string): string {
   const name = path.replace(/\\/g, "/").split("/").pop() ?? path
   if (name === "env" || name === ".env" || name.endsWith(".env")) return "ini"
-  if (name === "run" || name === "build") return "txt"
+  if (name === "dev" || name === "prod" || name === "build") return "txt"
   const ext = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1) : "txt"
   const map: Record<string, string> = {
     ts: "typescript",
@@ -112,7 +112,8 @@ export function buildAppAIDiff(
   }
 
   const commandLists = [
-    { path: "run", patch: patch.run, current: current.run_config, defaultMode: "parallel" },
+    { path: "dev", patch: patch.dev, current: current.dev_config, defaultMode: "parallel" },
+    { path: "prod", patch: patch.prod, current: current.prod_config, defaultMode: "parallel" },
     { path: "build", patch: patch.build, current: current.build_config, defaultMode: "sequential" },
   ] as const
   for (const list of commandLists) {

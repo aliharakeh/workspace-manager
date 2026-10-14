@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { toast } from "sonner"
-import { HammerIcon, PlayIcon, RefreshCwIcon, SquareIcon } from "lucide-react"
+import { HammerIcon, PlayIcon, RefreshCwIcon, RocketIcon, SquareIcon, WrenchIcon } from "lucide-react"
 import { api } from "@/lib/api"
 import { appStateLabel, isTaskKind } from "@/lib/app-state"
 import type { StatusEvent } from "@/lib/types"
@@ -21,6 +21,7 @@ type AppRunControlsProps = {
   onStatus: (status: StatusEvent) => void
   /** "icon" is the full set of actions as icon buttons with tooltips. */
   variant?: "default" | "compact" | "icon"
+  showSetup?: boolean
   className?: string
 }
 
@@ -30,6 +31,7 @@ export function AppRunControls({
   kind,
   onStatus,
   variant = "default",
+  showSetup = false,
   className,
 }: AppRunControlsProps) {
   const [busy, setBusy] = useState(false)
@@ -38,7 +40,7 @@ export function AppRunControls({
   const compact = variant === "compact"
 
   async function runAction(
-    action: "run" | "build" | "stop" | "reload",
+    action: "setup" | "dev" | "prod" | "build" | "stop" | "reload",
     success: string,
     failure: string
   ) {
@@ -55,57 +57,43 @@ export function AppRunControls({
   }
 
   if (compact) {
-    const label = running ? "Stop" : "Start"
+    const actions = [
+      { action: "setup", label: "Setup", Icon: WrenchIcon },
+      { action: "dev", label: "Dev", Icon: PlayIcon },
+      { action: "build", label: "Build", Icon: HammerIcon },
+      { action: "prod", label: "Prod", Icon: RocketIcon },
+    ] as const
     return (
       <div
         className={cn("flex items-center", className)}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
       >
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                disabled={busy || running}
-                onClick={() =>
-                  void runAction("build", "Build started", "Failed to build")
+        {actions.filter(({ action }) => showSetup || action !== "setup").map(({ action, label, Icon }) => {
+          const stop = running && action === "dev"
+          const title = stop ? "Stop" : `Start ${label.toLowerCase()}`
+          return (
+            <Tooltip key={action}>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={title}
+                    disabled={busy || (running && !stop)}
+                    onClick={() => void (stop
+                      ? runAction("stop", "Stopped", "Failed to stop")
+                      : runAction(action, `${label} started`, `Failed to start ${label.toLowerCase()}`))}
+                  />
                 }
-              />
-            }
-          >
-            <HammerIcon />
-            <span className="sr-only">Build</span>
-          </TooltipTrigger>
-          <TooltipContent>Build</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                disabled={busy}
-                onClick={() =>
-                  running
-                    ? void runAction("stop", "Stopped", "Failed to stop")
-                    : void runAction("run", "Started", "Failed to run")
-                }
-              />
-            }
-          >
-            {running ? (
-              <SquareIcon className="text-red-600" />
-            ) : (
-              <PlayIcon className="text-emerald-600" />
-            )}
-            <span className="sr-only">{label}</span>
-          </TooltipTrigger>
-          <TooltipContent>{label}</TooltipContent>
-        </Tooltip>
+              >
+                {stop ? <SquareIcon /> : <Icon />}
+              </TooltipTrigger>
+              <TooltipContent>{title}</TooltipContent>
+            </Tooltip>
+          )
+        })}
       </div>
     )
   }
@@ -113,15 +101,23 @@ export function AppRunControls({
   if (variant === "icon") {
     const actions = [
       {
-        label: "Run",
-        hint: "Run the app",
+        label: "Setup",
+        hint: "Run setup commands",
+        icon: <WrenchIcon />,
+        variant: "outline",
+        disabled: busy || running,
+        onClick: () => runAction("setup", "Setup started", "Failed to run setup"),
+      },
+      {
+        label: "Dev",
+        hint: "Start development commands",
         icon: <PlayIcon />,
         variant: "default",
         className: running
           ? ""
           : "bg-emerald-600 text-white hover:bg-emerald-700",
         disabled: busy || running,
-        onClick: () => runAction("run", "Started", "Failed to run"),
+        onClick: () => runAction("dev", "Dev started", "Failed to start dev"),
       },
       {
         label: "Build",
@@ -130,6 +126,14 @@ export function AppRunControls({
         variant: "outline",
         disabled: busy || running,
         onClick: () => runAction("build", "Build started", "Failed to build"),
+      },
+      {
+        label: "Prod",
+        hint: "Start production commands",
+        icon: <RocketIcon />,
+        variant: "outline",
+        disabled: busy || running,
+        onClick: () => runAction("prod", "Prod started", "Failed to start prod"),
       },
       {
         label: "Stop",
@@ -153,8 +157,8 @@ export function AppRunControls({
       },
     ] as const
     return (
-      <div className={cn("flex items-center gap-2", className)}>
-        {actions.map((action) => (
+      <div className={cn("flex flex-wrap items-center gap-2", className)}>
+        {actions.filter(({ label }) => showSetup || label !== "Setup").map((action) => (
           <Tooltip key={action.label}>
             <TooltipTrigger
               render={
@@ -183,13 +187,22 @@ export function AppRunControls({
 
   return (
     <div className={cn("flex flex-wrap gap-2", className)}>
+      {showSetup ? <Button
+        size="sm"
+        variant="outline"
+        disabled={busy || running}
+        onClick={() => void runAction("setup", "Setup started", "Failed to run setup")}
+      >
+        <WrenchIcon data-icon="inline-start" />
+        Setup
+      </Button> : null}
       <Button
         size="sm"
         disabled={busy || running}
-        onClick={() => void runAction("run", "Started", "Failed to run")}
+        onClick={() => void runAction("dev", "Dev started", "Failed to start dev")}
       >
         <PlayIcon data-icon="inline-start" />
-        Run
+        Dev
       </Button>
       <Button
         size="sm"
@@ -199,6 +212,15 @@ export function AppRunControls({
       >
         <HammerIcon data-icon="inline-start" />
         Build
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={busy || running}
+        onClick={() => void runAction("prod", "Prod started", "Failed to start prod")}
+      >
+        <RocketIcon data-icon="inline-start" />
+        Prod
       </Button>
       <Button
         size="sm"

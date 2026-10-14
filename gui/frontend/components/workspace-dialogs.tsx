@@ -155,7 +155,7 @@ export function DeleteWorkspaceDialog({
           <AlertDialogTitle>Delete workspace?</AlertDialogTitle>
           <AlertDialogDescription>
             This will permanently delete “{workspace?.name}” and all of its apps,
-            env vars, templates, run config, and build config.
+            env vars, templates, and setup, dev, build and prod configs.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

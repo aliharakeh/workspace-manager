@@ -34,7 +34,8 @@ export type ConfigSet = {
 export type ConfigSetDetail = ConfigSet & {
     env_vars: EnvVar[]
     templates: Template[]
-    run_config: RunConfig | null
+    dev_config: RunConfig | null
+    prod_config: RunConfig | null
     build_config: RunConfig | null
     setup_config: RunConfig | null
 }
@@ -42,12 +43,13 @@ export type ConfigSetDetail = ConfigSet & {
 /**
  * What to copy from a source config set.
  * `true` copies everything, `false` skips, an array copies only the listed
- * items: env var keys, template file paths, or source run/build/setup command ids.
+ * items: env var keys, template file paths, or source command ids.
  */
 export type CopyParts = {
     env?: boolean | string[]
     templates?: boolean | string[]
-    run?: boolean | number[]
+    dev?: boolean | number[]
+    prod?: boolean | number[]
     build?: boolean | number[]
     setup?: boolean | number[]
 }
@@ -75,10 +77,9 @@ export type Template = {
 export type RunMode = 'sequential' | 'parallel'
 
 /**
- * The command list a config set holds one of: `run` starts the app, `build`
- * builds it, `setup` prepares it (install dependencies and the like).
+ * Each config set has setup, dev, build and prod command lists.
  */
-export type CommandKind = 'run' | 'build' | 'setup'
+export type CommandKind = 'dev' | 'prod' | 'build' | 'setup'
 
 export type RunCommand = {
     id: number
@@ -90,7 +91,7 @@ export type RunCommand = {
     updated_at: string
 }
 
-/** The command list of one kind of a config set; commands carry `run_config_id` for both. */
+/** The command list of one kind of a config set. */
 export type RunConfig = {
     id: number
     config_set_id: number

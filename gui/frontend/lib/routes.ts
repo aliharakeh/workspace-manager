@@ -2,7 +2,8 @@ export type AppTab =
   | "env"
   | "templates"
   | "setup"
-  | "run"
+  | "dev"
+  | "prod"
   | "build"
   | "git"
   | "ai"
@@ -12,7 +13,8 @@ export const APP_TABS: AppTab[] = [
   "env",
   "templates",
   "setup",
-  "run",
+  "dev",
+  "prod",
   "build",
   "git",
   "ai",
@@ -82,7 +84,7 @@ export function parseRoute(pathname: string, search?: string): Route {
     const app = parseSegment(parts[3]!)
     if (app.id != null) {
       appId = app.id
-      const raw = parts[4]
+      const raw = parts[4] === "run" ? "dev" : parts[4]
       if (raw && (APP_TABS as string[]).includes(raw)) {
         tab = raw as AppTab
       }

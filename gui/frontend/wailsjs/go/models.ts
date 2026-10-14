@@ -190,7 +190,8 @@ export namespace types {
 	    message: string;
 	    env?: AppAIEnvPatch;
 	    templates?: AppAITemplatePatch[];
-	    run?: AppAIRunPatch;
+	    dev?: AppAIRunPatch;
+	    prod?: AppAIRunPatch;
 	    build?: AppAIRunPatch;
 	    worktrees?: AppAIWorktreePatch;
 	
@@ -203,7 +204,8 @@ export namespace types {
 	        this.message = source["message"];
 	        this.env = this.convertValues(source["env"], AppAIEnvPatch);
 	        this.templates = this.convertValues(source["templates"], AppAITemplatePatch);
-	        this.run = this.convertValues(source["run"], AppAIRunPatch);
+	        this.dev = this.convertValues(source["dev"], AppAIRunPatch);
+	        this.prod = this.convertValues(source["prod"], AppAIRunPatch);
 	        this.build = this.convertValues(source["build"], AppAIRunPatch);
 	        this.worktrees = this.convertValues(source["worktrees"], AppAIWorktreePatch);
 	    }
@@ -868,7 +870,8 @@ export namespace types {
 	export class CopyParts {
 	    env?: any;
 	    templates?: any;
-	    run?: any;
+	    dev?: any;
+	    prod?: any;
 	    build?: any;
 	    setup?: any;
 	
@@ -880,7 +883,8 @@ export namespace types {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.env = source["env"];
 	        this.templates = source["templates"];
-	        this.run = source["run"];
+	        this.dev = source["dev"];
+	        this.prod = source["prod"];
 	        this.build = source["build"];
 	        this.setup = source["setup"];
 	    }
@@ -1043,7 +1047,8 @@ export namespace types {
 	    updated_at: string;
 	    env_vars: EnvVar[];
 	    templates: Template[];
-	    run_config?: RunConfig;
+	    dev_config?: RunConfig;
+	    prod_config?: RunConfig;
 	    build_config?: RunConfig;
 	    setup_config?: RunConfig;
 	
@@ -1060,7 +1065,8 @@ export namespace types {
 	        this.updated_at = source["updated_at"];
 	        this.env_vars = this.convertValues(source["env_vars"], EnvVar);
 	        this.templates = this.convertValues(source["templates"], Template);
-	        this.run_config = this.convertValues(source["run_config"], RunConfig);
+	        this.dev_config = this.convertValues(source["dev_config"], RunConfig);
+	        this.prod_config = this.convertValues(source["prod_config"], RunConfig);
 	        this.build_config = this.convertValues(source["build_config"], RunConfig);
 	        this.setup_config = this.convertValues(source["setup_config"], RunConfig);
 	    }

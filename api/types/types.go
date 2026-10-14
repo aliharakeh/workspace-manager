@@ -58,14 +58,21 @@ type RunCommand struct {
 	UpdatedAt   string  `json:"updated_at"`
 }
 
-// Kinds of command list: a config set has one RunConfig of each. A run starts
-// the app; a build builds it; a setup prepares it (install dependencies and the
-// like). They share the app's single runner session.
+// Kinds of command list: a config set has one RunConfig of each. A dev starts
+// the app for development; a prod starts it as in production; a build builds
+// it; a setup prepares it (install dependencies and the like). They share the
+// app's single runner session.
 const (
-	KindRun   = "run"
+	KindDev   = "dev"
+	KindProd  = "prod"
 	KindBuild = "build"
 	KindSetup = "setup"
+	KindRun   = KindDev // Legacy Go callers start development commands.
 )
+
+// IsServing reports whether a kind starts the app and waits for it to come up
+// (dev and prod), as opposed to a build or setup that just ends.
+func IsServing(kind string) bool { return kind == KindDev || kind == KindProd }
 
 // RunConfig is the command list of one kind (Kind) of a config set.
 type RunConfig struct {
@@ -82,7 +89,8 @@ type ConfigSetDetail struct {
 	ConfigSet
 	EnvVars     []EnvVar   `json:"env_vars"`
 	Templates   []Template `json:"templates"`
-	RunConfig   *RunConfig `json:"run_config"`
+	DevConfig   *RunConfig `json:"dev_config"`
+	ProdConfig  *RunConfig `json:"prod_config"`
 	BuildConfig *RunConfig `json:"build_config"`
 	SetupConfig *RunConfig `json:"setup_config"`
 }
@@ -104,7 +112,8 @@ type PackageScripts struct {
 type CopyParts struct {
 	Env       any `json:"env,omitempty"`
 	Templates any `json:"templates,omitempty"`
-	Run       any `json:"run,omitempty"`
+	Dev       any `json:"dev,omitempty"`
+	Prod      any `json:"prod,omitempty"`
 	Build     any `json:"build,omitempty"`
 	Setup     any `json:"setup,omitempty"`
 }
@@ -134,17 +143,17 @@ type StatusEvent struct {
 	Type      string `json:"type"`
 	SessionID string `json:"sessionId"`
 	AppID     int64  `json:"appId"`
-	// Kind is what the session executes: "run", "build" or "setup" (empty before any).
+	// Kind is what the session executes: "dev", "prod", "build" or "setup" (empty before any).
 	Kind string `json:"kind"`
 	// Worktree is the root of the git worktree the session runs in; empty when
 	// it runs in the app's own project path.
 	Worktree string `json:"worktree,omitempty"`
 	// ConfigSetID is the config set the session runs with.
 	ConfigSetID int64          `json:"configSetId,omitempty"`
-	Running   bool           `json:"running"`
-	Processes []ProcessState `json:"processes"`
-	Error     string         `json:"error,omitempty"`
-	Ts        int64          `json:"ts"`
+	Running     bool           `json:"running"`
+	Processes   []ProcessState `json:"processes"`
+	Error       string         `json:"error,omitempty"`
+	Ts          int64          `json:"ts"`
 }
 
 // LogEvent is a chunk of terminal output of one run command. Data is the raw
@@ -435,7 +444,8 @@ type AppAIPatch struct {
 	Message   string               `json:"message"`
 	Env       *AppAIEnvPatch       `json:"env,omitempty"`
 	Templates []AppAITemplatePatch `json:"templates,omitempty"`
-	Run       *AppAIRunPatch       `json:"run,omitempty"`
+	Dev       *AppAIRunPatch       `json:"dev,omitempty"`
+	Prod      *AppAIRunPatch       `json:"prod,omitempty"`
 	Build     *AppAIRunPatch       `json:"build,omitempty"`
 	Worktrees *AppAIWorktreePatch  `json:"worktrees,omitempty"`
 }

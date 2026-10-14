@@ -66,7 +66,8 @@ type CategorySel = { all: boolean; items: string[] }
 type CopySel = {
   env: CategorySel
   templates: CategorySel
-  run: CategorySel
+  dev: CategorySel
+  prod: CategorySel
   build: CategorySel
   setup: CategorySel
 }
@@ -79,7 +80,8 @@ function blankSel(): CopySel {
   return {
     env: blankCategory(),
     templates: blankCategory(),
-    run: blankCategory(),
+    dev: blankCategory(),
+    prod: blankCategory(),
     build: blankCategory(),
     setup: blankCategory(),
   }
@@ -99,7 +101,8 @@ function selToParts(sel: CopySel): CopyParts {
   return {
     env: categoryToPart(sel.env),
     templates: categoryToPart(sel.templates),
-    run: runToPart(sel.run),
+    dev: runToPart(sel.dev),
+    prod: runToPart(sel.prod),
     build: runToPart(sel.build),
     setup: runToPart(sel.setup),
   }
@@ -114,7 +117,8 @@ function partsEnabled(parts: CopyParts): boolean {
   return (
     isPartEnabled(parts.env) ||
     isPartEnabled(parts.templates) ||
-    isPartEnabled(parts.run) ||
+    isPartEnabled(parts.dev) ||
+    isPartEnabled(parts.prod) ||
     isPartEnabled(parts.build) ||
     isPartEnabled(parts.setup)
   )
@@ -275,7 +279,7 @@ function PartsPicker({
         }
       }}
     >
-      <TabsList className="w-full">
+      <TabsList className="w-full flex-wrap group-data-horizontal/tabs:h-auto">
         <TabsTrigger value="env" className="flex-1">
           Env vars
         </TabsTrigger>
@@ -285,11 +289,14 @@ function PartsPicker({
         <TabsTrigger value="setup" className="flex-1">
           Setup config
         </TabsTrigger>
-        <TabsTrigger value="run" className="flex-1">
-          Run config
+        <TabsTrigger value="dev" className="flex-1">
+          Dev config
         </TabsTrigger>
         <TabsTrigger value="build" className="flex-1">
           Build config
+        </TabsTrigger>
+        <TabsTrigger value="prod" className="flex-1">
+          Prod config
         </TabsTrigger>
       </TabsList>
       <TabsContent value="env" className="mt-3">
@@ -330,15 +337,15 @@ function PartsPicker({
           onQueryChange={setQuery}
         />
       </TabsContent>
-      <TabsContent value="run" className="mt-3">
+      <TabsContent value="dev" className="mt-3">
         <CategoryPicker
-          items={(detail.run_config?.commands ?? []).map((c) => ({
+          items={(detail.dev_config?.commands ?? []).map((c) => ({
             id: String(c.id),
             title: c.label ?? c.command,
             sub: c.label ? c.command : undefined,
           }))}
-          sel={sel.run}
-          onChange={(run) => onChange({ ...sel, run })}
+          sel={sel.dev}
+          onChange={(dev) => onChange({ ...sel, dev })}
           query={query}
           onQueryChange={setQuery}
         />
@@ -352,6 +359,19 @@ function PartsPicker({
           }))}
           sel={sel.build}
           onChange={(build) => onChange({ ...sel, build })}
+          query={query}
+          onQueryChange={setQuery}
+        />
+      </TabsContent>
+      <TabsContent value="prod" className="mt-3">
+        <CategoryPicker
+          items={(detail.prod_config?.commands ?? []).map((c) => ({
+            id: String(c.id),
+            title: c.label ?? c.command,
+            sub: c.label ? c.command : undefined,
+          }))}
+          sel={sel.prod}
+          onChange={(prod) => onChange({ ...sel, prod })}
           query={query}
           onQueryChange={setQuery}
         />
@@ -636,8 +656,8 @@ export function ConfigSetSwitcher({
           <DialogHeader>
             <DialogTitle>New config set</DialogTitle>
             <DialogDescription>
-              Each set has its own env vars, templates, run config, and build
-              config.
+              Each set has its own env vars, templates, and setup, dev, build
+              and prod configs.
               Optionally copy selected parts from an existing set.
             </DialogDescription>
           </DialogHeader>
@@ -815,7 +835,7 @@ export function ConfigSetSwitcher({
             <AlertDialogTitle>Delete config set?</AlertDialogTitle>
             <AlertDialogDescription>
               This permanently deletes “{active?.name}” and all of its env vars,
-              templates, run config, and build config.
+              templates, and setup, dev, build and prod configs.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

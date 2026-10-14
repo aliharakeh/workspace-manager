@@ -27,13 +27,11 @@ import {
 } from '@/components/ui/input-group'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { api } from '@/lib/api'
-import type { CommandKind, PackageScript, RunMode, StatusEvent } from '@/lib/types'
+import type { CommandKind, PackageScript, RunMode } from '@/lib/types'
 import {
     ChevronDownIcon,
-    PlayIcon,
     PlusIcon,
     SearchIcon,
-    SquareIcon,
     TerminalIcon,
     Trash2Icon,
     XIcon,
@@ -77,26 +75,20 @@ function ScriptMenuItems({
 }
 
 const KIND_COPY: Record<CommandKind, { noun: string; placeholder: string }> = {
-    run: { noun: 'run', placeholder: 'npm run dev' },
+    dev: { noun: 'dev', placeholder: 'npm run dev' },
+    prod: { noun: 'prod', placeholder: 'npm start' },
     build: { noun: 'build', placeholder: 'npm run build' },
     setup: { noun: 'setup', placeholder: 'npm install' },
 }
 
 type CommandConfigPanelProps = {
     appId: number
-    /** Which command list to edit: the run, build or setup config. */
+    /** Which command list to edit. */
     kind: CommandKind
-    /**
-     * The app's runner status and its handler. With both, a "setup" panel gets
-     * its own Run/Stop button, so setup is run in place and needs no button
-     * elsewhere.
-     */
-    status?: StatusEvent | null
-    onStatus?: (status: StatusEvent) => void
 }
 
-/** Editor for an app's run, build or setup config: an execution mode and its commands. */
-export function CommandConfigPanel({ appId, kind, status, onStatus }: CommandConfigPanelProps) {
+/** Editor for a command list: an execution mode and its commands. */
+export function CommandConfigPanel({ appId, kind }: CommandConfigPanelProps) {
     const { noun, placeholder } = KIND_COPY[kind]
     const [mode, setMode] = useState<RunMode>('parallel')
     const [commands, setCommands] = useState<DraftCommand[]>([])
@@ -105,7 +97,6 @@ export function CommandConfigPanel({ appId, kind, status, onStatus }: CommandCon
     const deferredQuery = useDeferredValue(query)
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
-    const [starting, setStarting] = useState(false)
     const [pendingRemove, setPendingRemove] = useState<DraftCommand | null>(null)
 
     const filtered = useMemo(() => {
@@ -177,11 +168,10 @@ export function CommandConfigPanel({ appId, kind, status, onStatus }: CommandCon
         )
     }
 
-    /** Saves the draft; resolves to whether it was saved. */
-    async function handleSave(quiet = false): Promise<boolean> {
+    async function handleSave() {
         if (commands.some(c => !c.command.trim())) {
             toast.error('Each process needs a command')
-            return false
+            return
         }
         setSaving(true)
         try {
@@ -200,41 +190,11 @@ export function CommandConfigPanel({ appId, kind, status, onStatus }: CommandCon
                     command: c.command,
                 })),
             )
-            if (!quiet) toast.success(`${noun[0]!.toUpperCase()}${noun.slice(1)} config saved`)
-            return true
+            toast.success(`${noun[0]!.toUpperCase()}${noun.slice(1)} config saved`)
         } catch (err) {
             toast.error(err instanceof Error ? err.message : 'Failed to save')
-            return false
         } finally {
             setSaving(false)
-        }
-    }
-
-    // The runner reads the saved config, so the draft is saved before it starts.
-    async function handleRunSetup() {
-        if (!onStatus || commands.length === 0) return
-        setStarting(true)
-        try {
-            if (!(await handleSave(true))) return
-            onStatus(await api.runner.setup(appId))
-            toast.success('Setup started')
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Failed to run setup')
-        } finally {
-            setStarting(false)
-        }
-    }
-
-    async function handleStopSetup() {
-        if (!onStatus) return
-        setStarting(true)
-        try {
-            onStatus(await api.runner.stop(appId))
-            toast.success('Stopped')
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Failed to stop')
-        } finally {
-            setStarting(false)
         }
     }
 
@@ -243,8 +203,6 @@ export function CommandConfigPanel({ appId, kind, status, onStatus }: CommandCon
     }
 
     const pendingName = pendingRemove?.label.trim() || pendingRemove?.command.trim()
-    const settingUp = !!status?.running && status.kind === 'setup'
-    const otherSessionRunning = !!status?.running && status.kind !== 'setup'
 
     return (
         <div className="flex flex-col gap-4">
@@ -392,34 +350,6 @@ export function CommandConfigPanel({ appId, kind, status, onStatus }: CommandCon
                 <Button disabled={saving} onClick={() => void handleSave()}>
                     {saving ? 'Saving…' : `Save ${noun} config`}
                 </Button>
-                {kind === 'setup' && onStatus ? (
-                    settingUp ? (
-                        <Button
-                            variant="destructive"
-                            disabled={starting}
-                            onClick={() => void handleStopSetup()}
-                        >
-                            <SquareIcon data-icon="inline-start" />
-                            Stop setup
-                        </Button>
-                    ) : (
-                        <Button
-                            className="bg-emerald-600 text-white hover:bg-emerald-700"
-                            disabled={starting || saving || otherSessionRunning || commands.length === 0}
-                            title={
-                                otherSessionRunning
-                                    ? 'Stop the running app first'
-                                    : commands.length === 0
-                                      ? 'Add a setup command first'
-                                      : 'Save and run the setup commands'
-                            }
-                            onClick={() => void handleRunSetup()}
-                        >
-                            <PlayIcon data-icon="inline-start" />
-                            {starting ? 'Starting…' : 'Run setup'}
-                        </Button>
-                    )
-                ) : null}
             </div>
 
             <AlertDialog

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"workspace-manager/api"
+	"workspace-manager/api/types"
 	"workspace-manager/server/db"
 	"workspace-manager/server/native"
-	"workspace-manager/api/types"
 )
 
 type childProc struct {
@@ -19,15 +19,15 @@ type childProc struct {
 }
 
 type session struct {
-	id              string
-	appID           int64
-	appName         string
-	kind            string
+	id      string
+	appID   int64
+	appName string
+	kind    string
 	// dir is where commands run and templates are applied: the app's project
 	// path, or the matching folder of a git worktree (then worktree is that
 	// worktree's root).
-	dir             string
-	worktree        string
+	dir      string
+	worktree string
 	// setID is the config set the session runs with (env, templates, commands).
 	setID           int64
 	mode            string
@@ -138,7 +138,7 @@ func (r *Runner) systemLog(s *session, commandID int64, text string) {
 }
 
 func (r *Runner) noteReadyURL(s *session, commandID int64, line string) {
-	if !s.running || s.kind != types.KindRun {
+	if !s.running || !types.IsServing(s.kind) {
 		return
 	}
 	match := MatchReadyURL(context.Background(), r.db, line)
@@ -355,8 +355,8 @@ func (r *Runner) runSession(s *session) {
 		commands = config.Commands
 	}
 
-	// Only a run is waited on to come up; a build or a setup just ends.
-	if s.kind == types.KindRun {
+	// Serving commands wait for readiness; build and setup just end.
+	if types.IsServing(s.kind) {
 		r.startIdleWatcher(s)
 	}
 
@@ -590,6 +590,10 @@ func (r *Runner) Reload(ctx context.Context, appID int64) (types.StatusEvent, er
 	// A reload stays in the worktree the last session ran in.
 	var dir, worktree string
 	var setID int64
+	kind := types.KindDev
+	if existing != nil && types.IsServing(existing.kind) {
+		kind = existing.kind
+	}
 	if existing != nil && existing.worktree != "" {
 		dir, worktree, setID = existing.dir, existing.worktree, existing.setID
 	}
@@ -599,7 +603,7 @@ func (r *Runner) Reload(ctx context.Context, appID int64) (types.StatusEvent, er
 			return types.StatusEvent{}, err
 		}
 	}
-	return r.StartIn(ctx, appID, types.KindRun, dir, worktree, setID)
+	return r.StartIn(ctx, appID, kind, dir, worktree, setID)
 }
 
 func (r *Runner) StopAll(ctx context.Context) {

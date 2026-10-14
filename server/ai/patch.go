@@ -94,8 +94,13 @@ func (s *Service) ApplyPatch(appID, configSetID int64, patch types.AppAIPatch) e
 		}
 	}
 
-	if patch.Run != nil {
-		if err := s.saveCommandList(configSetID, types.KindRun, patch.Run); err != nil {
+	if patch.Dev != nil {
+		if err := s.saveCommandList(configSetID, types.KindDev, patch.Dev); err != nil {
+			return err
+		}
+	}
+	if patch.Prod != nil {
+		if err := s.saveCommandList(configSetID, types.KindProd, patch.Prod); err != nil {
 			return err
 		}
 	}

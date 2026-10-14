@@ -72,7 +72,7 @@ func dialRetry(socket string, start func() error) (*rpc.Conn, error) {
 			return conn, nil
 		}
 		lastErr = err
-		if attempt >= 2 && start != nil && !started {
+		if attempt >= 1 && start != nil && !started {
 			started = true
 			if err := start(); err != nil {
 				return nil, err

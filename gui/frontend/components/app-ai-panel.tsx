@@ -348,7 +348,8 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
         message: res.text.trim() || res.patch.message || "Done.",
         env: res.patch.env,
         templates: res.patch.templates,
-        run: res.patch.run,
+        dev: res.patch.dev,
+        prod: res.patch.prod,
         build: res.patch.build,
         worktrees: res.patch.worktrees,
       }
