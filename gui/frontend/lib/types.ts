@@ -139,6 +139,8 @@ export type StatusEvent = {
     worktree?: string
     /** Config set the session runs with. */
     configSetId?: number
+    /** Who runs the app when it is not this app: "agent" for a run an AI agent prepared through the MCP server. */
+    owner?: string
     running: boolean
     processes: ProcessState[]
     error?: string

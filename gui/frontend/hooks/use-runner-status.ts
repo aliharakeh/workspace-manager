@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { api, onRunnerEvent } from "@/lib/api"
+import { api, onDataChanged, onRunnerEvent } from "@/lib/api"
 import type { StatusEvent } from "@/lib/types"
 
 type State = { appId: number | null; status: StatusEvent | null }
@@ -20,20 +20,31 @@ export function useRunnerStatus(appId: number | null) {
       setState({ appId, status: event })
     }, appId)
 
-    void api.runner
-      .status(appId)
-      .then((status) => {
-        if (!cancelled && !gotEvent) {
-          setState({ appId, status: status as StatusEvent })
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setState({ appId, status: null })
-      })
+    const load = (force: boolean) =>
+      api.runner
+        .status(appId)
+        .then((status) => {
+          if (!cancelled && (force || !gotEvent)) {
+            setState({ appId, status: status as StatusEvent })
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setState({ appId, status: null })
+        })
+    void load(false)
+
+    // An agent that takes or releases the app's run session (through the MCP
+    // server) does not produce runner events here, so read the status again.
+    const unsubscribeChanges = onDataChanged((event) => {
+      if (event.entity !== "session") return
+      if (event.ids?.length && !event.ids.includes(appId)) return
+      void load(true)
+    })
 
     return () => {
       cancelled = true
       unsubscribe()
+      unsubscribeChanges()
     }
   }, [appId])
 

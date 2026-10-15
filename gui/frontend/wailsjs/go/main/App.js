@@ -110,6 +110,10 @@ export function BlueprintsUpdate(arg1, arg2) {
   return window['go']['main']['App']['BlueprintsUpdate'](arg1, arg2);
 }
 
+export function Changed(arg1, arg2) {
+  return window['go']['main']['App']['Changed'](arg1, arg2);
+}
+
 export function ConfigSetsActivate(arg1) {
   return window['go']['main']['App']['ConfigSetsActivate'](arg1);
 }
@@ -136,10 +140,6 @@ export function ConfigSetsList(arg1) {
 
 export function ConfigSetsUpdate(arg1, arg2) {
   return window['go']['main']['App']['ConfigSetsUpdate'](arg1, arg2);
-}
-
-export function ConnectServer() {
-  return window['go']['main']['App']['ConnectServer']();
 }
 
 export function EnvVarsCreate(arg1, arg2) {
@@ -262,6 +262,10 @@ export function PortsList() {
   return window['go']['main']['App']['PortsList']();
 }
 
+export function Publish(arg1, arg2, arg3) {
+  return window['go']['main']['App']['Publish'](arg1, arg2, arg3);
+}
+
 export function ReadyUrlPatternsCreate(arg1) {
   return window['go']['main']['App']['ReadyUrlPatternsCreate'](arg1);
 }
@@ -328,10 +332,6 @@ export function RunnerStop(arg1) {
 
 export function RunnerWorkspaceStatus(arg1) {
   return window['go']['main']['App']['RunnerWorkspaceStatus'](arg1);
-}
-
-export function ServerConnected() {
-  return window['go']['main']['App']['ServerConnected']();
 }
 
 export function SettingsGet() {

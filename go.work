@@ -4,5 +4,5 @@ use (
 	./api
 	./gui
 	./mcp
-	./server
+	./core
 )

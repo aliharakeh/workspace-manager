@@ -1,12 +1,10 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"workspace-manager/api"
 )
@@ -47,7 +45,9 @@ const setRefDesc = "config set id or name; omit for the app's active set"
 
 func allTools() []mcpTool {
 	return []mcpTool{
+		guideTool(),
 		overviewTool(),
+		workspaceTool(),
 		appTool(),
 		configTool(),
 		envTool(),
@@ -56,7 +56,6 @@ func allTools() []mcpTool {
 		blueprintTool(),
 		portsTool(),
 		systemTool(),
-		callTool(),
 	}
 }
 
@@ -85,7 +84,7 @@ func toolSchemas() []any {
 func overviewTool() mcpTool {
 	return mcpTool{
 		Name:        "wm_overview",
-		Description: "List workspaces, their apps and what is currently running. Start here to discover the setup.",
+		Description: "List workspaces, their apps and which apps have a live run session (held by the Workspace Manager app or by an agent). Start here to discover the setup; read wm_guide for how to work with it.",
 		Schema: schema("Workspace overview", map[string]any{
 			"workspace": strProp("optional: " + wsRefDesc),
 		}),
@@ -119,7 +118,7 @@ func overviewTool() mcpTool {
 				if err != nil {
 					return nil, err
 				}
-				status, err := daoCall(api.MethodRunnerWorkspaceStatus, map[string]any{"workspaceID": int64(id)})
+				status, err := sessionsView()
 				if err != nil {
 					return nil, err
 				}
@@ -178,7 +177,7 @@ func appTool() mcpTool {
 				if set, err := resolveConfigSet(app, ""); err == nil {
 					detail, _ = daoCall(api.MethodConfigSetsDetail, map[string]any{"id": set.ID})
 				}
-				status, err := daoCall(api.MethodRunnerStatus, map[string]any{"appID": appIDOf(app)})
+				status, err := sessionOf(appIDOf(app))
 				if err != nil {
 					return nil, err
 				}
@@ -649,137 +648,28 @@ func templateTool() mcpTool {
 	}
 }
 
-// ---- wm_run ----
-
-func runTool() mcpTool {
-	return mcpTool{
-		Name:        "wm_run",
-		Description: "Run, build and stop apps; check runner status; read terminal output. An app runs one session at a time.",
-		Schema: schema("Runner", map[string]any{
-			"action":    map[string]any{"type": "string", "description": "dev, prod, build, setup, stop, reload, status, logs (run is a legacy alias for dev)", "enum": []string{"dev", "prod", "run", "build", "setup", "stop", "reload", "status", "logs"}},
-			"app":       strProp(appRefDesc),
-			"commandId": numProp("only this command id (logs)"),
-			"tail":      numProp("only the last N bytes of each command's output (logs)"),
-		}, "action"),
-		Handler: func(args map[string]any) (any, error) {
-			app, err := resolveApp(argStr(args, "app"))
-			if err != nil {
-				return nil, err
-			}
-			appID := appIDOf(app)
-			switch argStr(args, "action") {
-			case "dev", "prod", "run", "build", "setup":
-				kind := argStr(args, "action")
-				if kind == "run" {
-					kind = "dev"
-				}
-				method := api.MethodRunnerDev
-				switch kind {
-				case "prod":
-					method = api.MethodRunnerProd
-				case "build":
-					method = api.MethodRunnerBuild
-				case "setup":
-					method = api.MethodRunnerSetup
-				}
-				return daoCall(method, map[string]any{"appID": appID})
-			case "stop":
-				return daoCall(api.MethodRunnerStop, map[string]any{"appID": appID})
-			case "reload":
-				return daoCall(api.MethodRunnerReload, map[string]any{"appID": appID})
-			case "status":
-				return daoCall(api.MethodRunnerStatus, map[string]any{"appID": appID})
-			case "logs":
-				status, err := daoCall(api.MethodRunnerStatus, map[string]any{"appID": appID})
-				if err != nil {
-					return nil, err
-				}
-				raw, _ := json.Marshal(status)
-				var st map[string]any
-				_ = json.Unmarshal(raw, &st)
-				procs, _ := st["processes"].([]any)
-				if len(procs) == 0 {
-					appName, _ := app["name"].(string)
-					return nil, api.Errf(api.KindNotFound, "app %s has no active session", appName)
-				}
-				filter, hasFilter := argNum(args, "commandId")
-				tail, _ := argNum(args, "tail")
-				var out []map[string]any
-				for _, p := range procs {
-					pm, _ := p.(map[string]any)
-					cid, _ := pm["commandId"].(float64)
-					if hasFilter && int64(cid) != filter {
-						continue
-					}
-					res, err := daoCall(api.MethodRunnerOutput, map[string]any{"appID": appID, "commandID": int64(cid)})
-					if err != nil {
-						return nil, err
-					}
-					raw, _ := json.Marshal(res)
-					var o map[string]any
-					_ = json.Unmarshal(raw, &o)
-					data, _ := base64.StdEncoding.DecodeString(fmt.Sprint(o["data"]))
-					if tail > 0 && int64(len(data)) > tail {
-						data = data[int64(len(data))-tail:]
-					}
-					out = append(out, map[string]any{"commandId": int64(cid), "text": string(data)})
-				}
-				if hasFilter && len(out) == 0 {
-					return nil, api.Errf(api.KindNotFound, "no command %d in the app's session", filter)
-				}
-				if out == nil {
-					out = []map[string]any{}
-				}
-				return out, nil
-			}
-			return nil, fmt.Errorf("unknown action %q", argStr(args, "action"))
-		},
-	}
-}
-
 // ---- wm_blueprint ----
 
 func blueprintTool() mcpTool {
 	return mcpTool{
 		Name:        "wm_blueprint",
-		Description: "Blueprints: the recipes that scaffold new apps. Creating an app runs synchronously and fails fast on the first failing command.",
+		Description: "Blueprints: the recipes that scaffold new apps. plan_app resolves one into the exact commands for you to run; it runs nothing. Afterwards register the app with wm_app create.",
 		Schema: schema("Blueprints", map[string]any{
-			"action":       map[string]any{"type": "string", "description": "list, show, create, update, delete, create_app, resolve, cancel", "enum": []string{"list", "show", "create", "update", "delete", "create_app", "resolve", "cancel"}},
+			"action":       map[string]any{"type": "string", "description": "list, show, create, update, delete, plan_app", "enum": []string{"list", "show", "create", "update", "delete", "plan_app"}},
 			"blueprint":    strProp("blueprint id or name"),
-			"name":         strProp("blueprint name (create) or new app name (create_app)"),
+			"name":         strProp("blueprint name (create) or new app name (plan_app)"),
 			"description":  strProp("one sentence about what the blueprint creates (create/update)"),
 			"sampleName":   strProp("example app name for the new-app dialog (create/update)"),
 			"createFolder": boolProp("commands run in the parent folder and the app folder is created first (create/update, default true)"),
 			"commands":     map[string]any{"type": "array", "description": "shell lines in order; {{app_name}}, {{folder_name}} and {{app_dir}} are substituted (create/update)", "items": map[string]any{"type": "object", "properties": map[string]any{"command": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}}}},
-			"workspace":    strProp(wsRefDesc + " (create_app)"),
-			"parent":       strProp("parent folder for the new app (create_app, required)"),
-			"folder":       strProp("folder name (create_app, default: slug of the app name)"),
-			"runID":        strProp("run id to answer or stop (resolve/cancel)"),
-			"decision":     map[string]any{"type": "string", "description": "skip or abort (resolve)", "enum": []string{"skip", "abort"}},
+			"workspace":    strProp(wsRefDesc + " (plan_app)"),
+			"parent":       strProp("parent folder for the new app (plan_app, required)"),
+			"folder":       strProp("folder name (plan_app, default: slug of the app name)"),
 		}, "action"),
 		Handler: func(args map[string]any) (any, error) {
 			switch argStr(args, "action") {
 			case "list":
 				return daoCall(api.MethodBlueprintsList, nil)
-			case "resolve":
-				runID, err := need(args, "runID", "the run id")
-				if err != nil {
-					return nil, err
-				}
-				decision, err := need(args, "decision", "the decision")
-				if err != nil {
-					return nil, err
-				}
-				if decision != "skip" && decision != "abort" {
-					return nil, fmt.Errorf("decision must be skip or abort, got %q", decision)
-				}
-				return daoCall(api.MethodBlueprintsResolve, map[string]any{"runID": runID, "action": decision})
-			case "cancel":
-				runID, err := need(args, "runID", "the run id")
-				if err != nil {
-					return nil, err
-				}
-				return daoCall(api.MethodBlueprintsCancel, map[string]any{"runID": runID})
 			}
 			blueprintCmds := func() ([]any, error) {
 				var out []any
@@ -848,7 +738,7 @@ func blueprintTool() mcpTool {
 					}
 					return daoCall(api.MethodBlueprintsUpdate, map[string]any{"id": int64(id), "body": body})
 				}
-			case "create_app":
+			case "plan_app":
 				bp, err := resolveBlueprint(argStr(args, "blueprint"))
 				if err != nil {
 					return nil, err
@@ -877,12 +767,18 @@ func blueprintTool() mcpTool {
 				}
 				bpid, _ := bp["id"].(float64)
 				createFolder, _ := bp["create_folder"].(bool)
-				return daoCall(api.MethodBlueprintsCreateApp, map[string]any{
-					"run_id":       fmt.Sprintf("mcp-%d-%d", os.Getpid(), time.Now().UnixNano()),
+				plan, err := daoCall(api.MethodBlueprintsPlan, map[string]any{
 					"blueprint_id": int64(bpid), "workspace_id": ws.ID,
 					"name": name, "parent_path": parent, "folder_name": folder,
-					"create_folder": createFolder, "ask_on_error": false,
+					"create_folder": createFolder,
 				})
+				if err != nil {
+					return nil, err
+				}
+				return map[string]any{
+					"plan": plan,
+					"next": "Run the commands in order in working_dir (create app_dir first when create_folder is true; run git init in app_dir when git_init is true and it has no .git), then register the app: wm_app create with workspace " + ws.Name + " and path = app_dir.",
+				}, nil
 			}
 			return nil, fmt.Errorf("unknown action %q", argStr(args, "action"))
 		},
@@ -921,43 +817,31 @@ func resolveBlueprint(arg string) (map[string]any, error) {
 func portsTool() mcpTool {
 	return mcpTool{
 		Name:        "wm_ports",
-		Description: "Find local port conflicts and stop the process behind one.",
+		Description: "List the processes listening on local ports, to find port conflicts. Read-only: stopping one is for the user.",
 		Schema: schema("Ports", map[string]any{
-			"action": map[string]any{"type": "string", "description": "list, kill", "enum": []string{"list", "kill"}},
-			"port":   numProp("only this port (list)"),
-			"pid":    numProp("process id to stop (kill)"),
-		}, "action"),
+			"port": numProp("only this port"),
+		}),
 		Handler: func(args map[string]any) (any, error) {
-			switch argStr(args, "action") {
-			case "list":
-				res, err := daoCall(api.MethodPortsList, nil)
-				if err != nil {
-					return nil, err
-				}
-				if port, ok := argNum(args, "port"); ok {
-					raw, _ := json.Marshal(res)
-					var m map[string]any
-					_ = json.Unmarshal(raw, &m)
-					var kept []any
-					for _, p := range m["processes"].([]any) {
-						if pm, _ := p.(map[string]any); pm != nil {
-							if pt, _ := pm["port"].(float64); int64(pt) == port {
-								kept = append(kept, p)
-							}
+			res, err := daoCall(api.MethodPortsList, nil)
+			if err != nil {
+				return nil, err
+			}
+			if port, ok := argNum(args, "port"); ok {
+				raw, _ := json.Marshal(res)
+				var m map[string]any
+				_ = json.Unmarshal(raw, &m)
+				var kept []any
+				for _, p := range m["processes"].([]any) {
+					if pm, _ := p.(map[string]any); pm != nil {
+						if pt, _ := pm["port"].(float64); int64(pt) == port {
+							kept = append(kept, p)
 						}
 					}
-					m["processes"] = kept
-					return m, nil
 				}
-				return res, nil
-			case "kill":
-				pid, ok := argNum(args, "pid")
-				if !ok || pid <= 0 {
-					return nil, fmt.Errorf("pass \"pid\": the process id to stop")
-				}
-				return daoCall(api.MethodPortsKill, map[string]any{"pid": pid})
+				m["processes"] = kept
+				return m, nil
 			}
-			return nil, fmt.Errorf("unknown action %q", argStr(args, "action"))
+			return res, nil
 		},
 	}
 }
@@ -967,14 +851,13 @@ func portsTool() mcpTool {
 func systemTool() mcpTool {
 	return mcpTool{
 		Name:        "wm_system",
-		Description: "Settings, project file inspection and opening URLs in the browser.",
+		Description: "Settings and project file inspection.",
 		Schema: schema("System helpers", map[string]any{
-			"action": map[string]any{"type": "string", "description": "settings_get, settings_set, fs_validate, fs_read, open", "enum": []string{"settings_get", "settings_set", "fs_validate", "fs_read", "open"}},
+			"action": map[string]any{"type": "string", "description": "settings_get, settings_set, fs_validate, fs_read", "enum": []string{"settings_get", "settings_set", "fs_validate", "fs_read"}},
 			"key":    strProp("setting key (settings_get: optional filter; settings_set: required)"),
 			"value":  strProp("setting value (settings_set)"),
 			"path":   strProp("folder to validate (fs_validate) or file inside the app to read (fs_read)"),
 			"app":    strProp(appRefDesc + " (fs_read)"),
-			"url":    strProp("URL to open in the system browser (open)"),
 		}, "action"),
 		Handler: func(args map[string]any) (any, error) {
 			switch argStr(args, "action") {
@@ -1015,49 +898,62 @@ func systemTool() mcpTool {
 					return nil, err
 				}
 				return daoCall(api.MethodFsReadAppFile, map[string]any{"appID": appIDOf(app), "path": path})
-			case "open":
-				url, err := need(args, "url", "the URL to open")
-				if err != nil {
-					return nil, err
-				}
-				return daoCall(api.MethodOpenExternal, map[string]any{"url": url})
 			}
 			return nil, fmt.Errorf("unknown action %q", argStr(args, "action"))
 		},
 	}
 }
 
-// ---- wm_call (escape hatch) ----
+// ---- wm_workspace ----
 
-func callTool() mcpTool {
-	allowed := map[string]bool{}
-	for _, m := range api.AgentMethods() {
-		allowed[m.Name] = true
-	}
+func workspaceTool() mcpTool {
 	return mcpTool{
-		Name:        "wm_call",
-		Description: "Call any daemon method available to an agent client directly with raw params. Escape hatch for what the curated tools do not cover; prefer them when they fit.",
-		Schema: schema("Raw daemon call", map[string]any{
-			"method": strProp("daemon method, e.g. apps.list (see wm_call with method \"\" for the full list)"),
-			"params": map[string]any{"type": "object", "description": "method params object"},
-		}, "method"),
+		Name:        "wm_workspace",
+		Description: "Workspaces: the groups that hold apps. Deleting a workspace deletes its apps' records (not their folders).",
+		Schema: schema("Workspaces", map[string]any{
+			"action":    map[string]any{"type": "string", "description": "list, create, update, delete", "enum": []string{"list", "create", "update", "delete"}},
+			"workspace": strProp(wsRefDesc + " (update/delete)"),
+			"name":      strProp("workspace name (create; update: the new name)"),
+			"icon":      strProp("icon name (create/update)"),
+			"color":     strProp("color (create/update)"),
+		}, "action"),
 		Handler: func(args map[string]any) (any, error) {
-			method := argStr(args, "method")
-			if method == "" {
-				names := make([]string, 0, len(allowed))
-				for _, m := range api.AgentMethods() {
-					names = append(names, m.Name)
+			switch argStr(args, "action") {
+			case "list":
+				return daoCall(api.MethodWorkspacesList, nil)
+			case "create":
+				name, err := need(args, "name", "the workspace name")
+				if err != nil {
+					return nil, err
 				}
-				return names, nil
+				body := map[string]any{"name": name}
+				if v, ok := argOpt(args, "icon"); ok {
+					body["icon"] = v
+				}
+				if v, ok := argOpt(args, "color"); ok {
+					body["color"] = v
+				}
+				return daoCall(api.MethodWorkspacesCreate, body)
+			case "update", "delete":
+				ws, err := resolveWorkspace(argStr(args, "workspace"))
+				if err != nil {
+					return nil, err
+				}
+				if argStr(args, "action") == "delete" {
+					return daoCall(api.MethodWorkspacesDelete, map[string]any{"id": ws.ID})
+				}
+				body := map[string]any{}
+				for _, k := range []string{"name", "icon", "color"} {
+					if v, ok := argOpt(args, k); ok {
+						body[k] = v
+					}
+				}
+				if len(body) == 0 {
+					return nil, fmt.Errorf("pass what to change: name, icon or color")
+				}
+				return daoCall(api.MethodWorkspacesUpdate, map[string]any{"id": ws.ID, "body": body})
 			}
-			if !allowed[method] {
-				return nil, fmt.Errorf("method %q is not available to MCP clients (GUI-only or unknown)", method)
-			}
-			var params any
-			if p, ok := args["params"]; ok {
-				params = p
-			}
-			return daoCall(method, params)
+			return nil, fmt.Errorf("unknown action %q", argStr(args, "action"))
 		},
 	}
 }

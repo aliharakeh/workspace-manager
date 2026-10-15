@@ -1,15 +1,11 @@
-// Package api is the contract between the server and its clients: the request
-// and response types, the method registry, and the error model. The GUI and
-// the MCP server both depend on it; neither imports server code.
+// Package api is the contract between the GUI and the MCP server: the request
+// and response types, the method registry, and the error model. Both
+// depend on it; the GUI does not import the MCP server, nor the other way round.
 package api
 
 // Method names are "group.operation". Each one matches a server handler.
 const (
 	// Server lifecycle and streams.
-	MethodHello     = "hello"
-	MethodStop      = "server.stop"
-	MethodSubscribe = "events.subscribe"
-
 	// Workspaces.
 	MethodWorkspacesList   = "workspaces.list"
 	MethodWorkspacesCreate = "workspaces.create"
@@ -117,6 +113,7 @@ const (
 	MethodBlueprintsUpdate    = "blueprints.update"
 	MethodBlueprintsDelete    = "blueprints.delete"
 	MethodBlueprintsCreateApp = "blueprints.createApp"
+	MethodBlueprintsPlan      = "blueprints.plan"
 	MethodBlueprintsResolve   = "blueprints.resolve"
 	MethodBlueprintsSendInput = "blueprints.sendInput"
 	MethodBlueprintsResize    = "blueprints.resize"
@@ -136,9 +133,6 @@ type Method struct {
 // registry, so what it can call and what the server accepts cannot drift
 // apart.
 var Methods = []Method{
-	{Name: MethodHello, Agent: true},
-	{Name: MethodStop, Agent: true},
-	{Name: MethodSubscribe, Agent: true},
 
 	{Name: MethodWorkspacesList, Agent: true},
 	{Name: MethodWorkspacesCreate, Agent: true},
@@ -151,9 +145,9 @@ var Methods = []Method{
 	{Name: MethodAppsUpdate, Agent: true},
 	{Name: MethodAppsReorder, Agent: true},
 	{Name: MethodAppsDelete, Agent: true},
-	{Name: MethodAppsOpenFolder, Agent: true},
-	{Name: MethodAppsEditors, Agent: true},
-	{Name: MethodAppsOpenInEditor, Agent: true},
+	{Name: MethodAppsOpenFolder, Agent: false},
+	{Name: MethodAppsEditors, Agent: false},
+	{Name: MethodAppsOpenInEditor, Agent: false},
 
 	{Name: MethodConfigSetsList, Agent: true},
 	{Name: MethodConfigSetsDetail, Agent: true},
@@ -181,17 +175,17 @@ var Methods = []Method{
 	{Name: MethodRunConfigGet, Agent: true},
 	{Name: MethodRunConfigSave, Agent: true},
 
-	{Name: MethodRunnerStatus, Agent: true},
-	{Name: MethodRunnerWorkspaceStatus, Agent: true},
-	{Name: MethodRunnerOutput, Agent: true},
+	{Name: MethodRunnerStatus, Agent: false},
+	{Name: MethodRunnerWorkspaceStatus, Agent: false},
+	{Name: MethodRunnerOutput, Agent: false},
 	{Name: MethodRunnerResize, Agent: false},
-	{Name: MethodRunnerRun, Agent: true},
-	{Name: MethodRunnerDev, Agent: true},
-	{Name: MethodRunnerProd, Agent: true},
-	{Name: MethodRunnerBuild, Agent: true},
-	{Name: MethodRunnerSetup, Agent: true},
-	{Name: MethodRunnerStop, Agent: true},
-	{Name: MethodRunnerReload, Agent: true},
+	{Name: MethodRunnerRun, Agent: false},
+	{Name: MethodRunnerDev, Agent: false},
+	{Name: MethodRunnerProd, Agent: false},
+	{Name: MethodRunnerBuild, Agent: false},
+	{Name: MethodRunnerSetup, Agent: false},
+	{Name: MethodRunnerStop, Agent: false},
+	{Name: MethodRunnerReload, Agent: false},
 
 	// Git is GUI-only: agents (the MCP server, the AI) never touch the repo.
 	{Name: MethodGitInfo, Agent: false},
@@ -214,7 +208,7 @@ var Methods = []Method{
 	{Name: MethodWorktreeLinksSave, Agent: false},
 
 	{Name: MethodPortsList, Agent: true},
-	{Name: MethodPortsKill, Agent: true},
+	{Name: MethodPortsKill, Agent: false},
 
 	{Name: MethodReadyUrlPatternsList, Agent: true},
 	{Name: MethodReadyUrlPatternsCreate, Agent: true},
@@ -226,27 +220,17 @@ var Methods = []Method{
 
 	{Name: MethodFsValidatePath, Agent: true},
 	{Name: MethodFsReadAppFile, Agent: true},
-	{Name: MethodOpenExternal, Agent: true},
+	{Name: MethodOpenExternal, Agent: false},
 
 	{Name: MethodBlueprintsList, Agent: true},
 	{Name: MethodBlueprintsCreate, Agent: true},
 	{Name: MethodBlueprintsUpdate, Agent: true},
 	{Name: MethodBlueprintsDelete, Agent: true},
-	{Name: MethodBlueprintsCreateApp, Agent: true},
-	{Name: MethodBlueprintsResolve, Agent: true},
-	{Name: MethodBlueprintsSendInput, Agent: true},
+	{Name: MethodBlueprintsCreateApp, Agent: false},
+	{Name: MethodBlueprintsPlan, Agent: true},
+	{Name: MethodBlueprintsResolve, Agent: false},
+	{Name: MethodBlueprintsSendInput, Agent: false},
 	// Resizing is only useful to a terminal UI; an agent client never sends one.
 	{Name: MethodBlueprintsResize, Agent: false},
-	{Name: MethodBlueprintsCancel, Agent: true},
-}
-
-// AgentMethods returns the methods an agent client may call, in registry order.
-func AgentMethods() []Method {
-	out := make([]Method, 0, len(Methods))
-	for _, m := range Methods {
-		if m.Agent {
-			out = append(out, m)
-		}
-	}
-	return out
+	{Name: MethodBlueprintsCancel, Agent: false},
 }

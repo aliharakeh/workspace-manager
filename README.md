@@ -22,26 +22,27 @@ Group related apps into a workspace, then start, stop, or restart them from one 
 
 ```mermaid
 flowchart LR
-    MCP(["🤖 wm-mcp"]) --> S["🧠 wmd"]
-    GUI(["🖥️ desktop app"]) --> S
-    S --> DB[("🗄️ SQLite")]
-    S --> R(["▶️ runner"])
-    S --> G(["🌿 git"])
-    S --> A(["✨ AI"])
+    GUI(["🖥️ desktop app"]) --> DB[("🗄️ SQLite")]
+    MCP(["🤖 wm-mcp"]) --> DB
+    GUI --> R(["▶️ runner"])
+    GUI --> G(["🌿 git"])
+    GUI --> A(["✨ AI"])
+    AG(["🧑‍💻 coding agent"]) --> MCP
 ```
 
 ## 🚀 How it fits together
 
-- **`wmd`** is the background server. It owns the database, the process runner,
-  the blueprints and the AI, and listens on a local socket. One instance serves
-  every client.
-- **`wm-mcp`** is the MCP server. It exposes the daemon as tools to a coding
-  agent (Claude Code and any other MCP client): apps and config sets, env vars,
-  templates, command lists, the runner, git, worktrees, ports and blueprints.
-  It starts `wmd` on demand. Values marked as excluded from AI stay hidden from
-  it, and the AI features stay GUI-only.
-- **The desktop app** is a client too. It talks to the same server, so a run
-  started in the app shows up for the agent and the other way around.
+- **The desktop app** does the work: it owns the database, the process runner, git,
+  worktrees, blueprints and the AI. There is no background server.
+- **`wm-mcp`** is the MCP server for a coding agent (Claude Code and any other
+  MCP client). It opens the same database, so the app does not need to be
+  running, and gives the agent your workspaces, apps, config sets, env vars,
+  templates, command lists and blueprints, plus a guide for managing them. It
+  edits configuration but **runs nothing**: to run an app it hands the agent
+  the commands. Git and the AI stay in the app. Values marked as excluded from
+  AI stay hidden from it.
+- The two coordinate through the database: edits the agent makes show up in the
+  app, and an app the agent is running shows as "by agent" there.
 
 ## 🤖 Agent quick start
 
@@ -52,16 +53,16 @@ and the tool list). Claude Code:
 claude mcp add workspace-manager -- C:/path/to/wm-mcp.exe
 ```
 
-An agent can then create a workspace, register an app, set its run command,
-start it and follow its output — all through MCP tool calls against the same
-daemon the app talks to.
+An agent can then read the guide (`wm_guide`), register an app, set its run
+commands and env vars, and have the exact commands to start it handed back.
 
 Env vars and templates marked as excluded from AI are hidden from the MCP
 server: their values are blank in output and writes to them are refused. Set
-them in the desktop app.
+them in the desktop app. They still reach the app when it runs through
+`wm_run`, but never the agent's conversation.
 
-`WM_DATA_DIR` points both the server and its clients at another data folder,
-which is how tests run in isolation.
+`WM_DATA_DIR` points both programs at another data folder, which is how tests
+run in isolation.
 
 ## 🎯 The problem it solves
 
@@ -82,7 +83,7 @@ to the work.
 | ⚡ | **Start each app with one command** | Give an app its commands once, then run, stop, or reload it with one click or one agent tool call. Commands run in parallel or in sequence, depending on what the app needs. |
 | 🧩 | **Keep project setup reusable** | Save run commands, environment variables, and file templates in named config sets such as `dev` and `staging`. Switch setups without retyping variables or preparing files by hand. |
 | 📡 | **See what's running** | Check each app's status and follow live, searchable output in one place. When a development server prints its local URL, open it with a click. |
-| 🤖 | **Drive it from an agent** | The MCP server exposes the daemon as tools, so an agent can create apps, change config, run and stop them, and manage their git state. |
+| 🤖 | **Drive it from an agent** | The MCP server gives an agent your apps and a guide, so it can create apps, change config, and be told how to run them. |
 | 🌿 | **Branch and worktree tools** | Create, rename, check out, pull, push, and delete local branches, and run an app's setup inside a fresh git worktree with its shared files linked. |
 | 🪄 | **Create new projects from a recipe** | Save setup commands as blueprints and use them to create new apps. If a command asks for input, answer it in the built-in terminal. |
 | 🔌 | **Find local port conflicts** | See which process is using a listening port and stop it. |
@@ -91,10 +92,10 @@ to the work.
 
 | Path | Role |
 |---|---|
-| `api/` | The contract both sides share: types, the method registry, the wire protocol (`api/rpc`) and the client (`api/client`) |
-| `server/` | The server: `cmd/wmd`, `daemon` (lifecycle, protocol wiring), `handlers` (one per method), `ops` (write operations), `db`, `services` (runner, git, templates, blueprints), `ai`, `native`, `lib` |
-| `mcp/` | The `wm-mcp` MCP server: curated tools over the daemon API (`cmd/wm-mcp`) |
-| `gui/` | The Wails desktop app and the React frontend |
+| `api/` | The contract both programs share: types, the method registry, `lib` helpers |
+| `core/` | What both programs run on: `db`, `ops` (write operations), `handlers` (one per method, with the agent rules), `services` (runner, git, templates, blueprints), `native` |
+| `mcp/` | The `wm-mcp` MCP server: curated tools (`cmd/wm-mcp`) and the agent guide |
+| `gui/` | The Wails desktop app (with the AI in `gui/ai`) and the React frontend |
 | `go.work` | Ties the Go modules together for development |
 
 ## 🛠️ Development
@@ -104,11 +105,10 @@ Needs [Go](https://go.dev/) 🐹, [Wails](https://wails.io/) v2 and [Bun](https:
 From the repo root:
 
 ```bash
-go build ./api/... ./server/... ./gui/... ./mcp/...   # every module
-go test ./api/... ./server/...      # unit and protocol tests
-go build -o build/bin/wmd ./server/cmd/wmd
+go build ./api/... ./core/... ./gui/... ./mcp/...   # every module
+go test ./api/... ./core/... ./gui/... ./mcp/...    # unit tests
 go build -o build/bin/wm-mcp ./mcp/cmd/wm-mcp
-.\build.ps1                         # daemon + MCP + GUI -> build/bin
+.\build.ps1                         # MCP + GUI -> build/bin
 ```
 
 From `gui/`:
@@ -129,7 +129,7 @@ From `gui/frontend/` (run `bun install` once):
 | `bun run lint` | Lint the frontend |
 | `bun run typecheck` | Type-check with `tsc` |
 
-Schema or query changes: edit `server/db/schema.sql` or `server/db/queries.sql`,
+Schema or query changes: edit `core/db/schema.sql` or `core/db/queries.sql`,
 then run `sqlc generate` from the repo root.
 
 ---

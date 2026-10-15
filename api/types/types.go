@@ -149,11 +149,14 @@ type StatusEvent struct {
 	// it runs in the app's own project path.
 	Worktree string `json:"worktree,omitempty"`
 	// ConfigSetID is the config set the session runs with.
-	ConfigSetID int64          `json:"configSetId,omitempty"`
-	Running     bool           `json:"running"`
-	Processes   []ProcessState `json:"processes"`
-	Error       string         `json:"error,omitempty"`
-	Ts          int64          `json:"ts"`
+	ConfigSetID int64 `json:"configSetId,omitempty"`
+	// Owner is who runs the app when it is not this process: "agent" for a run
+	// an agent prepared through the MCP server. Empty for a GUI session.
+	Owner     string         `json:"owner,omitempty"`
+	Running   bool           `json:"running"`
+	Processes []ProcessState `json:"processes"`
+	Error     string         `json:"error,omitempty"`
+	Ts        int64          `json:"ts"`
 }
 
 // LogEvent is a chunk of terminal output of one run command. Data is the raw
@@ -634,4 +637,21 @@ type BlueprintLogEvent struct {
 	Text   string `json:"text"`
 	Data   string `json:"data"`
 	Ts     int64  `json:"ts"`
+}
+
+// BlueprintPlan is what running a blueprint would do, resolved but not run:
+// the folder, the working directory and each command with its placeholders
+// replaced. An agent runs the commands itself, then registers the app.
+type BlueprintPlan struct {
+	Blueprint string `json:"blueprint"`
+	// AppDir is the new app's folder. CreateFolder says to create it first (the
+	// blueprint's commands then run inside it); otherwise they run in
+	// WorkingDir, the parent folder, and are expected to create AppDir.
+	AppDir       string             `json:"app_dir"`
+	WorkingDir   string             `json:"working_dir"`
+	CreateFolder bool               `json:"create_folder"`
+	Commands     []BlueprintCommand `json:"commands"`
+	// GitInit is true when AppDir has no repository yet after the commands:
+	// run "git init" there.
+	GitInit bool `json:"git_init"`
 }

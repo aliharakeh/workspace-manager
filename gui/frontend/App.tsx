@@ -51,6 +51,7 @@ const APP_DATA_ENTITIES = new Set([
     'runConfig',
     'git',
     'worktreeLinks',
+    'session',
 ])
 
 // Last path segment, e.g. "C:\code\my-app\" -> "my-app". Falls back to the
@@ -202,10 +203,9 @@ function AppContent() {
     const retryServer = useCallback(async () => {
         setConnecting(true)
         try {
-            await api.server.connect()
             await bootstrap()
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to connect to server'
+            const message = err instanceof Error ? err.message : 'Failed to load data'
             setServerError(message)
             toast.error(message)
         } finally {
@@ -610,12 +610,12 @@ function AppContent() {
                                     <EmptyMedia variant="icon">
                                         <RefreshCwIcon />
                                     </EmptyMedia>
-                                    <EmptyTitle>Server not running</EmptyTitle>
+                                    <EmptyTitle>Could not load your workspaces</EmptyTitle>
                                     <EmptyDescription>{serverError}</EmptyDescription>
                                 </EmptyHeader>
                                 <EmptyContent>
                                     <Button onClick={() => void retryServer()} disabled={connecting}>
-                                        {connecting ? 'Connecting…' : 'Retry connection'}
+                                        {connecting ? 'Loading…' : 'Retry'}
                                     </Button>
                                 </EmptyContent>
                             </Empty>

@@ -1679,6 +1679,7 @@ export namespace types {
 	    kind: string;
 	    worktree?: string;
 	    configSetId?: number;
+	    owner?: string;
 	    running: boolean;
 	    processes: ProcessState[];
 	    error?: string;
@@ -1696,6 +1697,7 @@ export namespace types {
 	        this.kind = source["kind"];
 	        this.worktree = source["worktree"];
 	        this.configSetId = source["configSetId"];
+	        this.owner = source["owner"];
 	        this.running = source["running"];
 	        this.processes = this.convertValues(source["processes"], ProcessState);
 	        this.error = source["error"];

@@ -105,8 +105,9 @@ func handle(req rpcRequest) rpcResponse {
 		}
 		return ok(map[string]any{
 			"protocolVersion": ver,
-			"capabilities":    map[string]any{"tools": map[string]any{}},
+			"capabilities":    map[string]any{"tools": map[string]any{}, "resources": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "workspace-manager", "version": version},
+			"instructions":    guideText,
 		})
 	case "ping":
 		return ok(map[string]any{})
@@ -135,7 +136,21 @@ func handle(req rpcRequest) rpcResponse {
 		}
 		return ok(out)
 	case "resources/list":
-		return ok(map[string]any{"resources": []any{}})
+		return ok(map[string]any{"resources": []any{map[string]any{
+			"uri": guideURI, "name": "Workspace Manager guide", "mimeType": "text/markdown",
+			"description": "How to manage the user's workspaces with these tools.",
+		}}})
+	case "resources/read":
+		var params struct {
+			URI string `json:"uri"`
+		}
+		_ = json.Unmarshal(req.Params, &params)
+		if params.URI != guideURI {
+			return fail(-32002, "unknown resource %q", params.URI)
+		}
+		return ok(map[string]any{"contents": []any{map[string]any{
+			"uri": guideURI, "mimeType": "text/markdown", "text": guideText,
+		}}})
 	case "prompts/list":
 		return ok(map[string]any{"prompts": []any{}})
 	default:

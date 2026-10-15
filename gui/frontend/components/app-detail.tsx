@@ -58,6 +58,8 @@ export function AppDetail({
   onAppChange,
 }: AppDetailProps) {
   const running = !!status?.running
+  // An agent's run (prepared through the MCP server) cannot be driven from here.
+  const byAgent = running && !!status?.owner
   const [panelEpoch, setPanelEpoch] = useState(0)
   const readyUrls = useMemo(() => {
     if (!running) return []
@@ -88,6 +90,7 @@ export function AppDetail({
             </h1>
             <Badge variant={running ? "default" : "outline"}>
               {appStateLabel(running, status?.kind)}
+              {byAgent ? " · by agent" : null}
             </Badge>
           </div>
           <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
@@ -129,14 +132,20 @@ export function AppDetail({
           ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <AppRunControls
-            appId={app.id}
-            running={running}
-            kind={status?.kind}
-            onStatus={handleStatus}
-            variant="icon"
-            showSetup
-          />
+          {byAgent ? (
+            <span className="text-xs text-muted-foreground">
+              Run by an agent
+            </span>
+          ) : (
+            <AppRunControls
+              appId={app.id}
+              running={running}
+              kind={status?.kind}
+              onStatus={handleStatus}
+              variant="icon"
+              showSetup
+            />
+          )}
           <Separator orientation="vertical" className="hidden h-8 sm:block" />
           <OpenFolderButton appId={app.id} iconOnly />
           <OpenEditorButton appId={app.id} iconOnly />

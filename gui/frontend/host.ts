@@ -297,11 +297,6 @@ export const api = {
     },
 
     openExternal: (url: string) => call(() => Go.OpenExternal(url)),
-
-    server: {
-        connect: () => call(() => Go.ConnectServer()),
-        connected: () => call(() => Go.ServerConnected()),
-    },
 }
 
 export { ApiError }

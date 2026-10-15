@@ -56,6 +56,8 @@ export function BlueprintsSendInput(arg1:string,arg2:string):Promise<types.Ok>;
 
 export function BlueprintsUpdate(arg1:number,arg2:types.BlueprintInput):Promise<types.Blueprint>;
 
+export function Changed(arg1:string,arg2:Array<number>):Promise<void>;
+
 export function ConfigSetsActivate(arg1:number):Promise<types.ConfigSetActivateResult>;
 
 export function ConfigSetsCopyFrom(arg1:number,arg2:number,arg3:types.CopyParts):Promise<types.ConfigSet>;
@@ -69,8 +71,6 @@ export function ConfigSetsGetDetail(arg1:number):Promise<types.ConfigSetDetail>;
 export function ConfigSetsList(arg1:number):Promise<Array<types.ConfigSet>>;
 
 export function ConfigSetsUpdate(arg1:number,arg2:types.ConfigSetUpdateInput):Promise<types.ConfigSet>;
-
-export function ConnectServer():Promise<void>;
 
 export function EnvVarsCreate(arg1:number,arg2:types.EnvVarCreateInput):Promise<types.EnvVar>;
 
@@ -132,6 +132,8 @@ export function PortsKill(arg1:number):Promise<types.PortsKillResult>;
 
 export function PortsList():Promise<types.PortsListResult>;
 
+export function Publish(arg1:string,arg2:number,arg3:any):Promise<void>;
+
 export function ReadyUrlPatternsCreate(arg1:types.ReadyUrlPatternCreateInput):Promise<types.ReadyUrlPattern>;
 
 export function ReadyUrlPatternsDelete(arg1:number):Promise<types.Ok>;
@@ -165,8 +167,6 @@ export function RunnerStatus(arg1:number):Promise<types.StatusEvent>;
 export function RunnerStop(arg1:number):Promise<types.StatusEvent>;
 
 export function RunnerWorkspaceStatus(arg1:number):Promise<Array<types.StatusEvent>>;
-
-export function ServerConnected():Promise<boolean>;
 
 export function SettingsGet():Promise<Record<string, string>>;
 
