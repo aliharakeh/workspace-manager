@@ -6,7 +6,6 @@ type EventType string
 const (
 	EventRunner      EventType = "runnerEvent"
 	EventBlueprint   EventType = "blueprintEvent"
-	EventAppAI       EventType = "appAIEvent"
 	EventDataChanged EventType = "dataChanged"
 )
 
@@ -15,7 +14,7 @@ const (
 type Event struct {
 	Type EventType `json:"type"`
 	App  int64     `json:"appId,omitempty"`
-	Data  any      `json:"data,omitempty"`
+	Data any       `json:"data,omitempty"`
 }
 
 // DataChanged is the payload of EventDataChanged: the entity a write touched

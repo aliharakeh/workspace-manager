@@ -28,13 +28,14 @@ const (
 	MethodAppsOpenInEditor = "apps.openInEditor"
 
 	// Config sets.
-	MethodConfigSetsList     = "configSets.list"
-	MethodConfigSetsDetail   = "configSets.detail"
-	MethodConfigSetsCreate   = "configSets.create"
-	MethodConfigSetsUpdate   = "configSets.update"
-	MethodConfigSetsDelete   = "configSets.delete"
-	MethodConfigSetsActivate = "configSets.activate"
-	MethodConfigSetsCopyFrom = "configSets.copyFrom"
+	MethodConfigSetsList         = "configSets.list"
+	MethodConfigSetsDetail       = "configSets.detail"
+	MethodConfigSetsCreate       = "configSets.create"
+	MethodConfigSetsUpdate       = "configSets.update"
+	MethodConfigSetsDelete       = "configSets.delete"
+	MethodConfigSetsActivate     = "configSets.activate"
+	MethodConfigSetsCopyFrom     = "configSets.copyFrom"
+	MethodConfigSetsApplyChanges = "configSets.applyChanges"
 
 	// Env vars.
 	MethodEnvVarsList   = "envVars.list"
@@ -103,16 +104,6 @@ const (
 	MethodSettingsGet = "settings.get"
 	MethodSettingsSet = "settings.set"
 
-	// AI connections and agents. GUI clients only; agent clients have no AI commands.
-	MethodAIConfigGet      = "ai.config.get"
-	MethodAIConfigSave     = "ai.config.save"
-	MethodAIConfigDelete   = "ai.config.delete"
-	MethodAIConfigActivate = "ai.config.activate"
-	MethodAIChat           = "ai.chat"
-	MethodAIAppChat        = "ai.appChat"
-	MethodAITest           = "ai.test"
-	MethodAIApplyPatch     = "ai.applyPatch"
-
 	// Filesystem helpers.
 	MethodFsValidatePath = "fs.validatePath"
 	MethodFsReadAppFile  = "fs.readAppFile"
@@ -125,7 +116,6 @@ const (
 	MethodBlueprintsCreate    = "blueprints.create"
 	MethodBlueprintsUpdate    = "blueprints.update"
 	MethodBlueprintsDelete    = "blueprints.delete"
-	MethodBlueprintsAIPropose = "blueprints.aiPropose"
 	MethodBlueprintsCreateApp = "blueprints.createApp"
 	MethodBlueprintsResolve   = "blueprints.resolve"
 	MethodBlueprintsSendInput = "blueprints.sendInput"
@@ -137,8 +127,8 @@ const (
 type Method struct {
 	Name string
 	// Agent is true when an agent client (the MCP server) may call the method
-	// as well as the GUI. AI methods are GUI-only, as is the raw blueprint
-	// terminal.
+	// as well as the GUI. git and applying AI changes are GUI-only, as is the runner
+	// terminal resize.
 	Agent bool
 }
 
@@ -172,6 +162,8 @@ var Methods = []Method{
 	{Name: MethodConfigSetsDelete, Agent: true},
 	{Name: MethodConfigSetsActivate, Agent: true},
 	{Name: MethodConfigSetsCopyFrom, Agent: true},
+	// Applies changes the GUI reviewed (the app AI's staged edits) in one call.
+	{Name: MethodConfigSetsApplyChanges, Agent: false},
 
 	{Name: MethodEnvVarsList, Agent: true},
 	{Name: MethodEnvVarsCreate, Agent: true},
@@ -201,24 +193,25 @@ var Methods = []Method{
 	{Name: MethodRunnerStop, Agent: true},
 	{Name: MethodRunnerReload, Agent: true},
 
-	{Name: MethodGitInfo, Agent: true},
-	{Name: MethodGitFetchAll, Agent: true},
-	{Name: MethodGitBranchCreate, Agent: true},
-	{Name: MethodGitBranchRename, Agent: true},
-	{Name: MethodGitBranchCheckout, Agent: true},
-	{Name: MethodGitBranchPull, Agent: true},
-	{Name: MethodGitBranchPush, Agent: true},
-	{Name: MethodGitBranchDelete, Agent: true},
-	{Name: MethodGitFileOpenInEditor, Agent: true},
-	{Name: MethodGitWorktreeAdd, Agent: true},
-	{Name: MethodGitWorktreeRemove, Agent: true},
-	{Name: MethodGitWorktreePrune, Agent: true},
-	{Name: MethodGitWorktreeStart, Agent: true},
-	{Name: MethodGitWorktreeOpenFolder, Agent: true},
-	{Name: MethodGitWorktreeOpenEditor, Agent: true},
-	{Name: MethodGitWorktreeLinks, Agent: true},
-	{Name: MethodWorktreeLinksGet, Agent: true},
-	{Name: MethodWorktreeLinksSave, Agent: true},
+	// Git is GUI-only: agents (the MCP server, the AI) never touch the repo.
+	{Name: MethodGitInfo, Agent: false},
+	{Name: MethodGitFetchAll, Agent: false},
+	{Name: MethodGitBranchCreate, Agent: false},
+	{Name: MethodGitBranchRename, Agent: false},
+	{Name: MethodGitBranchCheckout, Agent: false},
+	{Name: MethodGitBranchPull, Agent: false},
+	{Name: MethodGitBranchPush, Agent: false},
+	{Name: MethodGitBranchDelete, Agent: false},
+	{Name: MethodGitFileOpenInEditor, Agent: false},
+	{Name: MethodGitWorktreeAdd, Agent: false},
+	{Name: MethodGitWorktreeRemove, Agent: false},
+	{Name: MethodGitWorktreePrune, Agent: false},
+	{Name: MethodGitWorktreeStart, Agent: false},
+	{Name: MethodGitWorktreeOpenFolder, Agent: false},
+	{Name: MethodGitWorktreeOpenEditor, Agent: false},
+	{Name: MethodGitWorktreeLinks, Agent: false},
+	{Name: MethodWorktreeLinksGet, Agent: false},
+	{Name: MethodWorktreeLinksSave, Agent: false},
 
 	{Name: MethodPortsList, Agent: true},
 	{Name: MethodPortsKill, Agent: true},
@@ -231,15 +224,6 @@ var Methods = []Method{
 	{Name: MethodSettingsGet, Agent: true},
 	{Name: MethodSettingsSet, Agent: true},
 
-	{Name: MethodAIConfigGet, Agent: false},
-	{Name: MethodAIConfigSave, Agent: false},
-	{Name: MethodAIConfigDelete, Agent: false},
-	{Name: MethodAIConfigActivate, Agent: false},
-	{Name: MethodAIChat, Agent: false},
-	{Name: MethodAIAppChat, Agent: false},
-	{Name: MethodAITest, Agent: false},
-	{Name: MethodAIApplyPatch, Agent: false},
-
 	{Name: MethodFsValidatePath, Agent: true},
 	{Name: MethodFsReadAppFile, Agent: true},
 	{Name: MethodOpenExternal, Agent: true},
@@ -248,7 +232,6 @@ var Methods = []Method{
 	{Name: MethodBlueprintsCreate, Agent: true},
 	{Name: MethodBlueprintsUpdate, Agent: true},
 	{Name: MethodBlueprintsDelete, Agent: true},
-	{Name: MethodBlueprintsAIPropose, Agent: false},
 	{Name: MethodBlueprintsCreateApp, Agent: true},
 	{Name: MethodBlueprintsResolve, Agent: true},
 	{Name: MethodBlueprintsSendInput, Agent: true},

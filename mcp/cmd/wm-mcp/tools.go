@@ -53,7 +53,6 @@ func allTools() []mcpTool {
 		envTool(),
 		templateTool(),
 		runTool(),
-		gitTool(),
 		blueprintTool(),
 		portsTool(),
 		systemTool(),
@@ -659,8 +658,6 @@ func runTool() mcpTool {
 		Schema: schema("Runner", map[string]any{
 			"action":    map[string]any{"type": "string", "description": "dev, prod, build, setup, stop, reload, status, logs (run is a legacy alias for dev)", "enum": []string{"dev", "prod", "run", "build", "setup", "stop", "reload", "status", "logs"}},
 			"app":       strProp(appRefDesc),
-			"configSet": strProp("config set id or name (only used with worktree)"),
-			"worktree":  strProp("run inside this git worktree path instead of the app folder"),
 			"commandId": numProp("only this command id (logs)"),
 			"tail":      numProp("only the last N bytes of each command's output (logs)"),
 		}, "action"),
@@ -675,17 +672,6 @@ func runTool() mcpTool {
 				kind := argStr(args, "action")
 				if kind == "run" {
 					kind = "dev"
-				}
-				if wt, ok := argOpt(args, "worktree"); ok {
-					params := map[string]any{"appID": appID, "path": wt, "kind": kind}
-					if cs, ok := argOpt(args, "configSet"); ok {
-						set, err := resolveConfigSet(app, cs)
-						if err != nil {
-							return nil, err
-						}
-						params["configSetID"] = set.ID
-					}
-					return daoCall(api.MethodGitWorktreeStart, params)
 				}
 				method := api.MethodRunnerDev
 				switch kind {
@@ -745,149 +731,6 @@ func runTool() mcpTool {
 					out = []map[string]any{}
 				}
 				return out, nil
-			}
-			return nil, fmt.Errorf("unknown action %q", argStr(args, "action"))
-		},
-	}
-}
-
-// ---- wm_git ----
-
-func gitTool() mcpTool {
-	return mcpTool{
-		Name:        "wm_git",
-		Description: "Branches, worktrees and shared worktree paths of an app's repository.",
-		Schema: schema("Git and worktrees", map[string]any{
-			"action":     map[string]any{"type": "string", "description": "info, fetch, branch_add, branch_rename, branch_checkout, branch_pull, branch_push, branch_delete, worktree_add, worktree_remove, worktree_prune, worktree_start, links_get, links_save, links_status", "enum": []string{"info", "fetch", "branch_add", "branch_rename", "branch_checkout", "branch_pull", "branch_push", "branch_delete", "worktree_add", "worktree_remove", "worktree_prune", "worktree_start", "links_get", "links_save", "links_status"}},
-			"app":        strProp(appRefDesc),
-			"name":       strProp("branch name (branch_*)"),
-			"oldName":    strProp("old branch name (branch_rename; defaults to name)"),
-			"newName":    strProp("new branch name (branch_rename)"),
-			"base":       strProp("create the new branch from this ref (branch_add/worktree_add)"),
-			"force":      boolProp("force push / delete / remove"),
-			"branch":     strProp("branch for the worktree (worktree_add)"),
-			"newBranch":  boolProp("create the branch instead of checking out an existing one (worktree_add)"),
-			"path":       strProp("worktree path (worktree_add/remove/start, links_status)"),
-			"linkShared": boolProp("link the app's shared paths into the worktree (worktree_add, default true)"),
-			"links":      arrProp("shared paths: per-worktree override (worktree_add) or the app's new set (links_save)", "string"),
-			"kind":       strProp("dev, prod, build or setup (worktree_start, default setup)"),
-			"configSet":  strProp(setRefDesc + " (worktree_start)"),
-			"create":     boolProp("link the missing shared paths first (links_status)"),
-		}, "action"),
-		Handler: func(args map[string]any) (any, error) {
-			app, err := resolveApp(argStr(args, "app"))
-			if err != nil {
-				return nil, err
-			}
-			appID := appIDOf(app)
-			base := map[string]any{"appID": appID}
-			with := func(extra map[string]any) map[string]any {
-				for k, v := range extra {
-					base[k] = v
-				}
-				return base
-			}
-			switch argStr(args, "action") {
-			case "info":
-				return daoCall(api.MethodGitInfo, base)
-			case "fetch":
-				return daoCall(api.MethodGitFetchAll, base)
-			case "branch_add":
-				name, err := need(args, "name", "the branch name")
-				if err != nil {
-					return nil, err
-				}
-				return daoCall(api.MethodGitBranchCreate, with(map[string]any{"name": name, "base": argStr(args, "base")}))
-			case "branch_rename":
-				oldName := argStr(args, "oldName")
-				if oldName == "" {
-					oldName = argStr(args, "name")
-				}
-				newName, err := need(args, "newName", "the new branch name")
-				if err != nil {
-					return nil, err
-				}
-				if oldName == "" {
-					return nil, fmt.Errorf("pass \"oldName\" (or \"name\") and \"newName\"")
-				}
-				return daoCall(api.MethodGitBranchRename, with(map[string]any{"oldName": oldName, "newName": newName}))
-			case "branch_checkout":
-				name, err := need(args, "name", "the branch name")
-				if err != nil {
-					return nil, err
-				}
-				return daoCall(api.MethodGitBranchCheckout, with(map[string]any{"name": name}))
-			case "branch_pull":
-				name, err := need(args, "name", "the branch name")
-				if err != nil {
-					return nil, err
-				}
-				return daoCall(api.MethodGitBranchPull, with(map[string]any{"name": name}))
-			case "branch_push":
-				name, err := need(args, "name", "the branch name")
-				if err != nil {
-					return nil, err
-				}
-				return daoCall(api.MethodGitBranchPush, with(map[string]any{"name": name, "force": argBool(args, "force", false)}))
-			case "branch_delete":
-				name, err := need(args, "name", "the branch name")
-				if err != nil {
-					return nil, err
-				}
-				return daoCall(api.MethodGitBranchDelete, with(map[string]any{"name": name, "force": argBool(args, "force", false)}))
-			case "worktree_add":
-				branch, err := need(args, "branch", "the branch for the worktree")
-				if err != nil {
-					return nil, err
-				}
-				body := map[string]any{
-					"path": argStr(args, "path"), "branch": branch,
-					"new_branch": argBool(args, "newBranch", false), "base": argStr(args, "base"),
-					"link_shared": argBool(args, "linkShared", true),
-				}
-				if _, ok := args["links"]; ok {
-					body["links"] = argStrList(args, "links")
-				}
-				return daoCall(api.MethodGitWorktreeAdd, with(map[string]any{"body": body}))
-			case "worktree_remove":
-				path, err := need(args, "path", "the worktree path")
-				if err != nil {
-					return nil, err
-				}
-				return daoCall(api.MethodGitWorktreeRemove, with(map[string]any{"path": path, "force": argBool(args, "force", false)}))
-			case "worktree_prune":
-				return daoCall(api.MethodGitWorktreePrune, base)
-			case "worktree_start":
-				path, err := need(args, "path", "the worktree path")
-				if err != nil {
-					return nil, err
-				}
-				kind := argStr(args, "kind")
-				if kind == "" {
-					kind = "setup"
-				}
-				if err := checkKind(kind); err != nil {
-					return nil, err
-				}
-				params := with(map[string]any{"path": path, "kind": kind})
-				if cs, ok := argOpt(args, "configSet"); ok {
-					set, err := resolveConfigSet(app, cs)
-					if err != nil {
-						return nil, err
-					}
-					params["configSetID"] = set.ID
-				}
-				return daoCall(api.MethodGitWorktreeStart, params)
-			case "links_get":
-				return daoCall(api.MethodWorktreeLinksGet, base)
-			case "links_save":
-				return daoCall(api.MethodWorktreeLinksSave, with(map[string]any{"paths": argStrList(args, "links")}))
-			case "links_status":
-				path, err := need(args, "path", "the worktree path")
-				if err != nil {
-					return nil, err
-				}
-				return daoCall(api.MethodGitWorktreeLinks, with(map[string]any{"path": path, "create": argBool(args, "create", false)}))
 			}
 			return nil, fmt.Errorf("unknown action %q", argStr(args, "action"))
 		},

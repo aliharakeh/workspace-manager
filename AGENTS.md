@@ -1,9 +1,10 @@
 # Workspace Manager
 
 Three Go modules plus a Wails app, tied together by `go.work`. The background
-server `wmd` owns the database, the process runner, the blueprints and the AI;
-the MCP server and the desktop app are both clients of it and talk JSON over a
-local socket. `api/` is the contract every side shares.
+server `wmd` owns the database, the process runner and the blueprints; it has no
+AI. The MCP server and the desktop app are both clients of it and talk JSON over
+a local socket. The AI lives only in the GUI app (`gui/ai`), and `gui` does not
+import `server`. `api/` is the contract every side shares.
 
 ## Layout
 
@@ -12,14 +13,13 @@ local socket. `api/` is the contract every side shares.
 | `api/` | Shared contract: `types` (JSON payloads), `methods` (the method registry), `rpc` (wire protocol and both connection ends), `client` (dial, handshake, auto-start, subscriptions), `lib` (pure helpers). |
 | `server/cmd/wmd` | The daemon's entry point: opens the database, runs the server. |
 | `server/daemon` | Lifecycle: data-folder lock, socket, idle exit, notifications, method table wiring. |
-| `server/handlers` | One handler per API method; applies the client-kind rules (AI is GUI-only, `include_in_ai` values are hidden from agent clients). |
+| `server/handlers` | One handler per API method; applies the client-kind rules (git and applying reviewed AI changes are GUI-only, `include_in_ai` values are hidden from agent clients). |
 | `server/ops` | Every write operation, ported from the old Wails bindings, with validation. |
 | `server/services` | Runner, templates, git/worktrees, worktree links, ready URLs, blueprints, notifier. |
-| `server/ai` | AI connections and the two agents. They run in the GUI's process but are served to GUI clients only. |
 | `server/db` | SQLite via sqlc: `schema.sql` (run at every startup), `queries.sql`, generated code, explicit upgrades. |
 | `server/native` | OS helpers: process, ports, editor, folder, browser, notifications, PTY (`pty*.go`). |
 | `mcp/` | The MCP server (`wm-mcp`): curated tools over the daemon API for external agents. |
-| `gui/` | The Wails app. `bind.go` proxies to the server; `frontend/` is the React UI. |
+| `gui/` | The Wails app. `bind.go` proxies to the server; `ai/` holds the AI connections and the two agents (they reach data through the GUI's server connection, never the database); `dialog.go` has the file pickers; `frontend/` is the React UI. |
 | `go.work` | Development workspace tying `api`, `server`, `gui` and `mcp`. |
 
 ## How the pieces talk
@@ -32,8 +32,8 @@ local socket. `api/` is the contract every side shares.
   flight.
 - Every client's first call is `hello`, which states `agent` or `gui`; the rpc
   layer refuses every other call until it has. That decides two things: methods
-  marked `Agent: false` in `api/methods.go` are refused to agent clients (the
-  AI), and env vars/templates with `include_in_ai=false` are blanked for agent
+  marked `Agent: false` in `api/methods.go` are refused to agent clients (git
+  and `configSets.applyChanges`), and env vars/templates with `include_in_ai=false` are blanked for agent
   clients and refuse writes from them. A client that omits its kind is treated
   as an agent, the least-privileged kind, never the GUI. Any new secret-like
   value needs the same treatment in `server/handlers`.
@@ -43,9 +43,10 @@ local socket. `api/` is the contract every side shares.
   the daemon and its clients to another data folder, which is how tests and
   sandboxes stay isolated.
 - Events are the frontend's contract: `runnerEvent` carries `{appId, event}`,
-  `blueprintEvent` a `BlueprintLogEvent`, `appAIEvent` an `AppAIStreamEvent`,
-  `dataChanged` an `api.DataChanged`. Keep those names and payload shapes in
-  `server/daemon` and `gui/app.go`.
+  `blueprintEvent` a `BlueprintLogEvent`, `appAIEvent` an `AppAIStreamEvent`
+  (emitted by the GUI itself, not the daemon), `dataChanged` an
+  `api.DataChanged`. Keep those names and payload shapes in `server/daemon` and
+  `gui/app.go`.
 - Every write goes through `ops`, which announces it as a `dataChanged` event
   (`api.DataChanged{Entity, IDs}`) so any client refreshes: the GUI reloads the
   lists on `app`/`workspace` and the open app's panels when its ids include the
@@ -71,8 +72,9 @@ local socket. `api/` is the contract every side shares.
 - Changing the GUI's bound surface: edit `gui/bind.go`, then run
   `wails generate module` from `gui/` and check `frontend/host.ts`. Most
   methods proxy to the server; only the file dialogs, `OpenExternal`, and the
-  AI methods run in the GUI process, and only the AI methods touch the
-  database directly there.
+  AI methods run in the GUI process. Nothing in the GUI opens the database: the
+  AI reads an app through `apps.get`/`configSets.detail` and writes reviewed
+  changes with one `configSets.applyChanges` call.
 - Schema or query changes: edit `server/db/schema.sql` / `server/db/queries.sql`,
   then run `sqlc generate` from `server/`. `schema.sql` runs at every
   startup with `IF NOT EXISTS` statements, so it only creates missing tables:
@@ -89,7 +91,7 @@ local socket. `api/` is the contract every side shares.
   go last and `apps.reorder` rewrites the order. The UI must not re-sort apps
   by name.
 - Blueprints: the runner is in `server/services/blueprints.go`; the agent that
-  drafts them is `server/ai/blueprintai.go` and delivers only through its
+  drafts them is `gui/ai/blueprintai.go` and delivers only through its
   `propose_blueprint` tool. When you change the runner or the placeholder set
   (`{{app_name}}`, `{{folder_name}}`, `{{app_dir}}`), update the agent's
   system prompt and `validateBlueprintProposal`, and the preview in
@@ -99,7 +101,8 @@ local socket. `api/` is the contract every side shares.
   worktree can never be removed; a worktree can run the app's configs via
   `git.worktree.start`; shared paths (`worktree_links`) link a worktree's
   loose files back to the app's folder and are added to the repo's
-  `info/exclude`.
+  `info/exclude`. Git is GUI-only: every `git.*` method is `Agent: false`,
+  the MCP server has no git tool, and the app AI agent has no git tools.
 - Notification setting keys live in both `server/services/notifier.go` and
   `gui/frontend/lib/notifications.ts`; keep them in sync. The daemon sends the
   OS notifications.
@@ -113,7 +116,7 @@ From the repo root (note: `go build ./...` does not work at a workspace root):
 
 ```bash
 go build ./api/... ./server/... ./gui/... ./mcp/...
-go test ./api/... ./server/...
+go test ./api/... ./server/... ./gui/ai/...
 .\build.ps1                     # daemon + MCP + GUI -> build/bin
 go build -o build/bin/wmd ./server/cmd/wmd
 go build -o build/bin/wm-mcp ./mcp/cmd/wm-mcp

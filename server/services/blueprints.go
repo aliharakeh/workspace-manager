@@ -7,22 +7,18 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"workspace-manager/server/db"
 	"workspace-manager/api/lib"
-	"workspace-manager/server/native"
 	"workspace-manager/api/types"
+	"workspace-manager/server/db"
+	"workspace-manager/server/native"
 )
 
 var errBlueprintCancelled = errors.New("Cancelled")
-
-// BlueprintVarRe matches the placeholders a blueprint command may use.
-var BlueprintVarRe = regexp.MustCompile(`\{\{\s*(app_name|folder_name|app_dir)\s*\}\}`)
 
 // RenderBlueprintCommand replaces {{app_name}}, {{folder_name}} and {{app_dir}}
 // in a blueprint command. Values are inserted verbatim; other tokens stay.
@@ -33,8 +29,8 @@ func RenderBlueprintCommand(command string, vars map[string]string) string {
 // renderBlueprintCommand replaces {{app_name}}, {{folder_name}} and {{app_dir}}.
 // Values are inserted verbatim (no shell quoting); other {{tokens}} are kept.
 func renderBlueprintCommand(command string, vars map[string]string) string {
-	return BlueprintVarRe.ReplaceAllStringFunc(command, func(m string) string {
-		return vars[BlueprintVarRe.FindStringSubmatch(m)[1]]
+	return lib.BlueprintVarRe.ReplaceAllStringFunc(command, func(m string) string {
+		return vars[lib.BlueprintVarRe.FindStringSubmatch(m)[1]]
 	})
 }
 

@@ -1,8 +1,8 @@
 # wm-mcp: the workspace-manager MCP server
 
 An MCP server over stdio that lets any coding agent drive workspace-manager:
-list workspaces and apps, read and edit config, run apps, manage git
-worktrees, scaffold from blueprints.
+list workspaces and apps, read and edit config, run apps, scaffold from
+blueprints. Git and worktrees are GUI-only and not exposed to agents.
 
 It talks to the `wmd` daemon through `api/client` and starts the daemon on
 demand, so there is nothing to run by hand. It identifies as an `agent` client:
@@ -47,7 +47,6 @@ Environment is inherited, so the server uses your normal data folder. Set
 | `wm_env` | Env vars: list, set (upsert), delete, import |
 | `wm_template` | File templates: list, add, edit, delete |
 | `wm_run` | run, build, setup, stop, reload, status, logs |
-| `wm_git` | Branches, worktrees, shared worktree paths |
 | `wm_blueprint` | Blueprints: list, show, create, update, delete, create_app (fails fast), resolve, cancel |
 | `wm_ports` | List listening ports, stop a process |
 | `wm_system` | Settings, path validation, reading app files, opening URLs |

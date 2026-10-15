@@ -4,7 +4,6 @@ import (
 	"embed"
 	"log"
 
-	"workspace-manager/server/db"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -15,13 +14,9 @@ import (
 var assets embed.FS
 
 func main() {
-	database, err := db.Open()
-	if err != nil {
-		log.Fatal(err)
-	}
-	app := NewApp(database)
+	app := NewApp()
 
-	err = wails.Run(&options.App{
+	err := wails.Run(&options.App{
 		Title:  "Workspace Manager",
 		Width:  1280,
 		Height: 860,

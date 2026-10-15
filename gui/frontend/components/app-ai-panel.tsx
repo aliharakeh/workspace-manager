@@ -193,8 +193,7 @@ function AppAIDiffView({
   const [hideWhitespace, setHideWhitespace] = useState(false)
   const n = appAIDiffCount(diff)
   if (n === 0) return null
-  const pending =
-    status === "pending" && (diff.files.length > 0 || diff.actions.length > 0)
+  const pending = status === "pending" && diff.files.length > 0
 
   return (
     <div className="mt-2 flex flex-col gap-2">
@@ -230,16 +229,6 @@ function AppAIDiffView({
               {path} — not on this config set, skipped
             </p>
           ))}
-          {diff.actions.length > 0 ? (
-            <div className="flex flex-col gap-1">
-              <p className="text-xs font-medium">Git (runs on apply)</p>
-              {diff.actions.map((line) => (
-                <p key={line} className="font-mono text-xs break-all">
-                  {line}
-                </p>
-              ))}
-            </div>
-          ) : null}
         </div>
       </details>
       {pending ? (
@@ -351,13 +340,11 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
         dev: res.patch.dev,
         prod: res.patch.prod,
         build: res.patch.build,
-        worktrees: res.patch.worktrees,
       }
       const diff = patchHasEdits(patch)
         ? buildAppAIDiff(detail, patch)
         : undefined
-      const pending =
-        diff && (diff.files.length > 0 || diff.actions.length > 0)
+      const pending = diff && diff.files.length > 0
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
@@ -444,7 +431,7 @@ export function AppAIPanel({ app, onApplied }: AppAIPanelProps) {
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm text-muted-foreground">
-            Ask to change env vars, templates, commands, or git worktrees.
+            Ask to change env vars, templates, or commands.
             Review, then apply — only for
           </p>
           <Badge variant="secondary">{setName ?? `set ${setId}`}</Badge>

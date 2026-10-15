@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"workspace-manager/api/types"
-	"workspace-manager/server/services"
+	"workspace-manager/api/lib"
 
 	"github.com/firebase/genkit/go/ai"
 )
@@ -158,14 +158,14 @@ func validateBlueprintProposal(in proposeBlueprintIn, goos string) (types.Bluepr
 			problems = append(problems, fmt.Sprintf("command %d must be a single line; split it into separate commands or chain with &&", n))
 		}
 		for _, ph := range blueprintPlaceholderRe.FindAllString(command, -1) {
-			if !services.BlueprintVarRe.MatchString(ph) {
+			if !lib.BlueprintVarRe.MatchString(ph) {
 				problems = append(problems, fmt.Sprintf("command %d uses unknown placeholder %s; only {{app_name}}, {{folder_name}} and {{app_dir}} exist", n, ph))
 			}
 		}
 		if p := shellProblem(command, goos); p != "" {
 			problems = append(problems, fmt.Sprintf("command %d: %s", n, p))
 		}
-		for _, g := range services.BlueprintVarRe.FindAllStringSubmatch(command, -1) {
+		for _, g := range lib.BlueprintVarRe.FindAllStringSubmatch(command, -1) {
 			if g[1] == "folder_name" || g[1] == "app_dir" {
 				refsFolder = true
 			}

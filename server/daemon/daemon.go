@@ -14,7 +14,6 @@ import (
 
 	"workspace-manager/api"
 	"workspace-manager/api/rpc"
-	"workspace-manager/server/ai"
 	"workspace-manager/server/db"
 	"workspace-manager/server/handlers"
 	"workspace-manager/server/native"
@@ -32,7 +31,6 @@ var IdleExit = 10 * time.Minute
 type Daemon struct {
 	db     *db.DB
 	ops    *ops.Ops
-	aiSvc  *ai.Service
 	server *rpc.Server
 	logger *os.File
 	lock   *os.File
@@ -52,14 +50,10 @@ func New(database *db.DB, logw *os.File) (*Daemon, error) {
 	}, native.Notify)
 	d.ops.Pub = d
 
-	d.aiSvc = ai.NewService(database)
-	d.aiSvc.Worktrees = d.ops
 
 	d.server = rpc.NewServer(d.hello, d.permit)
-	reg := &handlers.Registry{Ops: d.ops, AI: d.aiSvc}
-	reg.RegisterAll(d.server, func(t api.EventType, appID int64, data any) {
-		d.broadcast(t, appID, data)
-	})
+	reg := &handlers.Registry{Ops: d.ops}
+	reg.RegisterAll(d.server)
 	if err := reg.CheckRegistration(); err != nil {
 		return nil, err
 	}

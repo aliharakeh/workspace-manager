@@ -9,26 +9,22 @@ import (
 	"workspace-manager/api"
 	"workspace-manager/api/client"
 	"workspace-manager/api/types"
-	"workspace-manager/server/db"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App is the Wails-bound API surface. It is a client of the wmd daemon, which
-// owns the database, the runner and the blueprints; only the AI methods run in
-// this process.
+// owns the database, the runner and the blueprints; only the AI methods and the
+// file dialogs run in this process. It never opens the database.
 type App struct {
 	ctx context.Context
 	mu  sync.Mutex
 	// conn is the connection to the daemon, nil when none could be opened.
 	conn *client.Client
-	// db backs the AI methods, which run in this process. Nothing else may use
-	// it: every other operation goes through the server.
-	db *db.DB
 }
 
-func NewApp(database *db.DB) *App {
-	return &App{db: database}
+func NewApp() *App {
+	return &App{}
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -84,9 +80,6 @@ func (a *App) shutdown(ctx context.Context) {
 	if c != nil {
 		_ = c.Close()
 	}
-	if a.db != nil {
-		_ = a.db.Close()
-	}
 }
 
 // client returns the connection to the daemon, nil when none could be opened.
@@ -116,7 +109,6 @@ func (a *App) forwardEvents() {
 		Types: []api.EventType{
 			api.EventRunner,
 			api.EventBlueprint,
-			api.EventAppAI,
 			api.EventDataChanged,
 		},
 	})
@@ -172,11 +164,6 @@ func (a *App) forwardEvent(raw json.RawMessage) {
 		var bp types.BlueprintLogEvent
 		if err := json.Unmarshal(ev.Data, &bp); err == nil {
 			EventsEmitBlueprint(a.ctx, bp)
-		}
-	case api.EventAppAI:
-		var ai types.AppAIStreamEvent
-		if err := json.Unmarshal(ev.Data, &ai); err == nil {
-			EventsEmitAppAI(a.ctx, ai)
 		}
 	case api.EventDataChanged:
 		var changed api.DataChanged

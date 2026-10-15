@@ -447,20 +447,6 @@ type AppAIPatch struct {
 	Dev       *AppAIRunPatch       `json:"dev,omitempty"`
 	Prod      *AppAIRunPatch       `json:"prod,omitempty"`
 	Build     *AppAIRunPatch       `json:"build,omitempty"`
-	Worktrees *AppAIWorktreePatch  `json:"worktrees,omitempty"`
-}
-
-// AppAIWorktreeRemove is a staged `git worktree remove`.
-type AppAIWorktreeRemove struct {
-	Path  string `json:"path"`
-	Force bool   `json:"force"`
-}
-
-// AppAIWorktreePatch holds git worktree changes the agent staged; they run when
-// the user applies the patch.
-type AppAIWorktreePatch struct {
-	Add    []GitWorktreeAddInput `json:"add,omitempty"`
-	Remove []AppAIWorktreeRemove `json:"remove,omitempty"`
 }
 
 // GitWorktree is one entry of `git worktree list`. Main is the repository's

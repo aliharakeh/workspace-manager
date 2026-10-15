@@ -1,4 +1,4 @@
-import type { GitWorktreeAddInput, RunMode } from "./types"
+import type { RunMode } from "./types"
 
 export type AppAIChatTurn = {
   role: "user" | "assistant"
@@ -53,11 +53,6 @@ export type AppAIPatch = {
   dev?: AppAICommandPatch
   prod?: AppAICommandPatch
   build?: AppAICommandPatch
-  /** Git worktree changes; they run against the repo when the patch is applied. */
-  worktrees?: {
-    add?: GitWorktreeAddInput[]
-    remove?: { path: string; force: boolean }[]
-  }
 }
 
 /** A staged change to a run or build config. */
@@ -73,8 +68,6 @@ export function patchHasEdits(patch: AppAIPatch): boolean {
     patch.templates?.length ||
     patch.dev ||
     patch.prod ||
-    patch.build ||
-    patch.worktrees?.add?.length ||
-    patch.worktrees?.remove?.length
+    patch.build
   )
 }

@@ -15,9 +15,9 @@ type ImportEntry struct {
 }
 
 type ImportFormat struct {
-	Label     string
-	Matches   func(fileName string) bool
-	Parse     func(content string) ([]ImportEntry, error)
+	Label      string
+	Matches    func(fileName string) bool
+	Parse      func(content string) ([]ImportEntry, error)
 	ToTemplate func(content string) (string, error)
 }
 

@@ -11,8 +11,7 @@ import (
 	"workspace-manager/api"
 	"workspace-manager/api/lib"
 	"workspace-manager/api/types"
-	"workspace-manager/server/ai"
-	"workspace-manager/server/native"
+	"workspace-manager/gui/ai"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -179,7 +178,7 @@ func (a *App) EnvVarsImport(appID int64) (types.ImportEnvResult, error) {
 	if err != nil {
 		return types.ImportEnvResult{}, err
 	}
-	picked, err := native.PickFile(a.ctx, app.ProjectPath)
+	picked, err := PickFile(a.ctx, app.ProjectPath)
 	if err != nil {
 		return types.ImportEnvResult{}, err
 	}
@@ -531,8 +530,8 @@ func aiConfigInfo(store ai.AIStore) types.AIConfigInfo {
 	return info
 }
 
-// The AI methods run in this process against the same package the daemon uses;
-// they are the only code allowed to touch a.db.
+// The AI methods run in this process (package gui/ai). They read the app and
+// its config set from the server and write through it; the daemon has no AI.
 
 func (a *App) AIConfigGet() (types.AIConfigInfo, error) {
 	store, err := ai.LoadAIStore()
@@ -609,7 +608,18 @@ func (a *App) AIAppChat(body types.AppAIChatInput) (types.AppAIChatResult, error
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return ai.AppChatAI(ctx, a.db, body.AppID, body.ConfigSetID, body.History, body.Instruction, func(ev types.AppAIStreamEvent) {
+	app, err := a.appByID(body.AppID)
+	if err != nil {
+		return types.AppAIChatResult{}, err
+	}
+	var detail types.ConfigSetDetail
+	if err := a.call(api.MethodConfigSetsDetail, map[string]any{"id": body.ConfigSetID}, &detail); err != nil {
+		return types.AppAIChatResult{}, err
+	}
+	if detail.AppID != app.ID {
+		return types.AppAIChatResult{}, fmt.Errorf("Config set not found")
+	}
+	return ai.AppChatAI(ctx, app.Name, app.ProjectPath, detail, body.History, body.Instruction, func(ev types.AppAIStreamEvent) {
 		if a.ctx == nil {
 			return
 		}
@@ -651,11 +661,13 @@ func (a *App) AITest(body types.AITestInput) (types.AITestResult, error) {
 }
 
 // AIApplyPatch writes a staged agent patch through the server, which owns the
-// write path: the config set's env vars, templates and command lists, and the
-// git worktrees. Values excluded from AI are never touched.
+// write path: the config set's env vars, templates and command lists. Values
+// excluded from AI are never touched.
 func (a *App) AIApplyPatch(body types.AIApplyPatchInput) (types.Ok, error) {
 	var out types.Ok
-	if err := a.call(api.MethodAIApplyPatch, body, &out); err != nil {
+	if err := a.call(api.MethodConfigSetsApplyChanges, map[string]any{
+		"appID": body.AppID, "configSetID": body.ConfigSetID, "patch": body.Patch,
+	}, &out); err != nil {
 		return types.Ok{}, err
 	}
 	return out, nil
@@ -687,7 +699,7 @@ func (a *App) FsPickFolder(body types.FsPickFolderInput) (types.PickFolderResult
 	if body.StartDir != nil {
 		start = strings.TrimSpace(*body.StartDir)
 	}
-	picked, err := native.PickFolder(a.ctx, start)
+	picked, err := PickFolder(a.ctx, start)
 	if err != nil {
 		return types.PickFolderResult{}, err
 	}
@@ -713,7 +725,7 @@ func (a *App) FsPickFile(body types.FsPickFileInput) (types.PickFileResult, erro
 			dir = app.ProjectPath
 		}
 	}
-	picked, err := native.PickFile(a.ctx, dir)
+	picked, err := PickFile(a.ctx, dir)
 	if err != nil {
 		return types.PickFileResult{}, err
 	}
@@ -739,7 +751,7 @@ func (a *App) FsPickAppFile(appID int64) (types.PickFileResult, error) {
 	if err != nil {
 		return types.PickFileResult{}, err
 	}
-	picked, err := native.PickFile(a.ctx, app.ProjectPath)
+	picked, err := PickFile(a.ctx, app.ProjectPath)
 	if err != nil {
 		return types.PickFileResult{}, err
 	}

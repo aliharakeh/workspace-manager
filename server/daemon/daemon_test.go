@@ -395,3 +395,54 @@ func TestDataFolderIsolation(t *testing.T) {
 	}
 }
 
+
+// TestApplyChangesWritesAndSkipsHidden covers the GUI's one-call write of a
+// reviewed patch: it upserts visible values and never touches AI-excluded ones.
+func TestApplyChangesWritesAndSkipsHidden(t *testing.T) {
+	c := startServer(t)
+	app := makeApp(t, c)
+
+	visible, hidden := true, false
+	one, secret := "1", "secret"
+	for _, v := range []types.EnvVarCreateInput{
+		{Key: "PORT", Value: &one, IncludeInAI: &visible},
+		{Key: "SECRET", Value: &secret, IncludeInAI: &hidden},
+	} {
+		if err := c.Call(api.MethodEnvVarsCreate, map[string]any{"appID": app.ID, "body": v}, nil); err != nil {
+			t.Fatalf("create %s: %v", v.Key, err)
+		}
+	}
+	var sets []types.ConfigSet
+	if err := c.Call(api.MethodConfigSetsList, map[string]any{"appID": app.ID}, &sets); err != nil || len(sets) == 0 {
+		t.Fatalf("config sets: %v (%d)", err, len(sets))
+	}
+
+	patch := types.AppAIPatch{Env: &types.AppAIEnvPatch{Upsert: []types.AppAIEnvUpsert{
+		{Key: "PORT", Value: "2"}, {Key: "SECRET", Value: "leaked"}, {Key: "NEW", Value: "x"},
+	}}}
+	params := map[string]any{"appID": app.ID, "configSetID": sets[0].ID, "patch": patch}
+	// Agent clients cannot apply changes; only the GUI can.
+	if err := c.Call(api.MethodConfigSetsApplyChanges, params, nil); err == nil {
+		t.Fatalf("an agent client applied changes")
+	}
+	gui, err := client.Dial(client.Options{Kind: "gui", Version: "test"})
+	if err != nil {
+		t.Fatalf("dial gui: %v", err)
+	}
+	t.Cleanup(func() { _ = gui.Close() })
+	if err := gui.Call(api.MethodConfigSetsApplyChanges, params, nil); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	var vars []types.EnvVar
+	if err := gui.Call(api.MethodEnvVarsList, map[string]any{"appID": app.ID}, &vars); err != nil {
+		t.Fatalf("list vars: %v", err)
+	}
+	got := map[string]string{}
+	for _, v := range vars {
+		got[v.Key] = v.Value
+	}
+	if got["PORT"] != "2" || got["NEW"] != "x" || got["SECRET"] != "secret" {
+		t.Fatalf("env after apply: %v", got)
+	}
+}

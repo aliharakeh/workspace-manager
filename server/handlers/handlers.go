@@ -1,5 +1,5 @@
 // Package handlers maps API methods to server operations, applying the
-// client-kind rules: AI methods are GUI-only, and env var values and template
+// client-kind rules: git and config-apply methods are GUI-only, and env var values and template
 // contents excluded from AI are hidden from agent clients.
 package handlers
 
@@ -15,7 +15,7 @@ import (
 )
 
 // Client kinds known to the server. An "agent" client (the MCP server) is not
-// the GUI: AI methods are refused and AI-excluded values are hidden.
+// the GUI: GUI-only methods are refused and AI-excluded values are hidden.
 const (
 	ClientAgent = "agent"
 	ClientGUI   = "gui"
@@ -24,23 +24,16 @@ const (
 // Registry is the method table the daemon serves.
 type Registry struct {
 	Ops *ops.Ops
-	AI  AIOps
 
 	srv     rpc.Registerer
 	done    map[string]bool
-	publish func(t api.EventType, appID int64, data any)
 }
 
 // RegisterAll wires every domain into a server and returns the registry, so
-// the caller can check the method table afterwards. publish, when set, carries
-// streamed payloads such as AI progress to subscribers.
-func (r *Registry) RegisterAll(srv rpc.Registerer, publish func(t api.EventType, appID int64, data any)) *Registry {
+// the caller can check the method table afterwards.
+func (r *Registry) RegisterAll(srv rpc.Registerer) *Registry {
 	r.srv = srv
 	r.done = map[string]bool{}
-	if publish == nil {
-		publish = func(api.EventType, int64, any) {}
-	}
-	r.publish = publish
 	r.workspaces()
 	r.apps()
 	r.configSets()
@@ -51,7 +44,6 @@ func (r *Registry) RegisterAll(srv rpc.Registerer, publish func(t api.EventType,
 	r.git()
 	r.system()
 	r.blueprints()
-	r.aiOps()
 	return r
 }
 

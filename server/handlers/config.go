@@ -66,6 +66,16 @@ func (r *Registry) configSets() {
 	}) (types.ConfigSet, error) {
 		return o.ConfigSetsCopyFrom(in.ID, in.SourceID, in.Parts)
 	}))
+	r.handle(api.MethodConfigSetsApplyChanges, typed(func(in struct {
+		AppID       int64            `json:"appID"`
+		ConfigSetID int64            `json:"configSetID"`
+		Patch       types.AppAIPatch `json:"patch"`
+	}) (types.Ok, error) {
+		if err := o.ConfigSetsApplyChanges(in.AppID, in.ConfigSetID, in.Patch); err != nil {
+			return types.Ok{}, err
+		}
+		return types.Ok{Ok: true}, nil
+	}))
 }
 
 func (r *Registry) envVars() {
