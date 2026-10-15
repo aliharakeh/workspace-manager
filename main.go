@@ -20,10 +20,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	app, err := NewApp(database)
-	if err != nil {
-		log.Fatal(err)
-	}
+	app := NewApp(database)
 
 	err = wails.Run(&options.App{
 		Title:  "Workspace Manager",

@@ -65,7 +65,7 @@ to the work.
 | Path | Role |
 |---|---|
 | `main.go`, `app.go`, `bind.go` | The Wails app: entry point, the `App` struct and the surface the frontend calls |
-| `internal/` | The Go side: `api` (types and the method registry), `handlers`, `ops` (write operations), `services` (runner, git, templates, blueprints), `db`, `native`, `ai` |
+| `internal/` | The Go side: `api` (shared types), `ops` (every operation), `services` (runner, git, templates, blueprints), `db`, `native`, `ai` |
 | `frontend/` | The React UI |
 | `build/` | Wails build assets; `build/bin` is the output |
 

@@ -9,10 +9,9 @@ SQLite database and owns the process runner, git, blueprints and the AI.
 | Path | Role |
 |---|---|
 | `main.go`, `app.go` | Wails entry point and the `App` struct: opens the database, builds the operations, relays the runner's events to the frontend. |
-| `bind.go` | The Wails-bound surface the frontend calls. Most methods call `internal/handlers`; the file dialogs, `OpenExternal` and the AI methods are implemented here. |
+| `bind.go` | The Wails-bound surface the frontend calls. Most methods forward to `internal/ops`; the file dialogs, `OpenExternal` and the AI methods are implemented here. |
 | `events.go`, `dialog.go` | Wails event emitters and the file/folder pickers. |
-| `internal/api` | The contract: `types` (JSON payloads), `methods.go` (the method registry), `lib` (pure helpers), errors and the data folder (`types.go`), event types (`events.go`). |
-| `internal/handlers` | One handler per API method, and `Local`, an in-process caller used by `bind.go`. |
+| `internal/api` | Shared definitions: `types` (JSON payloads), `lib` (pure helpers), errors and the data folder (`types.go`), event types (`events.go`). |
 | `internal/ops` | Every write operation, with validation. Each write is announced through a `Publisher`. |
 | `internal/services` | Runner, templates, git/worktrees, worktree links, ready URLs, blueprints, notifier. |
 | `internal/db` | SQLite via sqlc: `schema.sql` (run at every startup), `queries.sql`, generated code, explicit upgrades. |
@@ -24,8 +23,8 @@ SQLite database and owns the process runner, git, blueprints and the AI.
 ## How it fits together
 
 - **Calls.** The frontend calls bound methods on `App` (`frontend/host.ts`
-  wraps them). `bind.go` forwards most of them to `handlers.Local.Call(method,
-  params, &out)`, which runs the registered handler in the same process.
+  wraps them). `bind.go` forwards most of them straight to `internal/ops`, so
+  there is no server, protocol or dispatch layer in between.
 - **Events.** The frontend's contract: `runnerEvent` carries `{appId, event}`,
   `blueprintEvent` a `BlueprintLogEvent`, `appAIEvent` an `AppAIStreamEvent`,
   `dataChanged` an `api.DataChanged`. Keep those names and payload shapes in
@@ -52,10 +51,8 @@ SQLite database and owns the process runner, git, blueprints and the AI.
 
 ## Rules
 
-- Adding an operation: add the method constant in `internal/api/methods.go`,
-  put the operation in `internal/ops` (or a service), and register a handler in
-  `internal/handlers`. `NewLocal` fails if a method has no handler, or a handler
-  has no method, so nothing can drift. Then add the bound method in `bind.go`.
+- Adding an operation: put it in `internal/ops` (or a service), then add the
+  bound method in `bind.go` that calls it.
 - Changing the bound surface: edit `bind.go`, then run `wails generate module`
   and check `frontend/host.ts`.
 - Schema or query changes: edit `internal/db/schema.sql` /

@@ -7,7 +7,6 @@ import (
 	"workspace-manager/internal/api"
 	"workspace-manager/internal/api/types"
 	"workspace-manager/internal/db"
-	"workspace-manager/internal/handlers"
 	"workspace-manager/internal/native"
 	"workspace-manager/internal/ops"
 
@@ -21,10 +20,9 @@ type App struct {
 	ctx   context.Context
 	db    *db.DB
 	ops   *ops.Ops
-	local *handlers.Local
 }
 
-func NewApp(database *db.DB) (*App, error) {
+func NewApp(database *db.DB) *App {
 	a := &App{db: database}
 	a.ops = ops.New(database, func(appID int64, event any) {
 		if a.ctx != nil {
@@ -32,12 +30,7 @@ func NewApp(database *db.DB) (*App, error) {
 		}
 	}, native.Notify)
 	a.ops.Pub = a
-	local, err := handlers.NewLocal(a.ops)
-	if err != nil {
-		return nil, err
-	}
-	a.local = local
-	return a, nil
+	return a
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -53,10 +46,6 @@ func (a *App) shutdown(ctx context.Context) {
 	_ = a.db.Close()
 }
 
-// call runs one API method as the GUI and decodes its result into out.
-func (a *App) call(method string, params, out any) error {
-	return a.local.Call(method, params, out)
-}
 
 // Publish implements ops.Publisher: the blueprint runner's log lines go to the
 // frontend. Runner output does not pass through here.
