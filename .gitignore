@@ -6,3 +6,7 @@ node_modules/
 
 *.exe
 wails-dev.log
+
+vscode/node_modules/
+vscode/out/
+*.vsix

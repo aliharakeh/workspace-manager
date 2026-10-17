@@ -1,0 +1,632 @@
+{
+  "name": "workspace-manager",
+  "displayName": "Workspace Manager",
+  "description": "Config sets, environment variables, file templates and run commands for your folders, stored by the Workspace Manager daemon (shared with the desktop app and the MCP server).",
+  "version": "0.1.0",
+  "publisher": "workspace-manager",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.cjs",
+  "type": "module",
+  "activationEvents": [
+    "onStartupFinished",
+    "onFileSystem:wm-template"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "workspaceManager.refresh",
+        "title": "Refresh",
+        "category": "Workspace Manager",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "workspaceManager.addProject",
+        "title": "Add Folder to Workspace Manager",
+        "category": "Workspace Manager",
+        "icon": "$(add)"
+      },
+      {
+        "command": "workspaceManager.startDaemon",
+        "title": "Connect / Start Daemon",
+        "category": "Workspace Manager",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "workspaceManager.showLog",
+        "title": "Show Daemon Log",
+        "category": "Workspace Manager",
+        "icon": "$(output)"
+      },
+      {
+        "command": "workspaceManager.switchSet",
+        "title": "Switch Config Set",
+        "category": "Workspace Manager",
+        "icon": "$(layers)"
+      },
+      {
+        "command": "workspaceManager.createSet",
+        "title": "New Config Set",
+        "category": "Workspace Manager",
+        "icon": "$(add)"
+      },
+      {
+        "command": "workspaceManager.copyFromSet",
+        "title": "Copy From Another Config Set",
+        "category": "Workspace Manager",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "workspaceManager.renameSet",
+        "title": "Rename Config Set",
+        "category": "Workspace Manager",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "workspaceManager.deleteSet",
+        "title": "Delete Config Set",
+        "category": "Workspace Manager",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "workspaceManager.addEnv",
+        "title": "Add Environment Variable",
+        "category": "Workspace Manager",
+        "icon": "$(add)"
+      },
+      {
+        "command": "workspaceManager.editEnv",
+        "title": "Edit Environment Variable",
+        "category": "Workspace Manager",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "workspaceManager.deleteEnv",
+        "title": "Delete Environment Variable",
+        "category": "Workspace Manager",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "workspaceManager.importEnv",
+        "title": "Import .env File",
+        "category": "Workspace Manager",
+        "icon": "$(file-symlink-file)"
+      },
+      {
+        "command": "workspaceManager.snapshotFile",
+        "title": "Snapshot File as Template",
+        "category": "Workspace Manager",
+        "icon": "$(add)"
+      },
+      {
+        "command": "workspaceManager.snapshotActiveEditor",
+        "title": "Save Active File as Snapshot Template",
+        "category": "Workspace Manager",
+        "icon": "$(camera)"
+      },
+      {
+        "command": "workspaceManager.editTemplate",
+        "title": "Edit Template in Editor",
+        "category": "Workspace Manager",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "workspaceManager.previewTemplate",
+        "title": "Preview Rendered Template",
+        "category": "Workspace Manager",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "workspaceManager.reloadTemplate",
+        "title": "Update Snapshot from Disk File",
+        "category": "Workspace Manager",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "workspaceManager.deleteTemplate",
+        "title": "Delete Template",
+        "category": "Workspace Manager",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "workspaceManager.runSetup",
+        "title": "Run Setup Commands",
+        "category": "Workspace Manager",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "workspaceManager.runDev",
+        "title": "Run Dev Commands",
+        "category": "Workspace Manager",
+        "icon": "$(play)"
+      },
+      {
+        "command": "workspaceManager.runBuild",
+        "title": "Run Build Commands",
+        "category": "Workspace Manager",
+        "icon": "$(package)"
+      },
+      {
+        "command": "workspaceManager.runProd",
+        "title": "Run Prod Commands",
+        "category": "Workspace Manager",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "workspaceManager.stop",
+        "title": "Stop",
+        "category": "Workspace Manager",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "workspaceManager.reload",
+        "title": "Reload (Restart)",
+        "category": "Workspace Manager",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "workspaceManager.showOutput",
+        "title": "Show Command Output",
+        "category": "Workspace Manager",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "workspaceManager.openUrl",
+        "title": "Open URL",
+        "category": "Workspace Manager",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "workspaceManager.agent.listSets",
+        "title": "Agent: List Sets",
+        "category": "Workspace Manager"
+      },
+      {
+        "command": "workspaceManager.agent.switchSet",
+        "title": "Agent: Switch Set",
+        "category": "Workspace Manager"
+      },
+      {
+        "command": "workspaceManager.agent.createSet",
+        "title": "Agent: Create Set",
+        "category": "Workspace Manager"
+      },
+      {
+        "command": "workspaceManager.agent.renameSet",
+        "title": "Agent: Rename Set",
+        "category": "Workspace Manager"
+      },
+      {
+        "command": "workspaceManager.agent.copyFrom",
+        "title": "Agent: Copy From Set",
+        "category": "Workspace Manager"
+      },
+      {
+        "command": "workspaceManager.agent.deleteSet",
+        "title": "Agent: Delete Set",
+        "category": "Workspace Manager"
+      },
+      {
+        "command": "workspaceManager.agent.listEnv",
+        "title": "Agent: List Env",
+        "category": "Workspace Manager"
+      },
+      {
+        "command": "workspaceManager.agent.setEnv",
+        "title": "Agent: Set Env",
+        "category": "Workspace Manager"
+      },
+      {
+        "command": "workspaceManager.agent.removeEnv",
+        "title": "Agent: Remove Env",
+        "category": "Workspace Manager"
+      },
+      {
+        "command": "workspaceManager.agent.importEnv",
+        "title": "Agent: Import Env",
+        "category": "Workspace Manager"
+      },
+      {
+        "command": "workspaceManager.agent.listTemplates",
+        "title": "Agent: List Templates",
+        "category": "Workspace Manager"
+      },
+      {
+        "command": "workspaceManager.agent.getTemplate",
+        "title": "Agent: Get Template",
+        "category": "Workspace Manager"
+      },
+      {
+        "command": "workspaceManager.agent.setTemplate",
+        "title": "Agent: Set Template",
+        "category": "Workspace Manager"
+      },
+      {
+        "command": "workspaceManager.agent.snapshotFile",
+        "title": "Agent: Snapshot File",
+        "category": "Workspace Manager"
+      },
+      {
+        "command": "workspaceManager.agent.removeTemplate",
+        "title": "Agent: Remove Template",
+        "category": "Workspace Manager"
+      },
+      {
+        "command": "workspaceManager.agent.run",
+        "title": "Agent: Run",
+        "category": "Workspace Manager"
+      },
+      {
+        "command": "workspaceManager.agent.stop",
+        "title": "Agent: Stop",
+        "category": "Workspace Manager"
+      },
+      {
+        "command": "workspaceManager.agent.status",
+        "title": "Agent: Status",
+        "category": "Workspace Manager"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "workspaceManager",
+          "title": "Workspace Manager",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "workspaceManager": [
+        {
+          "id": "workspaceManager.view",
+          "name": "Workspace Manager",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "workspaceManager.view",
+        "contents": "Config sets, environment variables, templates and run commands for this folder, stored by the Workspace Manager daemon.\n[Add Folder to Workspace Manager](command:workspaceManager.addProject)\n[Connect / Start Daemon](command:workspaceManager.startDaemon)"
+      }
+    ],
+    "configuration": {
+      "title": "Workspace Manager",
+      "properties": {
+        "workspaceManager.daemonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to wmd (the Workspace Manager daemon). Empty: the WM_DAEMON environment variable, then wmd on PATH."
+        },
+        "workspaceManager.dataDir": {
+          "type": "string",
+          "default": "",
+          "description": "Workspace Manager data folder. Empty: WM_DATA_DIR, then the default for your OS."
+        },
+        "workspaceManager.autoStartDaemon": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start the daemon when it is not running."
+        }
+      }
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "workspaceManager.refresh",
+          "when": "view == workspaceManager.view",
+          "group": "navigation@1"
+        },
+        {
+          "command": "workspaceManager.addProject",
+          "when": "view == workspaceManager.view",
+          "group": "navigation@2"
+        },
+        {
+          "command": "workspaceManager.startDaemon",
+          "when": "view == workspaceManager.view",
+          "group": "1_daemon@1"
+        },
+        {
+          "command": "workspaceManager.showLog",
+          "when": "view == workspaceManager.view",
+          "group": "1_daemon@2"
+        },
+        {
+          "command": "workspaceManager.createSet",
+          "when": "view == workspaceManager.view",
+          "group": "2_sets@1"
+        },
+        {
+          "command": "workspaceManager.switchSet",
+          "when": "view == workspaceManager.view",
+          "group": "2_sets@2"
+        },
+        {
+          "command": "workspaceManager.importEnv",
+          "when": "view == workspaceManager.view",
+          "group": "3_templates@1"
+        },
+        {
+          "command": "workspaceManager.snapshotFile",
+          "when": "view == workspaceManager.view",
+          "group": "3_templates@2"
+        },
+        {
+          "command": "workspaceManager.snapshotActiveEditor",
+          "when": "view == workspaceManager.view",
+          "group": "3_templates@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "workspaceManager.addProject",
+          "when": "view == workspaceManager.view && viewItem == untracked",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspaceManager.switchSet",
+          "when": "view == workspaceManager.view && viewItem == project",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspaceManager.runDev",
+          "when": "view == workspaceManager.view && viewItem == project",
+          "group": "inline@2"
+        },
+        {
+          "command": "workspaceManager.createSet",
+          "when": "view == workspaceManager.view && viewItem == setsGroup",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspaceManager.copyFromSet",
+          "when": "view == workspaceManager.view && viewItem == setsGroup",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "workspaceManager.switchSet",
+          "when": "view == workspaceManager.view && viewItem == set",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspaceManager.renameSet",
+          "when": "view == workspaceManager.view && viewItem == set",
+          "group": "inline@2"
+        },
+        {
+          "command": "workspaceManager.deleteSet",
+          "when": "view == workspaceManager.view && viewItem == set",
+          "group": "inline@3"
+        },
+        {
+          "command": "workspaceManager.addEnv",
+          "when": "view == workspaceManager.view && viewItem == envGroup",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspaceManager.importEnv",
+          "when": "view == workspaceManager.view && viewItem == envGroup",
+          "group": "inline@2"
+        },
+        {
+          "command": "workspaceManager.editEnv",
+          "when": "view == workspaceManager.view && viewItem == env",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspaceManager.deleteEnv",
+          "when": "view == workspaceManager.view && viewItem == env",
+          "group": "inline@2"
+        },
+        {
+          "command": "workspaceManager.snapshotFile",
+          "when": "view == workspaceManager.view && viewItem == templatesGroup",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspaceManager.snapshotActiveEditor",
+          "when": "view == workspaceManager.view && viewItem == templatesGroup",
+          "group": "inline@2"
+        },
+        {
+          "command": "workspaceManager.editTemplate",
+          "when": "view == workspaceManager.view && viewItem == template",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspaceManager.previewTemplate",
+          "when": "view == workspaceManager.view && viewItem == template",
+          "group": "inline@2"
+        },
+        {
+          "command": "workspaceManager.reloadTemplate",
+          "when": "view == workspaceManager.view && viewItem == template",
+          "group": "inline@3"
+        },
+        {
+          "command": "workspaceManager.deleteTemplate",
+          "when": "view == workspaceManager.view && viewItem == template",
+          "group": "inline@4"
+        },
+        {
+          "command": "workspaceManager.runSetup",
+          "when": "view == workspaceManager.view && viewItem == runSetup",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspaceManager.runDev",
+          "when": "view == workspaceManager.view && viewItem == runDev",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspaceManager.runBuild",
+          "when": "view == workspaceManager.view && viewItem == runBuild",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspaceManager.runProd",
+          "when": "view == workspaceManager.view && viewItem == runProd",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspaceManager.stop",
+          "when": "view == workspaceManager.view && viewItem =~ /^run.*Active$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspaceManager.reload",
+          "when": "view == workspaceManager.view && viewItem == runDevActive || viewItem == runProdActive",
+          "group": "inline@2"
+        },
+        {
+          "command": "workspaceManager.showOutput",
+          "when": "view == workspaceManager.view && viewItem == process",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspaceManager.openUrl",
+          "when": "view == workspaceManager.view && viewItem == url",
+          "group": "inline@1"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "workspaceManager.snapshotFile",
+          "when": "!explorerResourceIsFolder",
+          "group": "navigation"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "workspaceManager.snapshotFile",
+          "when": "resourceScheme == file",
+          "group": "1_modification"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "workspaceManager.editEnv",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.deleteEnv",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.editTemplate",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.previewTemplate",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.reloadTemplate",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.deleteTemplate",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.showOutput",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.openUrl",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.listSets",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.switchSet",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.createSet",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.renameSet",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.copyFrom",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.deleteSet",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.listEnv",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.setEnv",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.removeEnv",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.importEnv",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.listTemplates",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.getTemplate",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.setTemplate",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.snapshotFile",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.removeTemplate",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.run",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.stop",
+          "when": "false"
+        },
+        {
+          "command": "workspaceManager.agent.status",
+          "when": "false"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "manifest": "node gen-manifest.mjs",
+    "bundle": "esbuild extension.js --bundle --platform=node --format=cjs --external:vscode --outfile=out/extension.cjs",
+    "test": "node --test \"test/*.test.js\"",
+    "test:host": "node test/host/run.mjs",
+    "build": "npm run bundle && npx --yes @vscode/vsce package --allow-missing-repository --no-dependencies --out ../build/bin"
+  },
+  "devDependencies": {
+    "@vscode/test-electron": "^3.1.0",
+    "esbuild": "^0.28.2"
+  }
+}

@@ -96,6 +96,10 @@ Section
 
     !insertmacro wails.files
 
+    # The daemon the app starts on demand; build.ps1 builds it first.
+    File "..\..\bin\wmd.exe"
+    File "..\..\bin\wm-mcp.exe"
+
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 
@@ -107,6 +111,9 @@ SectionEnd
 
 Section "uninstall"
     !insertmacro wails.setShellContext
+
+    nsExec::Exec 'taskkill /F /IM wmd.exe' # Stop the daemon so its files can be removed
+    nsExec::Exec 'taskkill /F /IM wm-mcp.exe'
 
     RMDir /r "$AppData\${PRODUCT_EXECUTABLE}" # Remove the WebView2 DataPath
 

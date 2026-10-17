@@ -17,7 +17,7 @@ import type {
     StatusEvent,
     WorktreeLinkState,
 } from '@/lib/types'
-import * as Go from './wailsjs/go/main/App'
+import * as Go from './wailsjs/go/gui/App'
 import { types } from './wailsjs/go/models'
 import { EventsOn, OnFileDrop, OnFileDropOff } from './wailsjs/runtime/runtime'
 

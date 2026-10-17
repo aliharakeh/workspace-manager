@@ -23,19 +23,23 @@ Group related apps into a workspace, then start, stop, or restart them from one 
 ```mermaid
 flowchart LR
     UI(["⚛️ React UI"]) --> GO(["🖥️ Go app (Wails)"])
-    GO --> DB[("🗄️ SQLite")]
-    GO --> R(["▶️ runner"])
+    GO --> D(["🧩 wmd daemon"])
+    D --> DB[("🗄️ SQLite")]
+    D --> R(["▶️ runner"])
     GO --> G(["🌿 git"])
     GO --> A(["✨ AI"])
 ```
 
 ## 🚀 How it fits together
 
-One native app. The React interface talks to the Go side through Wails bindings;
-the Go side owns the SQLite database, the process runner (with real terminals),
-git and worktrees, blueprints and the AI features. There is no server or
-background process, and `WM_DATA_DIR` points the app at another data folder,
-which is how tests run in isolation.
+A native app plus a small background daemon. The React interface talks to the Go
+side through Wails bindings; the daemon (`wmd`) owns the SQLite database, the
+process runner (with real terminals) and blueprints, and the app starts it on
+demand. Git and worktrees, the AI features and the file dialogs run in the app
+itself. Because the daemon runs your apps, they keep running when you close the
+window; `wmd` exits on its own once nothing is running and no window is open.
+`WM_DATA_DIR` points both at another data folder, which is how tests run in
+isolation.
 
 ## 🎯 The problem it solves
 
@@ -64,10 +68,15 @@ to the work.
 
 | Path | Role |
 |---|---|
-| `main.go`, `app.go`, `bind.go` | The Wails app: entry point, the `App` struct and the surface the frontend calls |
-| `internal/` | The Go side: `api` (shared types), `ops` (every operation), `services` (runner, git, templates, blueprints), `db`, `native`, `ai` |
+| `main.go` | The Wails entry point |
+| `gui` | The app's Go side: the `App` struct and the surface the frontend calls (`bind.go`), its connection to the daemon, the file dialogs; `ai` and `git` live below it |
+| `cmd/wmd` | The background daemon |
+| `cmd/wm-mcp` | MCP server so coding agents can drive the daemon ([details](cmd/wm-mcp/README.md)) |
+| `vscode` | VS Code extension for config sets, env vars, templates and run buttons, backed by the daemon ([details](vscode/README.md)) |
+| `daemon` | What `wmd` runs: `db`, `ops`, `services` (runner, templates, blueprints), `handlers` |
+| `shared` | What both sides use: `api` (types and the method list), `rpc`, `client`, `native` |
 | `frontend/` | The React UI |
-| `build/` | Wails build assets; `build/bin` is the output |
+| `build/` | Wails build assets; `build/bin` is the output (`workspace-manager.exe`, `wmd.exe`, `wm-mcp.exe`) |
 
 ## 🛠️ Development
 
@@ -79,7 +88,7 @@ From the repo root:
 go build ./...
 go test ./...
 wails dev                  # Wails + Vite (port 5174)
-wails build                # production native app -> build/bin
+.\build.ps1                # wmd.exe + production native app -> build/bin
 wails generate module      # regenerate frontend/wailsjs after Go changes
 ```
 
@@ -92,7 +101,7 @@ From `frontend/` (run `bun install` once):
 | `bun run lint` | Lint the frontend |
 | `bun run typecheck` | Type-check with `tsc` |
 
-Schema or query changes: edit `internal/db/schema.sql` or `internal/db/queries.sql`,
+Schema or query changes: edit `daemon/db/schema.sql` or `daemon/db/queries.sql`,
 then run `sqlc generate` from the repo root.
 
 ---

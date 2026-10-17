@@ -4,8 +4,7 @@ import (
 	"embed"
 	"log"
 
-	"workspace-manager/internal/db"
-
+	"workspace-manager/gui"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -16,13 +15,9 @@ import (
 var assets embed.FS
 
 func main() {
-	database, err := db.Open()
-	if err != nil {
-		log.Fatal(err)
-	}
-	app := NewApp(database)
+	app := gui.NewApp()
 
-	err = wails.Run(&options.App{
+	err := wails.Run(&options.App{
 		Title:  "Workspace Manager",
 		Width:  1280,
 		Height: 860,
@@ -33,8 +28,8 @@ func main() {
 			EnableFileDrop:     true,
 			DisableWebViewDrop: true,
 		},
-		OnStartup:  app.startup,
-		OnShutdown: app.shutdown,
+		OnStartup:  app.Startup,
+		OnShutdown: app.Shutdown,
 		Bind:       []interface{}{app},
 	})
 	if err != nil {
