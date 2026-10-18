@@ -158,7 +158,7 @@ func GitBranches(dir string) ([]string, error) {
 // GitLocalBranches lists local branches with their upstream state and the
 // worktree (from wts) that has each checked out.
 func GitLocalBranches(dir string, wts []types.GitWorktree) ([]types.GitLocalBranch, error) {
-	const format = "%(refname)%09%(objectname:short)%09%(upstream:short)%09%(upstream:track)%09%(contents:subject)"
+	const format = "%(refname)%09%(objectname:short)%09%(upstream:short)%09%(upstream:track)%09%(contents:subject)%09%(committerdate:unix)"
 	out, err := git(dir, "for-each-ref", "--format="+format, "refs/heads")
 	if err != nil {
 		return nil, err
@@ -187,8 +187,8 @@ func GitLocalBranches(dir string, wts []types.GitWorktree) ([]types.GitLocalBran
 // GitLocalBranches. The track field looks like "[ahead 1, behind 2]", "[gone]"
 // or is empty.
 func parseLocalBranch(line string) types.GitLocalBranch {
-	f := strings.SplitN(line, "\t", 5)
-	for len(f) < 5 {
+	f := strings.SplitN(line, "\t", 6)
+	for len(f) < 6 {
 		f = append(f, "")
 	}
 	name, ok := strings.CutPrefix(f[0], "refs/heads/")
@@ -196,6 +196,7 @@ func parseLocalBranch(line string) types.GitLocalBranch {
 		return types.GitLocalBranch{}
 	}
 	b := types.GitLocalBranch{Name: name, Head: f[1], Upstream: f[2], Subject: f[4]}
+	b.Date, _ = strconv.ParseInt(strings.TrimSpace(f[5]), 10, 64)
 	track := strings.Trim(strings.TrimSpace(f[3]), "[]")
 	for _, part := range strings.Split(track, ",") {
 		part = strings.TrimSpace(part)

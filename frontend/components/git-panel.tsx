@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import {
   ArrowDownToLineIcon,
   ArrowUpFromLineIcon,
+  CalendarIcon,
   CheckIcon,
   DownloadCloudIcon,
   EraserIcon,
@@ -21,6 +22,7 @@ import {
 import { toast } from "sonner"
 import { api } from "@/lib/api"
 import { appStateLabel } from "@/lib/app-state"
+import { cn } from "@/lib/utils"
 import type {
   CommandKind,
   ConfigSet,
@@ -43,6 +45,12 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
@@ -252,7 +260,16 @@ export function GitPanel({
   const [forceDelete, setForceDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [checkingOut, setCheckingOut] = useState(false)
+  // Bulk selection (worktree paths, branch names) and the bulk delete dialog.
+  const [selWorktrees, setSelWorktrees] = useState<string[]>([])
+  const [selBranches, setSelBranches] = useState<string[]>([])
+  const [bulk, setBulk] = useState<"worktrees" | "branches" | null>(null)
+  const [bulkForce, setBulkForce] = useState(false)
+  const [bulkWithBranches, setBulkWithBranches] = useState(false)
+  const [bulkBusy, setBulkBusy] = useState(false)
   // The branch being pulled, and the result of a pull that hit conflicts.
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
   const [pulling, setPulling] = useState<string | null>(null)
   const [conflicts, setConflicts] = useState<GitPullResult | null>(null)
   // The branch being pushed, and one whose push was rejected (offered a force).
@@ -358,7 +375,9 @@ export function GitPanel({
         `${label} started in ${w.branch || w.path} with ${setName(setFor(w)) ?? "the active set"}`
       )
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : `Failed to start ${kind}`)
+      toast.error(
+        err instanceof Error ? err.message : `Failed to start ${kind}`
+      )
     } finally {
       setStarting(false)
     }
@@ -479,6 +498,53 @@ export function GitPanel({
     }
   }
 
+  async function handleBulkConfirm() {
+    if (!bulk) return
+    setBulkBusy(true)
+    const failed: string[] = []
+    let ok = 0
+    const msg = (err: unknown) =>
+      err instanceof Error ? err.message : "failed"
+    if (bulk === "worktrees") {
+      for (const w of selectedWorktrees) {
+        try {
+          await api.git.worktreeRemove(appId, w.path, bulkForce)
+          ok++
+        } catch (err) {
+          failed.push(`${w.branch || w.path}: ${msg(err)}`)
+          continue
+        }
+        if (bulkWithBranches && w.branch) {
+          try {
+            await api.git.branchDelete(appId, w.branch, bulkForce)
+          } catch (err) {
+            failed.push(`branch ${w.branch}: ${msg(err)}`)
+          }
+        }
+      }
+    } else {
+      for (const b of selectedBranches) {
+        try {
+          await api.git.branchDelete(appId, b.name, bulkForce)
+          ok++
+        } catch (err) {
+          failed.push(`${b.name}: ${msg(err)}`)
+        }
+      }
+    }
+    const noun = bulk === "worktrees" ? "worktree" : "branch"
+    if (ok > 0) toast.success(`Deleted ${ok} ${noun}${ok === 1 ? "" : "s"}`)
+    if (failed.length > 0) {
+      setOutput(failed.join("\n"))
+      toast.error(`${failed.length} failed, see the output`)
+    }
+    setSelWorktrees([])
+    setSelBranches([])
+    setBulk(null)
+    setBulkBusy(false)
+    await load()
+  }
+
   if (info && !info.is_repo) {
     return (
       <Empty className="border">
@@ -500,12 +566,37 @@ export function GitPanel({
   }
 
   const worktrees = info?.worktrees ?? []
-  const localBranches = info?.local_branches ?? []
+  const allBranches = info?.local_branches ?? []
+  // Branches whose tip commit falls inside the chosen date-time range.
+  const fromMs = dateFrom ? new Date(dateFrom).getTime() : NaN
+  const toMs = dateTo ? new Date(dateTo).getTime() : NaN
+  const filtering = !Number.isNaN(fromMs) || !Number.isNaN(toMs)
+  const localBranches = filtering
+    ? allBranches.filter((b) => {
+        const t = b.date * 1000
+        return (
+          (Number.isNaN(fromMs) || t >= fromMs) &&
+          (Number.isNaN(toMs) || t <= toMs)
+        )
+      })
+    : allBranches
   // The branch the app's own folder is on (empty when detached).
   const currentBranch = worktrees.find((w) => w.current)?.branch ?? ""
   // The worktree the app's session is in: the app's own one when status names none.
   const runningIn = (w: GitWorktree) =>
     running && (status?.worktree ? status.worktree === w.path : w.current)
+  // What a bulk delete may touch: not the main or app worktree, not one running,
+  // and no branch that is checked out.
+  const removableWorktrees = worktrees.filter(
+    (w) => !w.main && !w.current && !runningIn(w)
+  )
+  const deletableBranches = localBranches.filter((b) => !b.worktree)
+  const selectedWorktrees = removableWorktrees.filter((w) =>
+    selWorktrees.includes(w.path)
+  )
+  const selectedBranches = deletableBranches.filter((b) =>
+    selBranches.includes(b.name)
+  )
 
   return (
     <>
@@ -534,8 +625,8 @@ export function GitPanel({
               </div>
               <p className="text-sm text-muted-foreground">
                 Setup, Run and Build use this app's config, with the config set
-                picked per worktree, inside that worktree. Setup first links
-                the shared files.
+                picked per worktree, inside that worktree. Setup first links the
+                shared files.
               </p>
             </div>
             <div className="ml-auto flex flex-wrap justify-end gap-2">
@@ -584,143 +675,182 @@ export function GitPanel({
               <Skeleton className="h-14 w-full" />
             </div>
           ) : (
-            <ul className="divide-y rounded-lg border">
-              {worktrees.map((w) => (
-                <li
-                  key={w.path}
-                  className="flex flex-wrap items-center gap-3 px-3 py-2"
-                >
-                  <div className="min-w-48 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <GitBranchIcon className="size-3.5 text-muted-foreground" />
-                      <span className="text-sm font-medium">
-                        {w.branch ||
-                          (w.bare
-                            ? "bare"
-                            : `detached @ ${w.head.slice(0, 7)}`)}
-                      </span>
-                      {w.main ? <Badge variant="secondary">main</Badge> : null}
-                      {w.current ? <Badge>this app</Badge> : null}
-                      {w.locked ? <Badge variant="outline">locked</Badge> : null}
-                      {w.shared_links ? (
-                        <Badge
-                          variant="outline"
-                          title={`Shared files for this worktree only: ${w.shared_links.join(", ")}`}
-                        >
-                          own shared files
-                        </Badge>
-                      ) : null}
-                      {w.prunable ? (
-                        <Badge variant="destructive">missing</Badge>
-                      ) : null}
-                      {runningIn(w) ? (
-                        <Badge variant="outline">
-                          {appStateLabel(true, status?.kind)}
-                          {setName(status?.configSetId)
-                            ? ` · ${setName(status?.configSetId)}`
-                            : ""}
-                        </Badge>
-                      ) : null}
-                    </div>
-                    <p
-                      className="truncate font-mono text-xs text-muted-foreground"
-                      title={w.path}
-                    >
-                      {w.path}
-                    </p>
-                  </div>
-                  {!w.current && !w.bare && !w.prunable ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Select
-                        items={sets.map((s) => ({
-                          value: String(s.id),
-                          label: s.name,
-                        }))}
-                        value={setFor(w) ? String(setFor(w)) : null}
-                        onValueChange={(value) => {
-                          if (value != null) chooseSet(w, Number(value))
-                        }}
-                        disabled={runningIn(w) || sets.length === 0}
-                      >
-                        <SelectTrigger
-                          size="sm"
-                          className="w-40"
-                          aria-label={`Config set for ${w.path}`}
-                        >
-                          <SelectValue placeholder="Config set" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {sets.map((s) => (
-                              <SelectItem key={s.id} value={String(s.id)}>
-                                {s.name}
-                                {s.id === activeConfigSetId ? " (active)" : ""}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      {(w.shared_links ?? links).length ? (
-                        <IconAction
-                          label="Link shared files"
-                          disabled={linking || runningIn(w)}
-                          onClick={() => void handleLink(w)}
-                        >
-                          <Link2Icon />
-                        </IconAction>
-                      ) : null}
-                      {runningIn(w) ? (
-                        <IconAction
-                          label="Stop"
-                          disabled={starting}
-                          onClick={() => void handleStop()}
-                        >
-                          <SquareIcon />
-                        </IconAction>
-                      ) : (
-                        START_KINDS.map(({ kind, label, Icon }) => (
-                          <IconAction
-                            key={kind}
-                            label={`${label} in this worktree`}
-                            disabled={starting || running || !setFor(w)}
-                            onClick={() => void handleStart(w, kind, label)}
+            <>
+              {removableWorktrees.length > 0 ? (
+                <BulkBar
+                  label="worktrees"
+                  total={removableWorktrees.length}
+                  selected={selectedWorktrees.length}
+                  onToggleAll={(all) =>
+                    setSelWorktrees(
+                      all ? removableWorktrees.map((w) => w.path) : []
+                    )
+                  }
+                  onDelete={() => {
+                    setBulkForce(false)
+                    setBulkWithBranches(false)
+                    setBulk("worktrees")
+                  }}
+                />
+              ) : null}
+              <ul className="divide-y rounded-lg border">
+                {worktrees.map((w) => (
+                  <li
+                    key={w.path}
+                    className="flex flex-wrap items-center gap-3 px-3 py-2"
+                  >
+                    {removableWorktrees.length > 0 ? (
+                      <Checkbox
+                        aria-label={`Select worktree ${w.branch || w.path}`}
+                        disabled={!removableWorktrees.includes(w)}
+                        checked={selWorktrees.includes(w.path)}
+                        onCheckedChange={(checked) =>
+                          setSelWorktrees((cur) =>
+                            checked
+                              ? [...cur, w.path]
+                              : cur.filter((p) => p !== w.path)
+                          )
+                        }
+                      />
+                    ) : null}
+                    <div className="min-w-48 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <GitBranchIcon className="size-3.5 text-muted-foreground" />
+                        <span className="text-sm font-medium">
+                          {w.branch ||
+                            (w.bare
+                              ? "bare"
+                              : `detached @ ${w.head.slice(0, 7)}`)}
+                        </span>
+                        {w.main ? (
+                          <Badge variant="secondary">main</Badge>
+                        ) : null}
+                        {w.current ? <Badge>this app</Badge> : null}
+                        {w.locked ? (
+                          <Badge variant="outline">locked</Badge>
+                        ) : null}
+                        {w.shared_links ? (
+                          <Badge
+                            variant="outline"
+                            title={`Shared files for this worktree only: ${w.shared_links.join(", ")}`}
                           >
-                            <Icon />
+                            own shared files
+                          </Badge>
+                        ) : null}
+                        {w.prunable ? (
+                          <Badge variant="destructive">missing</Badge>
+                        ) : null}
+                        {runningIn(w) ? (
+                          <Badge variant="outline">
+                            {appStateLabel(true, status?.kind)}
+                            {setName(status?.configSetId)
+                              ? ` · ${setName(status?.configSetId)}`
+                              : ""}
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <p
+                        className="truncate font-mono text-xs text-muted-foreground"
+                        title={w.path}
+                      >
+                        {w.path}
+                      </p>
+                    </div>
+                    {!w.current && !w.bare && !w.prunable ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Select
+                          items={sets.map((s) => ({
+                            value: String(s.id),
+                            label: s.name,
+                          }))}
+                          value={setFor(w) ? String(setFor(w)) : null}
+                          onValueChange={(value) => {
+                            if (value != null) chooseSet(w, Number(value))
+                          }}
+                          disabled={runningIn(w) || sets.length === 0}
+                        >
+                          <SelectTrigger
+                            size="sm"
+                            className="w-40"
+                            aria-label={`Config set for ${w.path}`}
+                          >
+                            <SelectValue placeholder="Config set" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {sets.map((s) => (
+                                <SelectItem key={s.id} value={String(s.id)}>
+                                  {s.name}
+                                  {s.id === activeConfigSetId
+                                    ? " (active)"
+                                    : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                        {(w.shared_links ?? links).length ? (
+                          <IconAction
+                            label="Link shared files"
+                            disabled={linking || runningIn(w)}
+                            onClick={() => void handleLink(w)}
+                          >
+                            <Link2Icon />
                           </IconAction>
-                        ))
-                      )}
-                    </div>
-                  ) : null}
-                  {!w.bare && !w.prunable ? (
-                    <div className="flex items-center gap-2">
-                      <OpenFolderButton
-                        appId={appId}
-                        worktreePath={w.current ? undefined : w.path}
-                        iconOnly
-                      />
-                      <OpenEditorButton
-                        appId={appId}
-                        worktreePath={w.current ? undefined : w.path}
-                        iconOnly
-                      />
-                    </div>
-                  ) : null}
-                  {!w.main && !w.current ? (
-                    <IconAction
-                      label="Remove worktree"
-                      variant="ghost"
-                      disabled={runningIn(w)}
-                      onClick={() => {
-                        setForce(false)
-                        setPendingRemove(w)
-                      }}
-                    >
-                      <Trash2Icon />
-                    </IconAction>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+                        ) : null}
+                        {runningIn(w) ? (
+                          <IconAction
+                            label="Stop"
+                            disabled={starting}
+                            onClick={() => void handleStop()}
+                          >
+                            <SquareIcon />
+                          </IconAction>
+                        ) : (
+                          START_KINDS.map(({ kind, label, Icon }) => (
+                            <IconAction
+                              key={kind}
+                              label={`${label} in this worktree`}
+                              disabled={starting || running || !setFor(w)}
+                              onClick={() => void handleStart(w, kind, label)}
+                            >
+                              <Icon />
+                            </IconAction>
+                          ))
+                        )}
+                      </div>
+                    ) : null}
+                    {!w.bare && !w.prunable ? (
+                      <div className="flex items-center gap-2">
+                        <OpenFolderButton
+                          appId={appId}
+                          worktreePath={w.current ? undefined : w.path}
+                          iconOnly
+                        />
+                        <OpenEditorButton
+                          appId={appId}
+                          worktreePath={w.current ? undefined : w.path}
+                          iconOnly
+                        />
+                      </div>
+                    ) : null}
+                    {!w.main && !w.current ? (
+                      <IconAction
+                        label="Remove worktree"
+                        variant="ghost"
+                        disabled={runningIn(w)}
+                        onClick={() => {
+                          setForce(false)
+                          setPendingRemove(w)
+                        }}
+                      >
+                        <Trash2Icon />
+                      </IconAction>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </section>
 
@@ -729,131 +859,177 @@ export function GitPanel({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <p className="text-sm font-medium">Local branches</p>
-                <Badge variant="secondary">{localBranches.length}</Badge>
+                <Badge variant="secondary">
+                  {filtering
+                    ? `${localBranches.length} of ${allBranches.length}`
+                    : localBranches.length}
+                </Badge>
               </div>
               <p className="text-sm text-muted-foreground">
                 Create, rename and delete local branches. A branch checked out
                 in a worktree cannot be deleted.
               </p>
             </div>
-            <Button
-              variant="outline"
-              disabled={!info}
-              onClick={() => setBranchCreateOpen(true)}
-            >
-              <PlusIcon data-icon="inline-start" />
-              New branch
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <DateRangeFilter
+                disabled={!info || allBranches.length === 0}
+                from={dateFrom}
+                to={dateTo}
+                onChange={(f, t) => {
+                  setDateFrom(f)
+                  setDateTo(t)
+                }}
+              />
+              <Button
+                variant="outline"
+                disabled={!info}
+                onClick={() => setBranchCreateOpen(true)}
+              >
+                <PlusIcon data-icon="inline-start" />
+                New branch
+              </Button>
+            </div>
           </div>
 
           {!info ? (
             <Skeleton className="h-14 w-full" />
           ) : localBranches.length === 0 ? (
             <p className="rounded-lg border px-3 py-2 text-sm text-muted-foreground">
-              No local branches yet.
+              {filtering
+                ? "No branches have a last commit in this range."
+                : "No local branches yet."}
             </p>
           ) : (
-            <ul className="divide-y rounded-lg border">
-              {localBranches.map((b) => (
-                <li
-                  key={b.name}
-                  className="flex flex-wrap items-center gap-3 px-3 py-2"
-                >
-                  <div className="min-w-48 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <GitBranchIcon className="size-3.5 text-muted-foreground" />
-                      <span className="text-sm font-medium">{b.name}</span>
-                      {b.name === currentBranch ? (
-                        <Badge title={b.worktree}>this app</Badge>
-                      ) : b.worktree ? (
-                        <Badge variant="secondary" title={b.worktree}>
-                          checked out
-                        </Badge>
-                      ) : null}
-                      {b.upstream ? (
-                        <Badge
-                          variant="outline"
-                          title={b.gone ? "Upstream branch was deleted" : ""}
-                        >
-                          {b.upstream}
-                          {b.gone ? " · gone" : ""}
-                          {b.ahead ? ` · ↑${b.ahead}` : ""}
-                          {b.behind ? ` · ↓${b.behind}` : ""}
-                        </Badge>
-                      ) : null}
+            <>
+              {deletableBranches.length > 0 ? (
+                <BulkBar
+                  label="branches"
+                  total={deletableBranches.length}
+                  selected={selectedBranches.length}
+                  onToggleAll={(all) =>
+                    setSelBranches(
+                      all ? deletableBranches.map((b) => b.name) : []
+                    )
+                  }
+                  onDelete={() => {
+                    setBulkForce(false)
+                    setBulk("branches")
+                  }}
+                />
+              ) : null}
+              <ul className="divide-y rounded-lg border">
+                {localBranches.map((b) => (
+                  <li
+                    key={b.name}
+                    className="flex flex-wrap items-center gap-3 px-3 py-2"
+                  >
+                    {deletableBranches.length > 0 ? (
+                      <Checkbox
+                        aria-label={`Select branch ${b.name}`}
+                        disabled={!!b.worktree}
+                        checked={selBranches.includes(b.name)}
+                        onCheckedChange={(checked) =>
+                          setSelBranches((cur) =>
+                            checked
+                              ? [...cur, b.name]
+                              : cur.filter((n) => n !== b.name)
+                          )
+                        }
+                      />
+                    ) : null}
+                    <div className="min-w-48 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <GitBranchIcon className="size-3.5 text-muted-foreground" />
+                        <span className="text-sm font-medium">{b.name}</span>
+                        {b.name === currentBranch ? (
+                          <Badge title={b.worktree}>this app</Badge>
+                        ) : b.worktree ? (
+                          <Badge variant="secondary" title={b.worktree}>
+                            checked out
+                          </Badge>
+                        ) : null}
+                        {b.upstream ? (
+                          <Badge
+                            variant="outline"
+                            title={b.gone ? "Upstream branch was deleted" : ""}
+                          >
+                            {b.upstream}
+                            {b.gone ? " · gone" : ""}
+                            {b.ahead ? ` · ↑${b.ahead}` : ""}
+                            {b.behind ? ` · ↓${b.behind}` : ""}
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {b.date ? new Date(b.date * 1000).toLocaleString() : ""}
+                      </p>
                     </div>
-                    <p
-                      className="truncate text-xs text-muted-foreground"
-                      title={b.subject}
-                    >
-                      <span className="font-mono">{b.head}</span> {b.subject}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {!b.upstream || b.gone || b.ahead > 0 ? (
+                    <div className="flex items-center gap-2">
+                      {!b.upstream || b.gone || b.ahead > 0 ? (
+                        <IconAction
+                          label={
+                            b.upstream && !b.gone
+                              ? `Push ${b.ahead} commit${b.ahead === 1 ? "" : "s"} to ${b.upstream}`
+                              : "Publish branch to a remote"
+                          }
+                          disabled={pushing !== null}
+                          onClick={() => void handlePush(b)}
+                        >
+                          <ArrowUpFromLineIcon />
+                        </IconAction>
+                      ) : null}
+                      {b.worktree && b.upstream && !b.gone ? (
+                        <IconAction
+                          label={
+                            running
+                              ? "Stop the app to pull"
+                              : `Pull ${b.upstream} into ${b.name}`
+                          }
+                          disabled={pulling !== null || running}
+                          onClick={() => void handlePull(b)}
+                        >
+                          <ArrowDownToLineIcon />
+                        </IconAction>
+                      ) : null}
+                      {!b.worktree ? (
+                        <IconAction
+                          label={
+                            running
+                              ? "Stop the app to switch branches"
+                              : "Check out in this app's folder"
+                          }
+                          disabled={checkingOut || running}
+                          onClick={() => void handleCheckout(b)}
+                        >
+                          <CheckIcon />
+                        </IconAction>
+                      ) : null}
+                      <IconAction
+                        label="Rename branch"
+                        onClick={() => setRenaming(b)}
+                      >
+                        <PencilIcon />
+                      </IconAction>
                       <IconAction
                         label={
-                          b.upstream && !b.gone
-                            ? `Push ${b.ahead} commit${b.ahead === 1 ? "" : "s"} to ${b.upstream}`
-                            : "Publish branch to a remote"
+                          b.worktree
+                            ? "Checked out in a worktree: cannot delete"
+                            : "Delete branch"
                         }
-                        disabled={pushing !== null}
-                        onClick={() => void handlePush(b)}
+                        variant="ghost"
+                        disabled={!!b.worktree}
+                        onClick={() => {
+                          setForceDelete(false)
+                          setPendingDelete(b)
+                        }}
                       >
-                        <ArrowUpFromLineIcon />
+                        <Trash2Icon />
                       </IconAction>
-                    ) : null}
-                    {b.worktree && b.upstream && !b.gone ? (
-                      <IconAction
-                        label={
-                          running
-                            ? "Stop the app to pull"
-                            : `Pull ${b.upstream} into ${b.name}`
-                        }
-                        disabled={pulling !== null || running}
-                        onClick={() => void handlePull(b)}
-                      >
-                        <ArrowDownToLineIcon />
-                      </IconAction>
-                    ) : null}
-                    {!b.worktree ? (
-                      <IconAction
-                        label={
-                          running
-                            ? "Stop the app to switch branches"
-                            : "Check out in this app's folder"
-                        }
-                        disabled={checkingOut || running}
-                        onClick={() => void handleCheckout(b)}
-                      >
-                        <CheckIcon />
-                      </IconAction>
-                    ) : null}
-                    <IconAction
-                      label="Rename branch"
-                      onClick={() => setRenaming(b)}
-                    >
-                      <PencilIcon />
-                    </IconAction>
-                    <IconAction
-                      label={
-                        b.worktree
-                          ? "Checked out in a worktree: cannot delete"
-                          : "Delete branch"
-                      }
-                      variant="ghost"
-                      disabled={!!b.worktree}
-                      onClick={() => {
-                        setForceDelete(false)
-                        setPendingDelete(b)
-                      }}
-                    >
-                      <Trash2Icon />
-                    </IconAction>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </section>
 
@@ -916,8 +1092,8 @@ export function GitPanel({
             <DialogDescription>
               The pull stopped because these files conflict. Open them in an
               editor, resolve the conflict markers, then commit in{" "}
-              <span className="font-mono">{conflicts?.path}</span> to finish
-              the merge.
+              <span className="font-mono">{conflicts?.path}</span> to finish the
+              merge.
             </DialogDescription>
           </DialogHeader>
           <ul className="max-h-64 divide-y overflow-auto rounded-lg border">
@@ -952,10 +1128,10 @@ export function GitPanel({
             <AlertDialogTitle>Push rejected</AlertDialogTitle>
             <AlertDialogDescription>
               The remote has commits{" "}
-              <span className="font-mono">{rejected?.name}</span> does not.
-              Pull first to merge them, or force push with lease: it
-              overwrites the remote branch, but only if nobody pushed to it
-              since your last fetch.
+              <span className="font-mono">{rejected?.name}</span> does not. Pull
+              first to merge them, or force push with lease: it overwrites the
+              remote branch, but only if nobody pushed to it since your last
+              fetch.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -988,9 +1164,9 @@ export function GitPanel({
             <AlertDialogTitle>Delete branch?</AlertDialogTitle>
             <AlertDialogDescription>
               Deletes the local branch{" "}
-              <span className="font-mono">{pendingDelete?.name}</span>. A
-              branch that is not fully merged is refused unless you force it.
-              Its remote branch is not touched.
+              <span className="font-mono">{pendingDelete?.name}</span>. A branch
+              that is not fully merged is refused unless you force it. Its
+              remote branch is not touched.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <Field orientation="horizontal" className="gap-2">
@@ -1020,6 +1196,88 @@ export function GitPanel({
       </AlertDialog>
 
       <AlertDialog
+        open={bulk !== null}
+        onOpenChange={(open) => {
+          if (!open && !bulkBusy) setBulk(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete{" "}
+              {bulk === "worktrees"
+                ? selectedWorktrees.length
+                : selectedBranches.length}{" "}
+              {bulk === "worktrees" ? "worktrees" : "branches"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {bulk === "worktrees"
+                ? "Deletes these worktree folders:"
+                : "Deletes these local branches (their remote branches are not touched):"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <ul className="max-h-40 overflow-y-auto rounded-md border p-2 font-mono text-xs">
+            {bulk === "worktrees"
+              ? selectedWorktrees.map((w) => (
+                  <li key={w.path} className="truncate" title={w.path}>
+                    {w.branch || w.path}
+                  </li>
+                ))
+              : selectedBranches.map((b) => (
+                  <li key={b.name} className="truncate">
+                    {b.name}
+                  </li>
+                ))}
+          </ul>
+          {bulk === "worktrees" ? (
+            <Field orientation="horizontal" className="gap-2">
+              <Checkbox
+                id="git-bulk-with-branches"
+                checked={bulkWithBranches}
+                onCheckedChange={(checked) =>
+                  setBulkWithBranches(checked === true)
+                }
+              />
+              <FieldLabel
+                htmlFor="git-bulk-with-branches"
+                className="text-xs font-normal text-muted-foreground"
+              >
+                Also delete their local branches
+              </FieldLabel>
+            </Field>
+          ) : null}
+          <Field orientation="horizontal" className="gap-2">
+            <Checkbox
+              id="git-bulk-force"
+              checked={bulkForce}
+              onCheckedChange={(checked) => setBulkForce(checked === true)}
+            />
+            <FieldLabel
+              htmlFor="git-bulk-force"
+              className="text-xs font-normal text-muted-foreground"
+            >
+              {bulk === "worktrees"
+                ? "Force: also discard uncommitted changes and delete unmerged branches"
+                : "Force: delete even if they have unmerged commits"}
+            </FieldLabel>
+          </Field>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={bulkBusy}
+              onClick={(event) => {
+                event.preventDefault()
+                void handleBulkConfirm()
+              }}
+            >
+              {bulkBusy ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
         open={!!pendingRemove}
         onOpenChange={(open) => {
           if (!open) setPendingRemove(null)
@@ -1031,8 +1289,8 @@ export function GitPanel({
             <AlertDialogDescription>
               Deletes the folder{" "}
               <span className="font-mono">{pendingRemove?.path}</span>. The
-              branch{pendingRemove?.branch ? ` ${pendingRemove.branch}` : ""}{" "}
-              is kept.
+              branch{pendingRemove?.branch ? ` ${pendingRemove.branch}` : ""} is
+              kept.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <Field orientation="horizontal" className="gap-2">
@@ -1065,6 +1323,138 @@ export function GitPanel({
 }
 
 /** Creates a local branch, or with `renaming` set renames that one. */
+/** Select-all checkbox with a "Delete selected" button above a list. */
+// "YYYY-MM-DDTHH:mm" in local time, the value format of the range filter.
+function splitStamp(v: string): { date?: Date; time: string } {
+  if (!v) return { time: "" }
+  const [d, t = ""] = v.split("T")
+  const [y, m, day] = d.split("-").map(Number)
+  return { date: new Date(y, m - 1, day), time: t }
+}
+
+function joinStamp(date: Date | undefined, time: string, fallback: string) {
+  if (!date) return ""
+  const p = (n: number) => String(n).padStart(2, "0")
+  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}T${time || fallback}`
+}
+
+function DateRangeFilter({
+  from,
+  to,
+  disabled,
+  onChange,
+}: {
+  from: string
+  to: string
+  disabled?: boolean
+  onChange: (from: string, to: string) => void
+}) {
+  const f = splitStamp(from)
+  const t = splitStamp(to)
+  const fmt = (v: string) =>
+    new Date(v).toLocaleString([], {
+      dateStyle: "medium",
+      timeStyle: "short",
+    })
+  const label =
+    from || to
+      ? `${from ? fmt(from) : "…"} – ${to ? fmt(to) : "…"}`
+      : "Filter by date"
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button variant="outline" disabled={disabled}>
+            <CalendarIcon data-icon="inline-start" />
+            {label}
+          </Button>
+        }
+      />
+      <PopoverContent align="end" className="w-auto gap-3">
+        <Calendar
+          mode="range"
+          numberOfMonths={1}
+          selected={{ from: f.date, to: t.date }}
+          onSelect={(r) =>
+            onChange(
+              joinStamp(r?.from, f.time, "00:00"),
+              joinStamp(r?.to, t.time, "23:59")
+            )
+          }
+        />
+        <div className="flex items-center gap-2">
+          <Input
+            type="time"
+            aria-label="From time"
+            disabled={!f.date}
+            value={f.time}
+            onChange={(e) =>
+              onChange(joinStamp(f.date, e.target.value, "00:00"), to)
+            }
+          />
+          <span className="text-muted-foreground">–</span>
+          <Input
+            type="time"
+            aria-label="To time"
+            disabled={!t.date}
+            value={t.time}
+            onChange={(e) =>
+              onChange(from, joinStamp(t.date, e.target.value, "23:59"))
+            }
+          />
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={!from && !to}
+          onClick={() => onChange("", "")}
+        >
+          Clear
+        </Button>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function BulkBar({
+  label,
+  total,
+  selected,
+  onToggleAll,
+  onDelete,
+}: {
+  label: string
+  total: number
+  selected: number
+  onToggleAll: (all: boolean) => void
+  onDelete: () => void
+}) {
+  return (
+    <div className="flex items-center gap-2 px-1 text-sm">
+      <Checkbox
+        aria-label={`Select all ${label}`}
+        checked={selected === total}
+        onCheckedChange={(checked) => onToggleAll(checked === true)}
+      />
+      <span className="text-xs text-muted-foreground">
+        {selected > 0 ? `${selected} of ${total} selected` : `Select ${label}`}
+      </span>
+      {/* Always laid out, so showing it does not change the bar's height. */}
+      <Button
+        variant="destructive"
+        size="sm"
+        className={cn("ml-auto", selected === 0 && "invisible")}
+        tabIndex={selected === 0 ? -1 : undefined}
+        aria-hidden={selected === 0}
+        onClick={onDelete}
+      >
+        <Trash2Icon data-icon="inline-start" />
+        Delete selected
+      </Button>
+    </div>
+  )
+}
+
 function BranchNameDialog({
   appId,
   branches,
@@ -1128,9 +1518,7 @@ function BranchNameDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>
-            {isRename ? "Rename branch" : "New branch"}
-          </DialogTitle>
+          <DialogTitle>{isRename ? "Rename branch" : "New branch"}</DialogTitle>
           <DialogDescription>
             {isRename ? (
               <>
@@ -1201,7 +1589,13 @@ function BranchNameDialog({
 }
 
 /** Common candidates, offered as one-click additions. */
-const LINK_SUGGESTIONS = ["node_modules", ".env", ".env.local", ".venv", "vendor"]
+const LINK_SUGGESTIONS = [
+  "node_modules",
+  ".env",
+  ".env.local",
+  ".venv",
+  "vendor",
+]
 
 function SharedLinksDialog({
   appId,
@@ -1256,8 +1650,8 @@ function SharedLinksDialog({
           <DialogDescription>
             Files and folders each worktree links to in this app's folder
             instead of having its own copy. They are linked when a worktree is
-            added (unless turned off there), before Setup runs in a worktree,
-            or with the link button on its row.
+            added (unless turned off there), before Setup runs in a worktree, or
+            with the link button on its row.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup>
@@ -1446,7 +1840,9 @@ function AddWorktreeDialog({
           </Field>
           <Field orientation="horizontal">
             <FieldContent>
-              <FieldLabel htmlFor="git-link-shared">Link shared files</FieldLabel>
+              <FieldLabel htmlFor="git-link-shared">
+                Link shared files
+              </FieldLabel>
               <FieldDescription>
                 Link these files and folders to the app's folder as soon as the
                 worktree is created.
@@ -1472,8 +1868,8 @@ function AddWorktreeDialog({
               <FieldDescription>
                 {ownLinks ? (
                   <>
-                    This worktree keeps its own list for later setups; the
-                    app's Shared files stay unchanged.{" "}
+                    This worktree keeps its own list for later setups; the app's
+                    Shared files stay unchanged.{" "}
                     <button
                       type="button"
                       className="underline underline-offset-4"

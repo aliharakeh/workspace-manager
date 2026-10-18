@@ -1435,6 +1435,7 @@ export namespace types {
 	    ahead: number;
 	    behind: number;
 	    worktree: string;
+	    date: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new GitLocalBranch(source);
@@ -1450,6 +1451,7 @@ export namespace types {
 	        this.ahead = source["ahead"];
 	        this.behind = source["behind"];
 	        this.worktree = source["worktree"];
+	        this.date = source["date"];
 	    }
 	}
 	export class GitWorktree {

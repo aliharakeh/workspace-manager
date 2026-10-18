@@ -207,6 +207,8 @@ export type GitLocalBranch = {
     behind: number
     /** Path of the worktree that has it checked out; empty when none (it cannot be deleted while set). */
     worktree: string
+    /** Tip commit time in Unix seconds. */
+    date: number
 }
 
 /** A `git pull` in the worktree at `path`; `conflicts` (absolute paths) is empty after a clean pull. */

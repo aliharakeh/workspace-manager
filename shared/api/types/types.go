@@ -483,6 +483,8 @@ type GitLocalBranch struct {
 	Ahead    int    `json:"ahead"`
 	Behind   int    `json:"behind"`
 	Worktree string `json:"worktree"`
+	// Date is the tip commit's time in Unix seconds.
+	Date int64 `json:"date"`
 }
 
 // GitInfo is the git state of an app's project path.
