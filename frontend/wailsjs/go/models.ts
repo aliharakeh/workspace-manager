@@ -869,6 +869,7 @@ export namespace types {
 	    active_config_set: string;
 	    config_sets: BundleConfigSet[];
 	    worktree_links: string[];
+	    exclude_from_start_all?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new BundleApp(source);
@@ -883,6 +884,7 @@ export namespace types {
 	        this.active_config_set = source["active_config_set"];
 	        this.config_sets = this.convertValues(source["config_sets"], BundleConfigSet);
 	        this.worktree_links = source["worktree_links"];
+	        this.exclude_from_start_all = source["exclude_from_start_all"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
