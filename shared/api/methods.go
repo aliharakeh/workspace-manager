@@ -76,6 +76,10 @@ const (
 	MethodRunnerStop            = "runner.stop"
 	MethodRunnerReload          = "runner.reload"
 
+	// Workspace-wide start and stop: thin fan-out to the per-app sessions.
+	MethodRunnerStartWorkspace = "runner.startWorkspace"
+	MethodRunnerStopWorkspace  = "runner.stopWorkspace"
+
 	// Worktree support for the GUI's git code (git runs in the GUI process).
 	MethodWorktreeLinksGet  = "worktreeLinks.get"
 	MethodWorktreeLinksSave = "worktreeLinks.save"
@@ -192,6 +196,8 @@ var Methods = []Method{
 	{Name: MethodRunnerSetup, Agent: true},
 	{Name: MethodRunnerStop, Agent: true},
 	{Name: MethodRunnerReload, Agent: true},
+	{Name: MethodRunnerStartWorkspace, Agent: true},
+	{Name: MethodRunnerStopWorkspace, Agent: true},
 
 	// Git runs in the GUI process; these serve its worktree support.
 	{Name: MethodWorktreeLinksGet, Agent: false},

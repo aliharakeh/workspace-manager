@@ -32,7 +32,7 @@ DELETE FROM workspaces WHERE id = ?;
 -- name: ListAppsByWorkspace :many
 SELECT
   a.id, a.workspace_id, a.name, a.project_path, a.active_config_set_id,
-  a.created_at, a.updated_at,
+  a.created_at, a.updated_at, a.exclude_from_start_all,
   cs.name AS active_config_set_name
 FROM apps a
 LEFT JOIN config_sets cs ON cs.id = a.active_config_set_id
@@ -42,7 +42,7 @@ ORDER BY a.sort_order ASC, a.id ASC;
 -- name: GetApp :one
 SELECT
   a.id, a.workspace_id, a.name, a.project_path, a.active_config_set_id,
-  a.created_at, a.updated_at,
+  a.created_at, a.updated_at, a.exclude_from_start_all,
   cs.name AS active_config_set_name
 FROM apps a
 LEFT JOIN config_sets cs ON cs.id = a.active_config_set_id
@@ -70,6 +70,9 @@ UPDATE apps
 SET active_config_set_id = ?, updated_at = datetime('now')
 WHERE id = ?
 RETURNING *;
+
+-- name: SetAppExcludeFromStartAll :exec
+UPDATE apps SET exclude_from_start_all = ?, updated_at = datetime('now') WHERE id = ?;
 
 -- name: DeleteApp :execrows
 DELETE FROM apps WHERE id = ?;

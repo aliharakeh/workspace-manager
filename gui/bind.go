@@ -244,6 +244,17 @@ func (a *App) RunnerStop(appID int64) (types.StatusEvent, error) {
 	return call[types.StatusEvent](a.link, api.MethodRunnerStop, m{"appID": appID})
 }
 
+// RunnerStartWorkspace starts the dev run of the workspace's apps, skipping the
+// running, excluded and flagged ones, and reports what happened to each app.
+func (a *App) RunnerStartWorkspace(workspaceID int64, excludeAppIds []int64, sequential bool) (types.WorkspaceRunResult, error) {
+	return call[types.WorkspaceRunResult](a.link, api.MethodRunnerStartWorkspace, m{"workspaceID": workspaceID, "excludeAppIds": excludeAppIds, "sequential": sequential})
+}
+
+// RunnerStopWorkspace stops every running app of the workspace.
+func (a *App) RunnerStopWorkspace(workspaceID int64, excludeAppIds []int64) (types.WorkspaceRunResult, error) {
+	return call[types.WorkspaceRunResult](a.link, api.MethodRunnerStopWorkspace, m{"workspaceID": workspaceID, "excludeAppIds": excludeAppIds})
+}
+
 func (a *App) RunnerReload(appID int64) (types.StatusEvent, error) {
 	return call[types.StatusEvent](a.link, api.MethodRunnerReload, m{"appID": appID})
 }

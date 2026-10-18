@@ -31,6 +31,9 @@ func applySchema(sqlDB *sql.DB) error {
 	if err := addTemplateIncludeInAI(sqlDB); err != nil {
 		return err
 	}
+	if err := addAppExcludeFromStartAll(sqlDB); err != nil {
+		return err
+	}
 	if _, err := sqlDB.Exec(schemaSQL); err != nil {
 		return err
 	}
@@ -251,5 +254,21 @@ func addWorkspaceOrderAndPin(sqlDB *sql.DB) error {
 		return err
 	}
 	_, err = sqlDB.Exec(`ALTER TABLE workspaces ADD COLUMN pinned integer DEFAULT false NOT NULL`)
+	return err
+}
+
+// addAppExcludeFromStartAll upgrades an apps table created before apps could be
+// left out of a workspace's "Start all". Existing apps stay included. A fresh
+// table already has the column from schemaSQL.
+func addAppExcludeFromStartAll(sqlDB *sql.DB) error {
+	cols, err := tableColumns(sqlDB, "apps")
+	if err != nil || len(cols) == 0 {
+		return err // fresh database: schemaSQL creates the table with the column
+	}
+	has, err := hasColumn(sqlDB, "apps", "exclude_from_start_all")
+	if err != nil || has {
+		return err
+	}
+	_, err = sqlDB.Exec(`ALTER TABLE apps ADD COLUMN exclude_from_start_all integer DEFAULT 0 NOT NULL`)
 	return err
 }

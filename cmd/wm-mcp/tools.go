@@ -656,12 +656,35 @@ func runTool() mcpTool {
 		Name:        "wm_run",
 		Description: "Run, build and stop apps; check runner status; read terminal output. An app runs one session at a time.",
 		Schema: schema("Runner", map[string]any{
-			"action":    map[string]any{"type": "string", "description": "dev, prod, build, setup, stop, reload, status, logs (run is a legacy alias for dev)", "enum": []string{"dev", "prod", "run", "build", "setup", "stop", "reload", "status", "logs"}},
-			"app":       strProp(appRefDesc),
-			"commandId": numProp("only this command id (logs)"),
-			"tail":      numProp("only the last N bytes of each command's output (logs)"),
+			"action":     map[string]any{"type": "string", "description": "dev, prod, build, setup, stop, reload, status, logs (run is a legacy alias for dev); startAll and stopAll act on every app of a workspace", "enum": []string{"dev", "prod", "run", "build", "setup", "stop", "reload", "status", "logs", "startAll", "stopAll"}},
+			"app":        strProp(appRefDesc),
+			"workspace":  strProp("workspace name or id (startAll, stopAll)"),
+			"exclude":    arrProp("apps to leave out, by name or id (startAll, stopAll); apps flagged \"exclude from Start all\" are always left out of startAll", "string"),
+			"sequential": boolProp("startAll: start the apps one after another instead of together"),
+			"commandId":  numProp("only this command id (logs)"),
+			"tail":       numProp("only the last N bytes of each command's output (logs)"),
 		}, "action"),
 		Handler: func(args map[string]any) (any, error) {
+			if action := argStr(args, "action"); action == "startAll" || action == "stopAll" {
+				ws, err := resolveWorkspace(argStr(args, "workspace"))
+				if err != nil {
+					return nil, err
+				}
+				exclude := []int64{}
+				for _, ref := range argStrList(args, "exclude") {
+					app, err := resolveApp(ref)
+					if err != nil {
+						return nil, err
+					}
+					exclude = append(exclude, appIDOf(app))
+				}
+				params := map[string]any{"workspaceID": ws.ID, "excludeAppIds": exclude}
+				if action == "stopAll" {
+					return daoCall(api.MethodRunnerStopWorkspace, params)
+				}
+				params["sequential"] = argBool(args, "sequential", false)
+				return daoCall(api.MethodRunnerStartWorkspace, params)
+			}
 			app, err := resolveApp(argStr(args, "app"))
 			if err != nil {
 				return nil, err

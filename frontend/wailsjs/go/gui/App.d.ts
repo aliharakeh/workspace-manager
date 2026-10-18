@@ -160,9 +160,13 @@ export function RunnerRun(arg1:number):Promise<types.StatusEvent>;
 
 export function RunnerSetup(arg1:number):Promise<types.StatusEvent>;
 
+export function RunnerStartWorkspace(arg1:number,arg2:Array<number>,arg3:boolean):Promise<types.WorkspaceRunResult>;
+
 export function RunnerStatus(arg1:number):Promise<types.StatusEvent>;
 
 export function RunnerStop(arg1:number):Promise<types.StatusEvent>;
+
+export function RunnerStopWorkspace(arg1:number,arg2:Array<number>):Promise<types.WorkspaceRunResult>;
 
 export function RunnerWorkspaceStatus(arg1:number):Promise<Array<types.StatusEvent>>;
 

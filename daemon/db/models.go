@@ -5,14 +5,15 @@
 package db
 
 type App struct {
-	ID                int64  `json:"id"`
-	WorkspaceID       int64  `json:"workspace_id"`
-	Name              string `json:"name"`
-	ProjectPath       string `json:"project_path"`
-	ActiveConfigSetID *int64 `json:"active_config_set_id"`
-	SortOrder         int64  `json:"sort_order"`
-	CreatedAt         string `json:"created_at"`
-	UpdatedAt         string `json:"updated_at"`
+	ID                  int64  `json:"id"`
+	WorkspaceID         int64  `json:"workspace_id"`
+	Name                string `json:"name"`
+	ProjectPath         string `json:"project_path"`
+	ActiveConfigSetID   *int64 `json:"active_config_set_id"`
+	SortOrder           int64  `json:"sort_order"`
+	ExcludeFromStartAll int64  `json:"exclude_from_start_all"`
+	CreatedAt           string `json:"created_at"`
+	UpdatedAt           string `json:"updated_at"`
 }
 
 type AppSetting struct {

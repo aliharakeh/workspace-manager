@@ -15,7 +15,7 @@ VALUES (
   ?1, ?2, ?3,
   (SELECT COALESCE(max(sort_order), -1) + 1 FROM apps WHERE workspace_id = ?1)
 )
-RETURNING id, workspace_id, name, project_path, active_config_set_id, sort_order, created_at, updated_at
+RETURNING id, workspace_id, name, project_path, active_config_set_id, sort_order, exclude_from_start_all, created_at, updated_at
 `
 
 type CreateAppParams struct {
@@ -34,6 +34,7 @@ func (q *Queries) CreateApp(ctx context.Context, arg CreateAppParams) (App, erro
 		&i.ProjectPath,
 		&i.ActiveConfigSetID,
 		&i.SortOrder,
+		&i.ExcludeFromStartAll,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -431,7 +432,7 @@ func (q *Queries) DeleteWorktreeLinks(ctx context.Context, appID int64) error {
 const getApp = `-- name: GetApp :one
 SELECT
   a.id, a.workspace_id, a.name, a.project_path, a.active_config_set_id,
-  a.created_at, a.updated_at,
+  a.created_at, a.updated_at, a.exclude_from_start_all,
   cs.name AS active_config_set_name
 FROM apps a
 LEFT JOIN config_sets cs ON cs.id = a.active_config_set_id
@@ -446,6 +447,7 @@ type GetAppRow struct {
 	ActiveConfigSetID   *int64  `json:"active_config_set_id"`
 	CreatedAt           string  `json:"created_at"`
 	UpdatedAt           string  `json:"updated_at"`
+	ExcludeFromStartAll int64   `json:"exclude_from_start_all"`
 	ActiveConfigSetName *string `json:"active_config_set_name"`
 }
 
@@ -460,6 +462,7 @@ func (q *Queries) GetApp(ctx context.Context, id int64) (GetAppRow, error) {
 		&i.ActiveConfigSetID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ExcludeFromStartAll,
 		&i.ActiveConfigSetName,
 	)
 	return i, err
@@ -666,7 +669,7 @@ func (q *Queries) GetWorkspace(ctx context.Context, id int64) (Workspace, error)
 const listAppsByWorkspace = `-- name: ListAppsByWorkspace :many
 SELECT
   a.id, a.workspace_id, a.name, a.project_path, a.active_config_set_id,
-  a.created_at, a.updated_at,
+  a.created_at, a.updated_at, a.exclude_from_start_all,
   cs.name AS active_config_set_name
 FROM apps a
 LEFT JOIN config_sets cs ON cs.id = a.active_config_set_id
@@ -682,6 +685,7 @@ type ListAppsByWorkspaceRow struct {
 	ActiveConfigSetID   *int64  `json:"active_config_set_id"`
 	CreatedAt           string  `json:"created_at"`
 	UpdatedAt           string  `json:"updated_at"`
+	ExcludeFromStartAll int64   `json:"exclude_from_start_all"`
 	ActiveConfigSetName *string `json:"active_config_set_name"`
 }
 
@@ -703,6 +707,7 @@ func (q *Queries) ListAppsByWorkspace(ctx context.Context, workspaceID int64) ([
 			&i.ActiveConfigSetID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ExcludeFromStartAll,
 			&i.ActiveConfigSetName,
 		); err != nil {
 			return nil, err
@@ -1043,7 +1048,7 @@ const setActiveConfigSet = `-- name: SetActiveConfigSet :one
 UPDATE apps
 SET active_config_set_id = ?, updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, workspace_id, name, project_path, active_config_set_id, sort_order, created_at, updated_at
+RETURNING id, workspace_id, name, project_path, active_config_set_id, sort_order, exclude_from_start_all, created_at, updated_at
 `
 
 type SetActiveConfigSetParams struct {
@@ -1061,10 +1066,25 @@ func (q *Queries) SetActiveConfigSet(ctx context.Context, arg SetActiveConfigSet
 		&i.ProjectPath,
 		&i.ActiveConfigSetID,
 		&i.SortOrder,
+		&i.ExcludeFromStartAll,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const setAppExcludeFromStartAll = `-- name: SetAppExcludeFromStartAll :exec
+UPDATE apps SET exclude_from_start_all = ?, updated_at = datetime('now') WHERE id = ?
+`
+
+type SetAppExcludeFromStartAllParams struct {
+	ExcludeFromStartAll int64 `json:"exclude_from_start_all"`
+	ID                  int64 `json:"id"`
+}
+
+func (q *Queries) SetAppExcludeFromStartAll(ctx context.Context, arg SetAppExcludeFromStartAllParams) error {
+	_, err := q.db.ExecContext(ctx, setAppExcludeFromStartAll, arg.ExcludeFromStartAll, arg.ID)
+	return err
 }
 
 const setAppSortOrder = `-- name: SetAppSortOrder :exec
@@ -1138,7 +1158,7 @@ const updateApp = `-- name: UpdateApp :one
 UPDATE apps
 SET name = ?, project_path = ?, updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, workspace_id, name, project_path, active_config_set_id, sort_order, created_at, updated_at
+RETURNING id, workspace_id, name, project_path, active_config_set_id, sort_order, exclude_from_start_all, created_at, updated_at
 `
 
 type UpdateAppParams struct {
@@ -1157,6 +1177,7 @@ func (q *Queries) UpdateApp(ctx context.Context, arg UpdateAppParams) (App, erro
 		&i.ProjectPath,
 		&i.ActiveConfigSetID,
 		&i.SortOrder,
+		&i.ExcludeFromStartAll,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

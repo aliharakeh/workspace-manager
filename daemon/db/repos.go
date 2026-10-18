@@ -26,11 +26,15 @@ func appFromRow(id, workspaceID int64, name, projectPath string, activeID *int64
 }
 
 func appFromGet(row GetAppRow) types.App {
-	return appFromRow(row.ID, row.WorkspaceID, row.Name, row.ProjectPath, row.ActiveConfigSetID, row.CreatedAt, row.UpdatedAt, row.ActiveConfigSetName)
+	app := appFromRow(row.ID, row.WorkspaceID, row.Name, row.ProjectPath, row.ActiveConfigSetID, row.CreatedAt, row.UpdatedAt, row.ActiveConfigSetName)
+	app.ExcludeFromStartAll = row.ExcludeFromStartAll != 0
+	return app
 }
 
 func appFromList(row ListAppsByWorkspaceRow) types.App {
-	return appFromRow(row.ID, row.WorkspaceID, row.Name, row.ProjectPath, row.ActiveConfigSetID, row.CreatedAt, row.UpdatedAt, row.ActiveConfigSetName)
+	app := appFromRow(row.ID, row.WorkspaceID, row.Name, row.ProjectPath, row.ActiveConfigSetID, row.CreatedAt, row.UpdatedAt, row.ActiveConfigSetName)
+	app.ExcludeFromStartAll = row.ExcludeFromStartAll != 0
+	return app
 }
 
 func configSetFrom(row ConfigSet) types.ConfigSet {
@@ -252,6 +256,15 @@ func (d *DB) UpdateAppT(ctx context.Context, id int64, name, projectPath *string
 		return types.App{}, err
 	}
 	return d.GetAppT(ctx, id)
+}
+
+// SetAppExcludeFromStartAllT stores whether the workspace's "Start all" skips the app.
+func (d *DB) SetAppExcludeFromStartAllT(ctx context.Context, id int64, exclude bool) error {
+	var v int64
+	if exclude {
+		v = 1
+	}
+	return d.SetAppExcludeFromStartAll(ctx, SetAppExcludeFromStartAllParams{ExcludeFromStartAll: v, ID: id})
 }
 
 func (d *DB) SetActiveConfigSetT(ctx context.Context, appID, configSetID int64) (types.App, error) {

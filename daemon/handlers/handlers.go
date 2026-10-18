@@ -42,6 +42,7 @@ func (r *Registry) RegisterAll(srv rpc.Registerer) *Registry {
 	r.templates()
 	r.scripts()
 	r.runner()
+	r.workspaceRun()
 	r.worktree()
 	r.system()
 	r.blueprints()

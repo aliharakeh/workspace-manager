@@ -344,6 +344,7 @@ export namespace types {
 	    project_path: string;
 	    active_config_set_id?: number;
 	    active_config_set_name?: string;
+	    exclude_from_start_all: boolean;
 	    created_at: string;
 	    updated_at: string;
 	
@@ -359,6 +360,7 @@ export namespace types {
 	        this.project_path = source["project_path"];
 	        this.active_config_set_id = source["active_config_set_id"];
 	        this.active_config_set_name = source["active_config_set_name"];
+	        this.exclude_from_start_all = source["exclude_from_start_all"];
 	        this.created_at = source["created_at"];
 	        this.updated_at = source["updated_at"];
 	    }
@@ -508,6 +510,7 @@ export namespace types {
 	export class AppUpdateInput {
 	    name?: string;
 	    project_path?: string;
+	    exclude_from_start_all?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppUpdateInput(source);
@@ -517,6 +520,7 @@ export namespace types {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.project_path = source["project_path"];
+	        this.exclude_from_start_all = source["exclude_from_start_all"];
 	    }
 	}
 	export class BlueprintCommand {
@@ -2298,6 +2302,56 @@ export namespace types {
 	        this.dry_run = source["dry_run"];
 	        this.apps = this.convertValues(source["apps"], WorkspaceImportApp);
 	        this.app_ids = source["app_ids"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class WorkspaceRunAppResult {
+	    appId: number;
+	    name: string;
+	    status: string;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceRunAppResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.appId = source["appId"];
+	        this.name = source["name"];
+	        this.status = source["status"];
+	        this.message = source["message"];
+	    }
+	}
+	export class WorkspaceRunResult {
+	    workspaceId: number;
+	    results: WorkspaceRunAppResult[];
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceRunResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.workspaceId = source["workspaceId"];
+	        this.results = this.convertValues(source["results"], WorkspaceRunAppResult);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

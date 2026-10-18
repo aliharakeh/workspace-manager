@@ -21,6 +21,8 @@ export type App = {
     project_path: string
     active_config_set_id: number | null
     active_config_set_name: string | null
+    /** Left out of the workspace's "Start all". */
+    exclude_from_start_all: boolean
     created_at: string
     updated_at: string
 }
@@ -501,4 +503,18 @@ export type WorkspaceBundleFileResult = {
     path: string
     cancelled: boolean
     bundle: WorkspaceBundle | null
+}
+
+/** What a workspace-wide start or stop did to one app. */
+export type WorkspaceRunAppResult = {
+    appId: number
+    name: string
+    /** started, stopped, skipped, excluded or error. */
+    status: string
+    message?: string
+}
+
+export type WorkspaceRunResult = {
+    workspaceId: number
+    results: WorkspaceRunAppResult[]
 }
