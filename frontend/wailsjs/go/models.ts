@@ -795,6 +795,140 @@ export namespace types {
 		    return a;
 		}
 	}
+	export class ConfigSetCommandDiff {
+	    label: string;
+	    status: string;
+	    left?: string;
+	    right?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConfigSetCommandDiff(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.status = source["status"];
+	        this.left = source["left"];
+	        this.right = source["right"];
+	    }
+	}
+	export class ConfigSetCommandListDiff {
+	    kind: string;
+	    left_mode: string;
+	    right_mode: string;
+	    status: string;
+	    commands: ConfigSetCommandDiff[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ConfigSetCommandListDiff(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.left_mode = source["left_mode"];
+	        this.right_mode = source["right_mode"];
+	        this.status = source["status"];
+	        this.commands = this.convertValues(source["commands"], ConfigSetCommandDiff);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ConfigSetTemplateDiff {
+	    file_path: string;
+	    status: string;
+	    left?: string;
+	    right?: string;
+	    redacted: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConfigSetTemplateDiff(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.file_path = source["file_path"];
+	        this.status = source["status"];
+	        this.left = source["left"];
+	        this.right = source["right"];
+	        this.redacted = source["redacted"];
+	    }
+	}
+	export class ConfigSetEnvDiff {
+	    key: string;
+	    status: string;
+	    left?: string;
+	    right?: string;
+	    redacted: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConfigSetEnvDiff(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.status = source["status"];
+	        this.left = source["left"];
+	        this.right = source["right"];
+	        this.redacted = source["redacted"];
+	    }
+	}
+	export class ConfigSetCompare {
+	    left: ConfigSet;
+	    right: ConfigSet;
+	    env: ConfigSetEnvDiff[];
+	    templates: ConfigSetTemplateDiff[];
+	    commands: ConfigSetCommandListDiff[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ConfigSetCompare(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.left = this.convertValues(source["left"], ConfigSet);
+	        this.right = this.convertValues(source["right"], ConfigSet);
+	        this.env = this.convertValues(source["env"], ConfigSetEnvDiff);
+	        this.templates = this.convertValues(source["templates"], ConfigSetTemplateDiff);
+	        this.commands = this.convertValues(source["commands"], ConfigSetCommandListDiff);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class CopyParts {
 	    env?: any;
 	    templates?: any;
@@ -1017,6 +1151,8 @@ export namespace types {
 		    return a;
 		}
 	}
+	
+	
 	export class ConfigSetUpdateInput {
 	    name: string;
 	

@@ -4,6 +4,7 @@ import {
   CheckIcon,
   ChevronsUpDownIcon,
   CopyIcon,
+  GitCompareIcon,
   PencilIcon,
   PlusIcon,
   SearchIcon,
@@ -60,6 +61,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ConfigSetCompareDialog } from "@/components/config-set-compare-dialog"
 
 type CategorySel = { all: boolean; items: string[] }
 
@@ -388,6 +390,7 @@ export function ConfigSetSwitcher({
   const [loading, setLoading] = useState(true)
   const [createOpen, setCreateOpen] = useState(false)
   const [copyOpen, setCopyOpen] = useState(false)
+  const [compareOpen, setCompareOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [name, setName] = useState("")
@@ -633,6 +636,13 @@ export function ConfigSetSwitcher({
                   Copy into current…
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  disabled={!active || sets.length < 2}
+                  onClick={() => setCompareOpen(true)}
+                >
+                  <GitCompareIcon />
+                  Compare with…
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   variant="destructive"
                   disabled={!active || sets.length <= 1}
                   onClick={() => active && setDeleteId(active.id)}
@@ -823,6 +833,14 @@ export function ConfigSetSwitcher({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfigSetCompareDialog
+        open={compareOpen}
+        onOpenChange={setCompareOpen}
+        sets={sets}
+        current={active}
+        onCopied={() => onAppChange({ ...app })}
+      />
 
       <AlertDialog
         open={deleteId != null}

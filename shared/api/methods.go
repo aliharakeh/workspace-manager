@@ -36,6 +36,7 @@ const (
 	MethodConfigSetsActivate     = "configSets.activate"
 	MethodConfigSetsCopyFrom     = "configSets.copyFrom"
 	MethodConfigSetsApplyChanges = "configSets.applyChanges"
+	MethodConfigSetsCompare      = "configSets.compare"
 
 	// Env vars.
 	MethodEnvVarsList   = "envVars.list"
@@ -146,6 +147,7 @@ var Methods = []Method{
 	{Name: MethodConfigSetsCopyFrom, Agent: true},
 	// Applies changes the GUI reviewed (the app AI's staged edits) in one call.
 	{Name: MethodConfigSetsApplyChanges, Agent: false},
+	{Name: MethodConfigSetsCompare, Agent: true},
 
 	{Name: MethodEnvVarsList, Agent: true},
 	{Name: MethodEnvVarsCreate, Agent: true},
