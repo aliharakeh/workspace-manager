@@ -104,6 +104,8 @@ export const api = {
                         options as unknown as types.WorkspaceImportOptions,
                     ) as Promise<WorkspaceImportResult>,
             ),
+        reorder: (ids: number[]) => call(() => Go.WorkspacesReorder(ids)),
+        setPinned: (id: number, pinned: boolean) => call(() => Go.WorkspacesSetPinned(id, pinned)),
     },
 
     apps: {

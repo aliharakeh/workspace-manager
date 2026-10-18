@@ -149,3 +149,19 @@ test('running: a build applies templates, streams output, and ends', async () =>
 test('an unknown run kind is refused', async () => {
   await assert.rejects(svc.run(project, 'deploy'), /kind must be/);
 });
+
+test('workspaces come back pinned first, then in the saved order', async () => {
+  const names = async () => (await svc.workspaces()).map((w) => w.name);
+  const a = await client.call('workspaces.create', { name: 'ord-a' });
+  const b = await client.call('workspaces.create', { name: 'ord-b' });
+  const c = await client.call('workspaces.create', { name: 'ord-c' });
+  const tail = async () => (await names()).filter((n) => n.startsWith('ord-'));
+  assert.deepEqual(await tail(), ['ord-a', 'ord-b', 'ord-c'], 'new workspaces go last');
+  const all = (await client.call('workspaces.list')).map((w) => w.id);
+  const rest = all.filter((id) => ![a.id, b.id, c.id].includes(id));
+  await client.call('workspaces.reorder', { ids: [...rest, c.id, a.id, b.id] });
+  assert.deepEqual(await tail(), ['ord-c', 'ord-a', 'ord-b']);
+  await client.call('workspaces.setPinned', { id: b.id, pinned: true });
+  assert.deepEqual(await tail(), ['ord-b', 'ord-c', 'ord-a'], 'pinned first');
+  assert.equal((await svc.workspaces())[0].name, 'ord-b');
+});

@@ -3,6 +3,8 @@ export type Workspace = {
     name: string
     icon: string | null
     color: string | null
+    /** Pinned workspaces are listed first; stored by the daemon. */
+    pinned: boolean
     created_at: string
     updated_at: string
 }

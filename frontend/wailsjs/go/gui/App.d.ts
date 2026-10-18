@@ -192,6 +192,10 @@ export function WorkspacesImport(arg1:types.WorkspaceBundle,arg2:types.Workspace
 
 export function WorkspacesList():Promise<Array<types.Workspace>>;
 
+export function WorkspacesReorder(arg1:Array<number>):Promise<types.Ok>;
+
+export function WorkspacesSetPinned(arg1:number,arg2:boolean):Promise<types.Workspace>;
+
 export function WorkspacesUpdate(arg1:number,arg2:types.WorkspaceUpdateInput):Promise<types.Workspace>;
 
 export function WorktreeLinksGet(arg1:number):Promise<Array<string>>;

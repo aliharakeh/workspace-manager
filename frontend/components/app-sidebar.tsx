@@ -1,6 +1,31 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react"
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react"
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import {
   AppWindowIcon,
+  ArrowDownIcon,
+  ArrowUpIcon,
   ChevronRightIcon,
   FolderIcon,
   MoonIcon,
@@ -50,6 +75,9 @@ type AppSidebarProps = {
   selectedAppId: number | null
   onSelectWorkspace: (id: number) => void
   onSelectApp: (workspaceId: number, appId: number) => void
+  /** Saves the order of all workspaces, first to last. */
+  onReorderWorkspaces: (ids: number[]) => void
+  onSetPinned: (id: number, pinned: boolean) => void
   onCreateWorkspace: () => void
   onEditWorkspace: (workspace: Workspace) => void
   onDeleteWorkspace: (workspace: Workspace) => void
@@ -62,10 +90,9 @@ type AppSidebarProps = {
 }
 
 const COLLAPSED_STORAGE_KEY = "workspace-manager.sidebar.collapsed"
-const PINNED_STORAGE_KEY = "workspace-manager.sidebar.pinned"
-
-// Workspace ids stored under key: the collapsed set (every other workspace
-// shows its apps) and the pinned set (listed first).
+// Pins and the workspace order live in the daemon (shared with the VS Code
+// extension); only the collapsed set (every other workspace shows its apps) is
+// per-device view state kept here.
 function loadIdSet(key: string): Set<number> {
   try {
     const raw = localStorage.getItem(key)
@@ -84,6 +111,8 @@ export function AppSidebar({
   selectedAppId,
   onSelectWorkspace,
   onSelectApp,
+  onReorderWorkspaces,
+  onSetPinned,
   onCreateWorkspace,
   onEditWorkspace,
   onDeleteWorkspace,
@@ -100,7 +129,6 @@ export function AppSidebar({
   const [collapsed, setCollapsed] = useState(() =>
     loadIdSet(COLLAPSED_STORAGE_KEY)
   )
-  const [pinned, setPinned] = useState(() => loadIdSet(PINNED_STORAGE_KEY))
   const [seenWorkspaceId, setSeenWorkspaceId] = useState(selectedWorkspaceId)
 
   // Opening a workspace (from the palette, a link or a click) expands it.
@@ -124,33 +152,44 @@ export function AppSidebar({
     }
   }, [collapsed])
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify([...pinned]))
-    } catch {
-      // Storage can be unavailable; the sidebar still works without it.
-    }
-  }, [pinned])
-
-  // Pinned workspaces first; each group keeps the incoming order.
+  // Pinned workspaces first; each group keeps the daemon's order.
   const sortedWorkspaces = useMemo(
     () => [
-      ...workspaces.filter((w) => pinned.has(w.id)),
-      ...workspaces.filter((w) => !pinned.has(w.id)),
+      ...workspaces.filter((w) => w.pinned),
+      ...workspaces.filter((w) => !w.pinned),
     ],
-    [workspaces, pinned]
+    [workspaces]
   )
 
-  function toggleIn(setter: typeof setCollapsed, id: number) {
-    setter((prev) => {
+  const sensors = useSensors(
+    // A small drag distance keeps a plain click on a row from starting a drag.
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  function moveWorkspace(id: number, from: number, to: number) {
+    if (from < 0 || to < 0 || from === to) return
+    const ids = sortedWorkspaces.map((w) => w.id)
+    if (ids[from] !== id) return
+    onReorderWorkspaces(arrayMove(ids, from, to))
+  }
+
+  function handleDragEnd({ active, over }: DragEndEvent) {
+    if (!over || active.id === over.id) return
+    const ids = sortedWorkspaces.map((w) => w.id)
+    moveWorkspace(
+      Number(active.id),
+      ids.indexOf(Number(active.id)),
+      ids.indexOf(Number(over.id))
+    )
+  }
+
+  const toggleWorkspace = (id: number) =>
+    setCollapsed((prev) => {
       const next = new Set(prev)
       if (!next.delete(id)) next.add(id)
       return next
     })
-  }
-
-  const toggleWorkspace = (id: number) => toggleIn(setCollapsed, id)
-  const togglePinned = (id: number) => toggleIn(setPinned, id)
 
   return (
     <Sidebar collapsible="icon">
@@ -185,6 +224,15 @@ export function AppSidebar({
             <span className="sr-only">Import workspace</span>
           </SidebarGroupAction>
           <SidebarGroupContent>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+            <SortableContext
+              items={sortedWorkspaces.map((w) => w.id)}
+              strategy={verticalListSortingStrategy}
+            >
             <SidebarMenu>
               {workspaces.length === 0 ? (
                 <SidebarMenuItem>
@@ -194,11 +242,11 @@ export function AppSidebar({
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ) : (
-                sortedWorkspaces.map((workspace) => {
+                sortedWorkspaces.map((workspace, index) => {
                   const apps = appsByWorkspace[workspace.id] ?? []
                   const isActive = selectedWorkspaceId === workspace.id
                   const expanded = !collapsed.has(workspace.id)
-                  const isPinned = pinned.has(workspace.id)
+                  const isPinned = workspace.pinned
                   const colorStyle = workspace.color
                     ? { color: workspace.color }
                     : undefined
@@ -212,8 +260,9 @@ export function AppSidebar({
                     (app) => statusByAppId[app.id]?.running
                   ).length
                   return (
-                    <SidebarMenuItem
+                    <SortableWorkspaceItem
                       key={workspace.id}
+                      id={workspace.id}
                       className={workspace.color ? "rounded-md" : undefined}
                       style={
                         workspace.color
@@ -226,7 +275,10 @@ export function AppSidebar({
                           : undefined
                       }
                     >
+                      {(dragProps) => (
+                      <>
                       <SidebarMenuButton
+                        {...dragProps}
                         isActive={isActive && !selectedAppId}
                         tooltip={workspace.name}
                         className={cn(
@@ -295,11 +347,31 @@ export function AppSidebar({
                             New app from blueprint
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => togglePinned(workspace.id)}
+                            onClick={() => onSetPinned(workspace.id, !isPinned)}
                           >
                             {isPinned ? <PinOffIcon /> : <PinIcon />}
                             {isPinned ? "Unpin" : "Pin to top"}
                           </DropdownMenuItem>
+                          {index > 0 ? (
+                            <DropdownMenuItem
+                              onClick={() =>
+                                moveWorkspace(workspace.id, index, index - 1)
+                              }
+                            >
+                              <ArrowUpIcon />
+                              Move up
+                            </DropdownMenuItem>
+                          ) : null}
+                          {index < sortedWorkspaces.length - 1 ? (
+                            <DropdownMenuItem
+                              onClick={() =>
+                                moveWorkspace(workspace.id, index, index + 1)
+                              }
+                            >
+                              <ArrowDownIcon />
+                              Move down
+                            </DropdownMenuItem>
+                          ) : null}
                           <DropdownMenuItem
                             onClick={() => onEditWorkspace(workspace)}
                           >
@@ -366,11 +438,15 @@ export function AppSidebar({
                           </SidebarMenuSubItem>
                         </SidebarMenuSub>
                       ) : null}
-                    </SidebarMenuItem>
+                      </>
+                      )}
+                    </SortableWorkspaceItem>
                   )
                 })
               )}
             </SidebarMenu>
+            </SortableContext>
+            </DndContext>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
@@ -395,5 +471,36 @@ export function AppSidebar({
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
+  )
+}
+
+// A workspace row that can be dragged to reorder. The drag starts from the
+// workspace's own button (passed to the render function); the menu offers
+// Move up/down for keyboard use.
+function SortableWorkspaceItem({
+  id,
+  className,
+  style,
+  children,
+}: {
+  id: number
+  className?: string
+  style?: CSSProperties
+  children: (dragProps: Record<string, unknown>) => ReactNode
+}) {
+  const { listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id })
+  return (
+    <SidebarMenuItem
+      ref={setNodeRef}
+      className={cn(className, isDragging && "z-10 opacity-80 shadow-lg")}
+      style={{
+        ...style,
+        transform: CSS.Translate.toString(transform),
+        transition,
+      }}
+    >
+      {children({ ...listeners })}
+    </SidebarMenuItem>
   )
 }

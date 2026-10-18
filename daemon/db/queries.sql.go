@@ -254,7 +254,12 @@ func (q *Queries) CreateTemplate(ctx context.Context, arg CreateTemplateParams) 
 }
 
 const createWorkspace = `-- name: CreateWorkspace :one
-INSERT INTO workspaces (name, icon, color) VALUES (?, ?, ?) RETURNING id, name, icon, color, created_at, updated_at
+INSERT INTO workspaces (name, icon, color, sort_order)
+VALUES (
+  ?1, ?2, ?3,
+  (SELECT COALESCE(max(sort_order), -1) + 1 FROM workspaces)
+)
+RETURNING id, name, icon, color, sort_order, pinned, created_at, updated_at
 `
 
 type CreateWorkspaceParams struct {
@@ -271,6 +276,8 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 		&i.Name,
 		&i.Icon,
 		&i.Color,
+		&i.SortOrder,
+		&i.Pinned,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -637,7 +644,7 @@ func (q *Queries) GetTemplateByPath(ctx context.Context, arg GetTemplateByPathPa
 }
 
 const getWorkspace = `-- name: GetWorkspace :one
-SELECT id, name, icon, color, created_at, updated_at FROM workspaces WHERE id = ?
+SELECT id, name, icon, color, sort_order, pinned, created_at, updated_at FROM workspaces WHERE id = ?
 `
 
 func (q *Queries) GetWorkspace(ctx context.Context, id int64) (Workspace, error) {
@@ -648,6 +655,8 @@ func (q *Queries) GetWorkspace(ctx context.Context, id int64) (Workspace, error)
 		&i.Name,
 		&i.Icon,
 		&i.Color,
+		&i.SortOrder,
+		&i.Pinned,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -955,7 +964,7 @@ func (q *Queries) ListTemplatesByConfigSet(ctx context.Context, configSetID int6
 }
 
 const listWorkspaces = `-- name: ListWorkspaces :many
-SELECT id, name, icon, color, created_at, updated_at FROM workspaces ORDER BY name COLLATE NOCASE ASC
+SELECT id, name, icon, color, sort_order, pinned, created_at, updated_at FROM workspaces ORDER BY sort_order ASC, id ASC
 `
 
 // workspaces (db/workspaces.ts)
@@ -973,6 +982,8 @@ func (q *Queries) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
 			&i.Name,
 			&i.Icon,
 			&i.Color,
+			&i.SortOrder,
+			&i.Pinned,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -1068,6 +1079,37 @@ type SetAppSortOrderParams struct {
 
 func (q *Queries) SetAppSortOrder(ctx context.Context, arg SetAppSortOrderParams) error {
 	_, err := q.db.ExecContext(ctx, setAppSortOrder, arg.SortOrder, arg.ID, arg.WorkspaceID)
+	return err
+}
+
+const setWorkspacePinned = `-- name: SetWorkspacePinned :execrows
+UPDATE workspaces SET pinned = ? WHERE id = ?
+`
+
+type SetWorkspacePinnedParams struct {
+	Pinned int64 `json:"pinned"`
+	ID     int64 `json:"id"`
+}
+
+func (q *Queries) SetWorkspacePinned(ctx context.Context, arg SetWorkspacePinnedParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setWorkspacePinned, arg.Pinned, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setWorkspaceSortOrder = `-- name: SetWorkspaceSortOrder :exec
+UPDATE workspaces SET sort_order = ? WHERE id = ?
+`
+
+type SetWorkspaceSortOrderParams struct {
+	SortOrder int64 `json:"sort_order"`
+	ID        int64 `json:"id"`
+}
+
+func (q *Queries) SetWorkspaceSortOrder(ctx context.Context, arg SetWorkspaceSortOrderParams) error {
+	_, err := q.db.ExecContext(ctx, setWorkspaceSortOrder, arg.SortOrder, arg.ID)
 	return err
 }
 
@@ -1343,7 +1385,7 @@ const updateWorkspace = `-- name: UpdateWorkspace :one
 UPDATE workspaces
 SET name = ?, icon = ?, color = ?, updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, name, icon, color, created_at, updated_at
+RETURNING id, name, icon, color, sort_order, pinned, created_at, updated_at
 `
 
 type UpdateWorkspaceParams struct {
@@ -1366,6 +1408,8 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 		&i.Name,
 		&i.Icon,
 		&i.Color,
+		&i.SortOrder,
+		&i.Pinned,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

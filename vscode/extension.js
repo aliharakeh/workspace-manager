@@ -122,7 +122,7 @@ export function activate(context) {
     let workspace;
     if (workspaces.length > 0) {
       const picked = await vscode.window.showQuickPick(
-        [...workspaces.map((w) => ({ label: w.name, workspace: w.name })), { label: '$(add) New workspace…', workspace: null }],
+        [...workspaces.map((w) => ({ label: w.name, description: w.pinned ? '$(pin) pinned' : undefined, workspace: w.name })), { label: '$(add) New workspace…', workspace: null }],
         { placeHolder: 'Add this folder to which workspace?' }
       );
       if (!picked) return undefined;

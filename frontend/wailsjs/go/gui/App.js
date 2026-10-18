@@ -382,6 +382,14 @@ export function WorkspacesList() {
   return window['go']['gui']['App']['WorkspacesList']();
 }
 
+export function WorkspacesReorder(arg1) {
+  return window['go']['gui']['App']['WorkspacesReorder'](arg1);
+}
+
+export function WorkspacesSetPinned(arg1, arg2) {
+  return window['go']['gui']['App']['WorkspacesSetPinned'](arg1, arg2);
+}
+
 export function WorkspacesUpdate(arg1, arg2) {
   return window['go']['gui']['App']['WorkspacesUpdate'](arg1, arg2);
 }

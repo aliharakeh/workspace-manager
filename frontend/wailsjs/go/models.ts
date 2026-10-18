@@ -2091,6 +2091,7 @@ export namespace types {
 	    name: string;
 	    icon?: string;
 	    color?: string;
+	    pinned: boolean;
 	    created_at: string;
 	    updated_at: string;
 	
@@ -2104,6 +2105,7 @@ export namespace types {
 	        this.name = source["name"];
 	        this.icon = source["icon"];
 	        this.color = source["color"];
+	        this.pinned = source["pinned"];
 	        this.created_at = source["created_at"];
 	        this.updated_at = source["updated_at"];
 	    }

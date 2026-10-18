@@ -54,6 +54,16 @@ func (a *App) AppsUpdate(id int64, body types.AppUpdateInput) (types.App, error)
 	return call[types.App](a.link, api.MethodAppsUpdate, m{"id": id, "body": body})
 }
 
+// WorkspacesReorder saves the order of the workspaces; ids lists all of them.
+func (a *App) WorkspacesReorder(ids []int64) (types.Ok, error) {
+	return call[types.Ok](a.link, api.MethodWorkspacesReorder, m{"ids": ids})
+}
+
+// WorkspacesSetPinned pins a workspace to the top of the list, or unpins it.
+func (a *App) WorkspacesSetPinned(id int64, pinned bool) (types.Workspace, error) {
+	return call[types.Workspace](a.link, api.MethodWorkspacesSetPinned, m{"id": id, "pinned": pinned})
+}
+
 // AppsReorder saves the order of a workspace's apps; ids lists all of them.
 func (a *App) AppsReorder(workspaceID int64, ids []int64) (types.Ok, error) {
 	return call[types.Ok](a.link, api.MethodAppsReorder, m{"workspaceID": workspaceID, "ids": ids})

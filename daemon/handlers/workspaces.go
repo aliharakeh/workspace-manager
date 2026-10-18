@@ -20,6 +20,17 @@ func (r *Registry) workspaces() {
 	}) (types.Workspace, error) {
 		return o.WorkspacesUpdate(in.ID, in.Body)
 	}))
+	r.handle(api.MethodWorkspacesReorder, typed(func(in struct {
+		IDs []int64 `json:"ids"`
+	}) (types.Ok, error) {
+		return o.WorkspacesReorder(in.IDs)
+	}))
+	r.handle(api.MethodWorkspacesSetPinned, typed(func(in struct {
+		ID     int64 `json:"id"`
+		Pinned bool  `json:"pinned"`
+	}) (types.Workspace, error) {
+		return o.WorkspacesSetPinned(in.ID, in.Pinned)
+	}))
 	r.handle(api.MethodWorkspacesDelete, typed(func(in struct {
 		ID int64 `json:"id"`
 	}) (types.Ok, error) {

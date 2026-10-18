@@ -17,6 +17,10 @@ const (
 	MethodWorkspacesDelete = "workspaces.delete"
 
 	// Apps.
+	// Workspace order and pins.
+	MethodWorkspacesReorder   = "workspaces.reorder"
+	MethodWorkspacesSetPinned = "workspaces.setPinned"
+
 	MethodAppsList         = "apps.list"
 	MethodAppsGet          = "apps.get"
 	MethodAppsCreate       = "apps.create"
@@ -135,6 +139,8 @@ var Methods = []Method{
 	// Export hides AI-excluded values from agents and refuses them "include".
 	{Name: MethodWorkspacesExport, Agent: true},
 	{Name: MethodWorkspacesImport, Agent: true},
+	{Name: MethodWorkspacesReorder, Agent: true},
+	{Name: MethodWorkspacesSetPinned, Agent: true},
 
 	{Name: MethodAppsList, Agent: true},
 	{Name: MethodAppsGet, Agent: true},

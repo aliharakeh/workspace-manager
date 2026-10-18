@@ -44,8 +44,13 @@ export class Service {
 
   // ---- projects (apps) ----
 
+  /**
+   * The daemon's workspaces in the order the apps show them: pinned first, then
+   * the saved order (the daemon already lists them in that order).
+   */
   async workspaces() {
-    return this.call('workspaces.list');
+    const list = await this.call('workspaces.list');
+    return [...list.filter((w) => w.pinned), ...list.filter((w) => !w.pinned)];
   }
 
   /** Every app with its workspace name. */

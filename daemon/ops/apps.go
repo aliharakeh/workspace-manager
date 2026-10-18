@@ -204,3 +204,21 @@ func (o *Ops) appProjectDir(appID int64) (string, error) {
 	}
 	return resolved, nil
 }
+
+// WorkspacesReorder saves the order of the workspaces; ids lists all of them.
+func (o *Ops) WorkspacesReorder(ids []int64) (types.Ok, error) {
+	if err := o.DB.ReorderWorkspacesT(o.Ctx(), ids); err != nil {
+		return types.Ok{}, err
+	}
+	o.changed("workspace", ids...)
+	return types.Ok{Ok: true}, nil
+}
+
+// WorkspacesSetPinned pins a workspace to the top of the list, or unpins it.
+func (o *Ops) WorkspacesSetPinned(id int64, pinned bool) (types.Workspace, error) {
+	ws, err := o.DB.SetWorkspacePinnedT(o.Ctx(), id, pinned)
+	if err == nil {
+		o.changed("workspace", ws.ID)
+	}
+	return ws, err
+}
