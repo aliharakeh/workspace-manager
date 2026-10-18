@@ -452,6 +452,7 @@ export type BundleApp = {
     active_config_set: string
     config_sets: BundleConfigSet[]
     worktree_links: string[]
+    exclude_from_start_all?: boolean
 }
 
 export type WorkspaceBundle = {

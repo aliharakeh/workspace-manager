@@ -57,7 +57,7 @@ func (o *Ops) WorkspacesExport(id int64, opts types.WorkspaceExportOptions, trus
 	}
 	used := map[string]bool{}
 	for _, a := range apps {
-		ba := types.BundleApp{Key: uniqueKey(slug(a.Name), used), Name: a.Name}
+		ba := types.BundleApp{Key: uniqueKey(slug(a.Name), used), Name: a.Name, ExcludeFromStartAll: a.ExcludeFromStartAll}
 		if rel, ok := relativeTo(root, a.ProjectPath); ok && root != "" {
 			ba.Path = rel
 		} else {
@@ -231,6 +231,11 @@ func (o *Ops) WorkspacesImport(bundle types.WorkspaceBundle, opts types.Workspac
 		app, err := q.CreateApp(ctx, db.CreateAppParams{WorkspaceID: ws.ID, Name: p.src.Name, ProjectPath: p.folder})
 		if err != nil {
 			return result, err
+		}
+		if p.src.ExcludeFromStartAll {
+			if err := q.SetAppExcludeFromStartAll(ctx, db.SetAppExcludeFromStartAllParams{ExcludeFromStartAll: 1, ID: app.ID}); err != nil {
+				return result, err
+			}
 		}
 		sets := p.src.ConfigSets
 		if len(sets) == 0 {

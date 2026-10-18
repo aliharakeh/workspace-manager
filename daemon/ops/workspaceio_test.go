@@ -70,6 +70,9 @@ func must(t *testing.T, err error) {
 
 func TestExportImportRoundTrip(t *testing.T) {
 	o, rec, ws, root := seedWorkspace(t)
+	seeded, err := o.AppsList(ws.ID)
+	must(t, err)
+	must(t, o.DB.SetAppExcludeFromStartAllT(o.Ctx(), seeded[1].ID, true))
 	bundle, err := o.WorkspacesExport(ws.ID, types.WorkspaceExportOptions{Secrets: types.SecretsInclude}, true)
 	must(t, err)
 	if bundle.Format != types.WorkspaceBundleFormat || bundle.Version != 1 || bundle.Secrets != types.SecretsInclude {
@@ -99,6 +102,9 @@ func TestExportImportRoundTrip(t *testing.T) {
 	must(t, err)
 	if len(apps) != 2 || apps[0].Name != "api" || apps[1].Name != "web" {
 		t.Fatalf("apps and their order: %+v", apps)
+	}
+	if apps[0].ExcludeFromStartAll || !apps[1].ExcludeFromStartAll {
+		t.Errorf("exclude from Start all should round-trip: %v, %v", apps[0].ExcludeFromStartAll, apps[1].ExcludeFromStartAll)
 	}
 	if apps[0].ProjectPath != filepath.Join(newBase, "api") {
 		t.Errorf("remapped folder: %s", apps[0].ProjectPath)

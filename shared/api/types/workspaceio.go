@@ -67,6 +67,8 @@ type BundleApp struct {
 	ConfigSets      []BundleConfigSet `json:"config_sets"`
 	// WorktreeLinks are the shared paths of the app's git worktrees.
 	WorktreeLinks []string `json:"worktree_links"`
+	// ExcludeFromStartAll leaves the app out of the workspace's "Start all".
+	ExcludeFromStartAll bool `json:"exclude_from_start_all,omitempty"`
 }
 
 type BundleConfigSet struct {
