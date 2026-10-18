@@ -409,6 +409,7 @@ export type ConfigSetCompare = {
     env: ConfigSetEnvDiff[]
     templates: ConfigSetTemplateDiff[]
     commands: ConfigSetCommandListDiff[]
+}
 
 // Workspace export and import (see shared/api/types/workspaceio.go).
 export type SecretsMode = 'exclude' | 'placeholder' | 'include'
