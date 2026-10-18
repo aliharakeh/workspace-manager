@@ -32,6 +32,7 @@ import { ConfigSetPicker } from "@/components/config-set-picker"
 import { OpenEditorButton } from "@/components/open-editor-button"
 import { OpenFolderButton } from "@/components/open-folder-button"
 import { WorkspaceColorPicker } from "@/components/workspace-color-picker"
+import { WorkspaceRunControls } from "@/components/workspace-run-controls"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -184,7 +185,15 @@ export function WorkspaceDetail({
             and logs. Drag an app by its handle to reorder it.
           </p>
         </div>
-        <div className="shrink-0 pt-1.5">{colorPicker(true)}</div>
+        <div className="flex shrink-0 items-center gap-2 pt-1.5">
+          <WorkspaceRunControls
+            workspaceId={workspace.id}
+            apps={apps}
+            statusByAppId={statusByAppId}
+            onAppChange={onAppChange}
+          />
+          {colorPicker(true)}
+        </div>
       </div>
 
       <DndContext

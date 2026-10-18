@@ -16,6 +16,8 @@ type App struct {
 	ProjectPath         string  `json:"project_path"`
 	ActiveConfigSetID   *int64  `json:"active_config_set_id"`
 	ActiveConfigSetName *string `json:"active_config_set_name"`
+	// ExcludeFromStartAll leaves the app out of its workspace's "Start all".
+	ExcludeFromStartAll bool   `json:"exclude_from_start_all"`
 	CreatedAt           string  `json:"created_at"`
 	UpdatedAt           string  `json:"updated_at"`
 }
@@ -269,6 +271,8 @@ type AppCreateInput struct {
 type AppUpdateInput struct {
 	Name        *string `json:"name"`
 	ProjectPath *string `json:"project_path"`
+	// ExcludeFromStartAll sets the app's "Start all" exclusion; nil keeps it.
+	ExcludeFromStartAll *bool `json:"exclude_from_start_all"`
 }
 
 type ConfigSetUpdateInput struct {

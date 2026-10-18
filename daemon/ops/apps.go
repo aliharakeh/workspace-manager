@@ -127,6 +127,11 @@ func (o *Ops) AppsUpdate(id int64, body types.AppUpdateInput) (types.App, error)
 		projectPath = &resolved
 	}
 	app, err := o.DB.UpdateAppT(o.Ctx(), id, name, projectPath)
+	if err == nil && body.ExcludeFromStartAll != nil {
+		if err = o.DB.SetAppExcludeFromStartAllT(o.Ctx(), id, *body.ExcludeFromStartAll); err == nil {
+			app.ExcludeFromStartAll = *body.ExcludeFromStartAll
+		}
+	}
 	if err == nil {
 		o.changed("app", app.ID)
 	}

@@ -46,7 +46,7 @@ Environment is inherited, so the server uses your normal data folder. Set
 | `wm_config` | Config sets: list, detail, create, rename, activate, copy, delete; command lists: get/save, package scripts |
 | `wm_env` | Env vars: list, set (upsert), delete, import |
 | `wm_template` | File templates: list, add, edit, delete |
-| `wm_run` | run, build, setup, stop, reload, status, logs |
+| `wm_run` | run, build, setup, stop, reload, status, logs, startAll, stopAll (a whole workspace) |
 | `wm_blueprint` | Blueprints: list, show, create, update, delete, create_app (fails fast), resolve, cancel |
 | `wm_ports` | List listening ports, stop a process |
 | `wm_file` | Read a file inside an app's folder |

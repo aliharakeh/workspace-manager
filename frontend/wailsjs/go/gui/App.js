@@ -314,12 +314,20 @@ export function RunnerSetup(arg1) {
   return window['go']['gui']['App']['RunnerSetup'](arg1);
 }
 
+export function RunnerStartWorkspace(arg1, arg2, arg3) {
+  return window['go']['gui']['App']['RunnerStartWorkspace'](arg1, arg2, arg3);
+}
+
 export function RunnerStatus(arg1) {
   return window['go']['gui']['App']['RunnerStatus'](arg1);
 }
 
 export function RunnerStop(arg1) {
   return window['go']['gui']['App']['RunnerStop'](arg1);
+}
+
+export function RunnerStopWorkspace(arg1, arg2) {
+  return window['go']['gui']['App']['RunnerStopWorkspace'](arg1, arg2);
 }
 
 export function RunnerWorkspaceStatus(arg1) {

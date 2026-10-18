@@ -90,7 +90,7 @@ export const api = {
         get: (id: number) => call(() => Go.AppsGet(id)),
         create: (workspaceId: number, body: { name: string; project_path: string }) =>
             call(() => Go.AppsCreate(workspaceId, body)),
-        update: (id: number, body: { name?: string; project_path?: string }) =>
+        update: (id: number, body: { name?: string; project_path?: string; exclude_from_start_all?: boolean }) =>
             call(() => Go.AppsUpdate(id, body)),
         reorder: (workspaceId: number, ids: number[]) =>
             call(() => Go.AppsReorder(workspaceId, ids)),
@@ -186,6 +186,10 @@ export const api = {
         setup: (appId: number) => call(() => Go.RunnerSetup(appId)),
         stop: (appId: number) => call(() => Go.RunnerStop(appId)),
         reload: (appId: number) => call(() => Go.RunnerReload(appId)),
+        startWorkspace: (workspaceId: number, excludeAppIds: number[], sequential: boolean) =>
+            call(() => Go.RunnerStartWorkspace(workspaceId, excludeAppIds, sequential)),
+        stopWorkspace: (workspaceId: number, excludeAppIds: number[]) =>
+            call(() => Go.RunnerStopWorkspace(workspaceId, excludeAppIds)),
     },
 
     git: {
