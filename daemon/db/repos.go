@@ -12,7 +12,7 @@ import (
 
 func workspaceFrom(row Workspace) types.Workspace {
 	return types.Workspace{
-		ID: row.ID, Name: row.Name, Icon: row.Icon, Color: row.Color,
+		ID: row.ID, Name: row.Name, Icon: row.Icon, Color: row.Color, Pinned: row.Pinned != 0,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
 }
@@ -773,4 +773,54 @@ func (d *DB) SetWorktreeLinksT(ctx context.Context, appID int64, paths []string)
 		}
 	}
 	return tx.Commit()
+}
+
+// ReorderWorkspacesT stores the order of the workspaces: ids lists every
+// workspace, first to last.
+func (d *DB) ReorderWorkspacesT(ctx context.Context, ids []int64) error {
+	current, err := d.ListWorkspaces(ctx)
+	if err != nil {
+		return err
+	}
+	if len(ids) != len(current) {
+		return fmt.Errorf("order must list every workspace")
+	}
+	known := make(map[int64]bool, len(current))
+	for _, w := range current {
+		known[w.ID] = true
+	}
+	for _, id := range ids {
+		if !known[id] {
+			return fmt.Errorf("Workspace %d does not exist or is listed twice", id)
+		}
+		delete(known, id)
+	}
+	tx, err := d.SQL.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := d.WithTx(tx)
+	for i, id := range ids {
+		if err := q.SetWorkspaceSortOrder(ctx, SetWorkspaceSortOrderParams{SortOrder: int64(i), ID: id}); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// SetWorkspacePinnedT pins or unpins a workspace and returns it.
+func (d *DB) SetWorkspacePinnedT(ctx context.Context, id int64, pinned bool) (types.Workspace, error) {
+	pinnedInt := int64(0)
+	if pinned {
+		pinnedInt = 1
+	}
+	n, err := d.SetWorkspacePinned(ctx, SetWorkspacePinnedParams{Pinned: pinnedInt, ID: id})
+	if err != nil {
+		return types.Workspace{}, err
+	}
+	if n == 0 {
+		return types.Workspace{}, fmt.Errorf("Workspace not found")
+	}
+	return d.GetWorkspaceT(ctx, id)
 }

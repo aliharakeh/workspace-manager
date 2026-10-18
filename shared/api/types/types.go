@@ -5,6 +5,7 @@ type Workspace struct {
 	Name      string  `json:"name"`
 	Icon      *string `json:"icon"`
 	Color     *string `json:"color"`
+	Pinned    bool    `json:"pinned"`
 	CreatedAt string  `json:"created_at"`
 	UpdatedAt string  `json:"updated_at"`
 }

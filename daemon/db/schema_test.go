@@ -302,3 +302,99 @@ func TestApplySchemaAddsWorkspaceColor(t *testing.T) {
 		t.Fatalf("existing workspace should have no color, got %q", color.String)
 	}
 }
+
+func TestApplySchemaAddsWorkspaceOrderAndPin(t *testing.T) {
+	sqlDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+	sqlDB.SetMaxOpenConns(1)
+	// Shape of workspaces before they could be reordered or pinned.
+	if _, err := sqlDB.Exec(`
+		CREATE TABLE workspaces (id integer PRIMARY KEY AUTOINCREMENT NOT NULL, name text NOT NULL, icon text, color text,
+		  created_at text DEFAULT (datetime('now')) NOT NULL, updated_at text DEFAULT (datetime('now')) NOT NULL);
+		INSERT INTO workspaces (name) VALUES ('web'), ('Api'), ('docs');`); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := applySchema(sqlDB); err != nil {
+			t.Fatalf("apply #%d: %v", i+1, err)
+		}
+	}
+	d := &DB{SQL: sqlDB, Queries: New(sqlDB)}
+	list, err := d.ListWorkspacesT(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := ""
+	for _, w := range list {
+		got += w.Name + ","
+		if w.Pinned {
+			t.Fatalf("%s starts pinned", w.Name)
+		}
+	}
+	if got != "Api,docs,web," {
+		t.Fatalf("backfilled order: %s", got)
+	}
+}
+
+func TestReorderAndPinWorkspaces(t *testing.T) {
+	sqlDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+	sqlDB.SetMaxOpenConns(1)
+	if err := applySchema(sqlDB); err != nil {
+		t.Fatal(err)
+	}
+	d := &DB{SQL: sqlDB, Queries: New(sqlDB)}
+	ctx := context.Background()
+	var ids []int64
+	for _, name := range []string{"b", "c", "a"} {
+		ws, err := d.CreateWorkspaceT(ctx, name, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, ws.ID)
+	}
+	names := func() string {
+		list, err := d.ListWorkspacesT(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := ""
+		for _, w := range list {
+			s += w.Name
+		}
+		return s
+	}
+	if got := names(); got != "bca" {
+		t.Fatalf("created order: %s", got)
+	}
+	if err := d.ReorderWorkspacesT(ctx, []int64{ids[2], ids[0], ids[1]}); err != nil {
+		t.Fatal(err)
+	}
+	if got := names(); got != "abc" {
+		t.Fatalf("reordered: %s", got)
+	}
+	for _, bad := range [][]int64{{ids[0]}, {ids[0], ids[0], ids[1]}, {ids[0], ids[1], 999}} {
+		if err := d.ReorderWorkspacesT(ctx, bad); err == nil {
+			t.Fatalf("order %v should be rejected", bad)
+		}
+	}
+	if got := names(); got != "abc" {
+		t.Fatalf("a rejected order changed the list: %s", got)
+	}
+	ws, err := d.SetWorkspacePinnedT(ctx, ids[1], true)
+	if err != nil || !ws.Pinned {
+		t.Fatalf("pin: %v %+v", err, ws)
+	}
+	if ws, err = d.SetWorkspacePinnedT(ctx, ids[1], false); err != nil || ws.Pinned {
+		t.Fatalf("unpin: %v %+v", err, ws)
+	}
+	if _, err := d.SetWorkspacePinnedT(ctx, 999, true); err == nil {
+		t.Fatal("pinning a missing workspace should fail")
+	}
+}

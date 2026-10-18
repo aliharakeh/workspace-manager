@@ -36,6 +36,7 @@ import {
     matchesShortcut,
     shortcutParts,
 } from '@/lib/shortcuts'
+import { migrateLocalPins } from '@/lib/pins-migration'
 import type { App as AppEntity, DataChangedEvent, StatusEvent, Workspace } from '@/lib/types'
 import { FolderIcon, LayoutTemplateIcon, PlusIcon, RefreshCwIcon, SearchIcon } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -185,7 +186,8 @@ function AppContent() {
         setLoading(true)
         setServerError(null)
         try {
-            const list = await api.workspaces.list()
+            let list = await api.workspaces.list()
+            if (await migrateLocalPins(list)) list = await api.workspaces.list()
             setWorkspaces(list)
             if (list.length) {
                 await Promise.all(list.map(w => loadApps(w.id)))
@@ -243,6 +245,31 @@ function AppContent() {
         }
     }
 
+    // Apply a drag-and-drop workspace order at once, then save it; on failure
+    // reload the saved order.
+    async function handleReorderWorkspaces(orderedIds: number[]) {
+        setWorkspaces(prev => {
+            const byId = new Map(prev.map(w => [w.id, w]))
+            return orderedIds.flatMap(id => byId.get(id) ?? [])
+        })
+        try {
+            await api.workspaces.reorder(orderedIds)
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to save the new order')
+            void reloadLists()
+        }
+    }
+
+    async function handleSetPinned(workspaceId: number, pinned: boolean) {
+        setWorkspaces(prev => prev.map(w => (w.id === workspaceId ? { ...w, pinned } : w)))
+        try {
+            await api.workspaces.setPinned(workspaceId, pinned)
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to save the pin')
+            void reloadLists()
+        }
+    }
+
     // Dropped folders become apps in the open workspace, or in a new "Default"
     // workspace when none is open.
     async function handleDropPaths(paths: string[]) {
@@ -269,9 +296,7 @@ function AppContent() {
             try {
                 const created = (await api.workspaces.create({ name: 'Default' })) as Workspace
                 target = created
-                setWorkspaces(prev =>
-                    [...prev, created].sort((a, b) => a.name.localeCompare(b.name)),
-                )
+                setWorkspaces(prev => [...prev, created])
                 setAppsByWorkspace(prev => ({ ...prev, [created.id]: [] }))
             } catch (err) {
                 toast.error(err instanceof Error ? err.message : 'Failed to create workspace')
@@ -520,6 +545,8 @@ function AppContent() {
                     selectedAppId={selectedAppId}
                     onSelectWorkspace={handleSelectWorkspace}
                     onSelectApp={handleSelectApp}
+                    onReorderWorkspaces={ids => void handleReorderWorkspaces(ids)}
+                    onSetPinned={(id, pinned) => void handleSetPinned(id, pinned)}
                     onCreateWorkspace={() => {
                         setEditingWorkspace(null)
                         setWorkspaceDialogOpen(true)
@@ -699,10 +726,9 @@ function AppContent() {
                     onSaved={workspace => {
                         setWorkspaces(prev => {
                             const exists = prev.some(w => w.id === workspace.id)
-                            const next = exists
+                            return exists
                                 ? prev.map(w => (w.id === workspace.id ? workspace : w))
                                 : [...prev, workspace]
-                            return next.sort((a, b) => a.name.localeCompare(b.name))
                         })
                         handleGoWorkspace(workspace)
                         if (!appsByWorkspace[workspace.id]) {

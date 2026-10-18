@@ -129,6 +129,10 @@ screen. The React frontend lives in `frontend/`.
 - Apps are listed by `apps.sort_order` (per workspace), not by name: new apps
   go last and `apps.reorder` rewrites the order. The UI must not re-sort apps
   by name.
+- Workspaces are listed by `workspaces.sort_order` (new ones go last, `workspaces.reorder`
+  rewrites the order) and carry a `pinned` flag (`workspaces.setPinned`); clients show
+  pinned first, then the saved order, and must not re-sort by name. Collapse state in
+  the sidebar stays per-device (local storage).
 - Blueprints: the runner is in `daemon/services/blueprints.go` (daemon); the
   agent that drafts them is `gui/ai/blueprintai.go` (GUI) and delivers only
   through its `propose_blueprint` tool. When you change the runner or the

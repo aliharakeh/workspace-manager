@@ -1,12 +1,23 @@
 -- workspaces (db/workspaces.ts)
 -- name: ListWorkspaces :many
-SELECT * FROM workspaces ORDER BY name COLLATE NOCASE ASC;
+SELECT * FROM workspaces ORDER BY sort_order ASC, id ASC;
 
 -- name: GetWorkspace :one
 SELECT * FROM workspaces WHERE id = ?;
 
 -- name: CreateWorkspace :one
-INSERT INTO workspaces (name, icon, color) VALUES (?, ?, ?) RETURNING *;
+INSERT INTO workspaces (name, icon, color, sort_order)
+VALUES (
+  sqlc.arg(name), sqlc.arg(icon), sqlc.arg(color),
+  (SELECT COALESCE(max(sort_order), -1) + 1 FROM workspaces)
+)
+RETURNING *;
+
+-- name: SetWorkspaceSortOrder :exec
+UPDATE workspaces SET sort_order = ? WHERE id = ?;
+
+-- name: SetWorkspacePinned :execrows
+UPDATE workspaces SET pinned = ? WHERE id = ?;
 
 -- name: UpdateWorkspace :one
 UPDATE workspaces

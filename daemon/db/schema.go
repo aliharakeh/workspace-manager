@@ -22,6 +22,9 @@ func applySchema(sqlDB *sql.DB) error {
 	if err := addAppSortOrder(sqlDB); err != nil {
 		return err
 	}
+	if err := addWorkspaceOrderAndPin(sqlDB); err != nil {
+		return err
+	}
 	if err := addWorkspaceColor(sqlDB); err != nil {
 		return err
 	}
@@ -216,4 +219,37 @@ func restoreBlueprints(sqlDB *sql.DB) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+// addWorkspaceOrderAndPin upgrades a workspaces table created before
+// workspaces could be reordered or pinned. Workspaces used to be listed by name,
+// so they are numbered in that order to keep the list looking the same; none
+// starts pinned (the old pins lived in the GUI's local storage and are pushed up
+// by the GUI). A fresh table already has both columns from schemaSQL.
+func addWorkspaceOrderAndPin(sqlDB *sql.DB) error {
+	cols, err := tableColumns(sqlDB, "workspaces")
+	if err != nil || len(cols) == 0 {
+		return err // fresh database: schemaSQL creates the table with both columns
+	}
+	hasOrder, err := hasColumn(sqlDB, "workspaces", "sort_order")
+	if err != nil {
+		return err
+	}
+	if !hasOrder {
+		if _, err := sqlDB.Exec(`
+			ALTER TABLE workspaces ADD COLUMN sort_order integer DEFAULT 0 NOT NULL;
+			UPDATE workspaces SET sort_order = (
+			  SELECT count(*) FROM workspaces b
+			  WHERE b.name COLLATE NOCASE < workspaces.name COLLATE NOCASE
+			     OR (b.name COLLATE NOCASE = workspaces.name COLLATE NOCASE AND b.id < workspaces.id)
+			);`); err != nil {
+			return err
+		}
+	}
+	hasPinned, err := hasColumn(sqlDB, "workspaces", "pinned")
+	if err != nil || hasPinned {
+		return err
+	}
+	_, err = sqlDB.Exec(`ALTER TABLE workspaces ADD COLUMN pinned integer DEFAULT false NOT NULL`)
+	return err
 }

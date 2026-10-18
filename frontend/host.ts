@@ -83,6 +83,8 @@ export const api = {
         update: (id: number, body: { name?: string; icon?: string | null; color?: string | null }) =>
             call(() => Go.WorkspacesUpdate(id, body)),
         delete: (id: number) => call(() => Go.WorkspacesDelete(id)),
+        reorder: (ids: number[]) => call(() => Go.WorkspacesReorder(ids)),
+        setPinned: (id: number, pinned: boolean) => call(() => Go.WorkspacesSetPinned(id, pinned)),
     },
 
     apps: {

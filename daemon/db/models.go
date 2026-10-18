@@ -95,6 +95,8 @@ type Workspace struct {
 	Name      string  `json:"name"`
 	Icon      *string `json:"icon"`
 	Color     *string `json:"color"`
+	SortOrder int64   `json:"sort_order"`
+	Pinned    int64   `json:"pinned"`
 	CreatedAt string  `json:"created_at"`
 	UpdatedAt string  `json:"updated_at"`
 }

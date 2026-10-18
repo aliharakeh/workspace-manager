@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS workspaces (
   name text NOT NULL,
   icon text,
   color text,
+  sort_order integer DEFAULT 0 NOT NULL,
+  pinned integer DEFAULT false NOT NULL,
   created_at text DEFAULT (datetime('now')) NOT NULL,
   updated_at text DEFAULT (datetime('now')) NOT NULL
 );
