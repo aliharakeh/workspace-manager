@@ -407,4 +407,95 @@ export type ConfigSetCompare = {
     env: ConfigSetEnvDiff[]
     templates: ConfigSetTemplateDiff[]
     commands: ConfigSetCommandListDiff[]
+
+// Workspace export and import (see shared/api/types/workspaceio.go).
+export type SecretsMode = 'exclude' | 'placeholder' | 'include'
+
+export type WorkspaceExportOptions = { secrets: SecretsMode }
+
+export type BundleEnvVar = {
+    key: string
+    value: string
+    include_in_ai: boolean
+    redacted?: boolean
+}
+
+export type BundleTemplate = {
+    file_path: string
+    content: string
+    include_in_ai: boolean
+    redacted?: boolean
+}
+
+export type BundleCommandList = {
+    mode: string
+    commands: { label: string | null; command: string }[]
+}
+
+export type BundleConfigSet = {
+    name: string
+    env_vars: BundleEnvVar[]
+    templates: BundleTemplate[]
+    commands: Record<string, BundleCommandList>
+}
+
+export type BundleApp = {
+    key: string
+    name: string
+    path: string
+    absolute?: boolean
+    active_config_set: string
+    config_sets: BundleConfigSet[]
+    worktree_links: string[]
+}
+
+export type WorkspaceBundle = {
+    format: string
+    version: number
+    exported_at: string
+    secrets: SecretsMode
+    source_root: string
+    workspace: { name: string; icon: string | null; color: string | null }
+    apps: BundleApp[]
+}
+
+export type WorkspaceImportOptions = {
+    name: string
+    base_folder: string
+    folders: Record<string, string>
+    dry_run: boolean
+}
+
+export type WorkspaceImportApp = {
+    key: string
+    name: string
+    folder: string
+    folder_missing: boolean
+    config_sets: number
+    env_vars: number
+    templates: number
+    commands: number
+    empty_env_vars: number
+    empty_templates: number
+}
+
+export type WorkspaceImportResult = {
+    workspace_id: number
+    name: string
+    dry_run: boolean
+    apps: WorkspaceImportApp[]
+    app_ids: number[]
+}
+
+export type WorkspaceExportFileResult = {
+    path: string
+    cancelled: boolean
+    apps: number
+    secrets: SecretsMode
+}
+
+export type WorkspaceBundleFileResult = {
+    path: string
+    cancelled: boolean
+    bundle: WorkspaceBundle | null
 }

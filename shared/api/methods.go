@@ -105,6 +105,10 @@ const (
 	MethodBlueprintsSendInput = "blueprints.sendInput"
 	MethodBlueprintsResize    = "blueprints.resize"
 	MethodBlueprintsCancel    = "blueprints.cancel"
+
+	// Workspace export and import.
+	MethodWorkspacesExport = "workspaces.export"
+	MethodWorkspacesImport = "workspaces.import"
 )
 
 // Method describes one method: its group, and who may call it.
@@ -127,6 +131,10 @@ var Methods = []Method{
 	{Name: MethodWorkspacesCreate, Agent: true},
 	{Name: MethodWorkspacesUpdate, Agent: true},
 	{Name: MethodWorkspacesDelete, Agent: true},
+
+	// Export hides AI-excluded values from agents and refuses them "include".
+	{Name: MethodWorkspacesExport, Agent: true},
+	{Name: MethodWorkspacesImport, Agent: true},
 
 	{Name: MethodAppsList, Agent: true},
 	{Name: MethodAppsGet, Agent: true},

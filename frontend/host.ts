@@ -16,6 +16,12 @@ import type {
     RunnerEvent,
     StatusEvent,
     WorktreeLinkState,
+    WorkspaceBundle,
+    WorkspaceBundleFileResult,
+    WorkspaceExportFileResult,
+    WorkspaceExportOptions,
+    WorkspaceImportOptions,
+    WorkspaceImportResult,
 } from '@/lib/types'
 import * as Go from './wailsjs/go/gui/App'
 import { types } from './wailsjs/go/models'
@@ -83,6 +89,21 @@ export const api = {
         update: (id: number, body: { name?: string; icon?: string | null; color?: string | null }) =>
             call(() => Go.WorkspacesUpdate(id, body)),
         delete: (id: number) => call(() => Go.WorkspacesDelete(id)),
+        /** Shows a save dialog and writes the workspace bundle to the chosen file. */
+        exportToFile: (id: number, options: WorkspaceExportOptions) =>
+            call(() => Go.WorkspaceExportToFile(id, options) as Promise<WorkspaceExportFileResult>),
+        /** Shows an open dialog and reads a bundle from the chosen file. */
+        openBundleFile: () =>
+            call(() => Go.WorkspaceImportOpenFile() as Promise<WorkspaceBundleFileResult>),
+        /** Creates a workspace from a bundle; with `dry_run` only previews it. */
+        import: (bundle: WorkspaceBundle, options: WorkspaceImportOptions) =>
+            call(
+                () =>
+                    Go.WorkspacesImport(
+                        bundle as unknown as types.WorkspaceBundle,
+                        options as unknown as types.WorkspaceImportOptions,
+                    ) as Promise<WorkspaceImportResult>,
+            ),
     },
 
     apps: {
