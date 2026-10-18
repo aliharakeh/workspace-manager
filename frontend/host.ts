@@ -1,6 +1,7 @@
 import type { AppAIChatResult, AppAIPatch, AppAIStreamEvent } from '@/lib/app-ai'
 import type {
     AIProviderConfig,
+    App,
     BlueprintAIInput,
     BlueprintInput,
     BlueprintLogEvent,
@@ -114,7 +115,7 @@ export const api = {
         create: (workspaceId: number, body: { name: string; project_path: string }) =>
             call(() => Go.AppsCreate(workspaceId, body)),
         update: (id: number, body: { name?: string; project_path?: string; exclude_from_start_all?: boolean }) =>
-            call(() => Go.AppsUpdate(id, body)),
+            call(() => Go.AppsUpdate(id, body) as unknown as Promise<App>),
         reorder: (workspaceId: number, ids: number[]) =>
             call(() => Go.AppsReorder(workspaceId, ids)),
         delete: (id: number) => call(() => Go.AppsDelete(id)),
