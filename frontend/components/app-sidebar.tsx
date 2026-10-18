@@ -10,6 +10,7 @@ import {
   PlusIcon,
   SettingsIcon,
   SunIcon,
+  UploadIcon,
 } from "lucide-react"
 import type { App, StatusEvent, Workspace } from "@/lib/types"
 import { AppRunControls, AppStatusDot } from "@/components/app-run-controls"
@@ -52,6 +53,8 @@ type AppSidebarProps = {
   onCreateWorkspace: () => void
   onEditWorkspace: (workspace: Workspace) => void
   onDeleteWorkspace: (workspace: Workspace) => void
+  onExportWorkspace: (workspace: Workspace) => void
+  onImportWorkspace: () => void
   onCreateApp: (workspaceId: number) => void
   onCreateAppFromBlueprint: (workspaceId: number) => void
   onOpenSettings: () => void
@@ -84,6 +87,8 @@ export function AppSidebar({
   onCreateWorkspace,
   onEditWorkspace,
   onDeleteWorkspace,
+  onExportWorkspace,
+  onImportWorkspace,
   onCreateApp,
   onCreateAppFromBlueprint,
   onOpenSettings,
@@ -170,6 +175,14 @@ export function AppSidebar({
           <SidebarGroupAction title="New workspace" onClick={onCreateWorkspace}>
             <PlusIcon />
             <span className="sr-only">New workspace</span>
+          </SidebarGroupAction>
+          <SidebarGroupAction
+            title="Import workspace…"
+            className="right-9"
+            onClick={onImportWorkspace}
+          >
+            <UploadIcon />
+            <span className="sr-only">Import workspace</span>
           </SidebarGroupAction>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -291,6 +304,11 @@ export function AppSidebar({
                             onClick={() => onEditWorkspace(workspace)}
                           >
                             Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => onExportWorkspace(workspace)}
+                          >
+                            Export…
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             variant="destructive"

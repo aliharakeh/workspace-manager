@@ -176,9 +176,17 @@ export function TemplatesList(arg1:number):Promise<Array<types.Template>>;
 
 export function TemplatesUpdate(arg1:number,arg2:types.TemplateUpdateInput):Promise<types.Template>;
 
+export function WorkspaceExportToFile(arg1:number,arg2:types.WorkspaceExportOptions):Promise<types.WorkspaceExportFileResult>;
+
+export function WorkspaceImportOpenFile():Promise<types.WorkspaceBundleFileResult>;
+
 export function WorkspacesCreate(arg1:types.WorkspaceCreateInput):Promise<types.Workspace>;
 
 export function WorkspacesDelete(arg1:number):Promise<types.Ok>;
+
+export function WorkspacesExport(arg1:number,arg2:types.WorkspaceExportOptions):Promise<types.WorkspaceBundle>;
+
+export function WorkspacesImport(arg1:types.WorkspaceBundle,arg2:types.WorkspaceImportOptions):Promise<types.WorkspaceImportResult>;
 
 export function WorkspacesList():Promise<Array<types.Workspace>>;
 

@@ -739,6 +739,187 @@ export namespace types {
 		    return a;
 		}
 	}
+	export class BundleCommand {
+	    label?: string;
+	    command: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BundleCommand(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.command = source["command"];
+	    }
+	}
+	export class BundleCommandList {
+	    mode: string;
+	    commands: BundleCommand[];
+	
+	    static createFrom(source: any = {}) {
+	        return new BundleCommandList(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mode = source["mode"];
+	        this.commands = this.convertValues(source["commands"], BundleCommand);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class BundleTemplate {
+	    file_path: string;
+	    content: string;
+	    include_in_ai: boolean;
+	    redacted?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new BundleTemplate(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.file_path = source["file_path"];
+	        this.content = source["content"];
+	        this.include_in_ai = source["include_in_ai"];
+	        this.redacted = source["redacted"];
+	    }
+	}
+	export class BundleEnvVar {
+	    key: string;
+	    value: string;
+	    include_in_ai: boolean;
+	    redacted?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new BundleEnvVar(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.value = source["value"];
+	        this.include_in_ai = source["include_in_ai"];
+	        this.redacted = source["redacted"];
+	    }
+	}
+	export class BundleConfigSet {
+	    name: string;
+	    env_vars: BundleEnvVar[];
+	    templates: BundleTemplate[];
+	    commands: Record<string, BundleCommandList>;
+	
+	    static createFrom(source: any = {}) {
+	        return new BundleConfigSet(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.env_vars = this.convertValues(source["env_vars"], BundleEnvVar);
+	        this.templates = this.convertValues(source["templates"], BundleTemplate);
+	        this.commands = this.convertValues(source["commands"], BundleCommandList, true);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class BundleApp {
+	    key: string;
+	    name: string;
+	    path: string;
+	    absolute?: boolean;
+	    active_config_set: string;
+	    config_sets: BundleConfigSet[];
+	    worktree_links: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new BundleApp(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.absolute = source["absolute"];
+	        this.active_config_set = source["active_config_set"];
+	        this.config_sets = this.convertValues(source["config_sets"], BundleConfigSet);
+	        this.worktree_links = source["worktree_links"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	
+	
+	
+	export class BundleWorkspace {
+	    name: string;
+	    icon?: string;
+	    color?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BundleWorkspace(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.icon = source["icon"];
+	        this.color = source["color"];
+	    }
+	}
 	export class ConfigSet {
 	    id: number;
 	    app_id: number;
@@ -1791,6 +1972,82 @@ export namespace types {
 	        this.updated_at = source["updated_at"];
 	    }
 	}
+	export class WorkspaceBundle {
+	    format: string;
+	    version: number;
+	    exported_at: string;
+	    secrets: string;
+	    source_root: string;
+	    workspace: BundleWorkspace;
+	    apps: BundleApp[];
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceBundle(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.format = source["format"];
+	        this.version = source["version"];
+	        this.exported_at = source["exported_at"];
+	        this.secrets = source["secrets"];
+	        this.source_root = source["source_root"];
+	        this.workspace = this.convertValues(source["workspace"], BundleWorkspace);
+	        this.apps = this.convertValues(source["apps"], BundleApp);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class WorkspaceBundleFileResult {
+	    path: string;
+	    cancelled: boolean;
+	    bundle?: WorkspaceBundle;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceBundleFileResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.cancelled = source["cancelled"];
+	        this.bundle = this.convertValues(source["bundle"], WorkspaceBundle);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class WorkspaceCreateInput {
 	    name: string;
 	    icon?: string;
@@ -1806,6 +2063,122 @@ export namespace types {
 	        this.icon = source["icon"];
 	        this.color = source["color"];
 	    }
+	}
+	export class WorkspaceExportFileResult {
+	    path: string;
+	    cancelled: boolean;
+	    apps: number;
+	    secrets: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceExportFileResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.cancelled = source["cancelled"];
+	        this.apps = source["apps"];
+	        this.secrets = source["secrets"];
+	    }
+	}
+	export class WorkspaceExportOptions {
+	    secrets: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceExportOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.secrets = source["secrets"];
+	    }
+	}
+	export class WorkspaceImportApp {
+	    key: string;
+	    name: string;
+	    folder: string;
+	    folder_missing: boolean;
+	    config_sets: number;
+	    env_vars: number;
+	    templates: number;
+	    commands: number;
+	    empty_env_vars: number;
+	    empty_templates: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceImportApp(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.name = source["name"];
+	        this.folder = source["folder"];
+	        this.folder_missing = source["folder_missing"];
+	        this.config_sets = source["config_sets"];
+	        this.env_vars = source["env_vars"];
+	        this.templates = source["templates"];
+	        this.commands = source["commands"];
+	        this.empty_env_vars = source["empty_env_vars"];
+	        this.empty_templates = source["empty_templates"];
+	    }
+	}
+	export class WorkspaceImportOptions {
+	    name: string;
+	    base_folder: string;
+	    folders: Record<string, string>;
+	    dry_run: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceImportOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.base_folder = source["base_folder"];
+	        this.folders = source["folders"];
+	        this.dry_run = source["dry_run"];
+	    }
+	}
+	export class WorkspaceImportResult {
+	    workspace_id: number;
+	    name: string;
+	    dry_run: boolean;
+	    apps: WorkspaceImportApp[];
+	    app_ids: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.workspace_id = source["workspace_id"];
+	        this.name = source["name"];
+	        this.dry_run = source["dry_run"];
+	        this.apps = this.convertValues(source["apps"], WorkspaceImportApp);
+	        this.app_ids = source["app_ids"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class WorkspaceUpdateInput {
 	    name?: string;

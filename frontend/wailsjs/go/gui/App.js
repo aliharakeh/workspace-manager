@@ -350,12 +350,28 @@ export function TemplatesUpdate(arg1, arg2) {
   return window['go']['gui']['App']['TemplatesUpdate'](arg1, arg2);
 }
 
+export function WorkspaceExportToFile(arg1, arg2) {
+  return window['go']['gui']['App']['WorkspaceExportToFile'](arg1, arg2);
+}
+
+export function WorkspaceImportOpenFile() {
+  return window['go']['gui']['App']['WorkspaceImportOpenFile']();
+}
+
 export function WorkspacesCreate(arg1) {
   return window['go']['gui']['App']['WorkspacesCreate'](arg1);
 }
 
 export function WorkspacesDelete(arg1) {
   return window['go']['gui']['App']['WorkspacesDelete'](arg1);
+}
+
+export function WorkspacesExport(arg1, arg2) {
+  return window['go']['gui']['App']['WorkspacesExport'](arg1, arg2);
+}
+
+export function WorkspacesImport(arg1, arg2) {
+  return window['go']['gui']['App']['WorkspacesImport'](arg1, arg2);
 }
 
 export function WorkspacesList() {

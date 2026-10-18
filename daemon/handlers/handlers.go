@@ -44,6 +44,7 @@ func (r *Registry) RegisterAll(srv rpc.Registerer) *Registry {
 	r.worktree()
 	r.system()
 	r.blueprints()
+	r.workspaceIO()
 	return r
 }
 

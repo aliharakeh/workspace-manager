@@ -22,6 +22,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { WorkspaceDetail } from '@/components/workspace-detail'
 import { DeleteWorkspaceDialog, WorkspaceDialog } from '@/components/workspace-dialogs'
+import { ExportWorkspaceDialog, ImportWorkspaceDialog } from '@/components/workspace-transfer-dialogs'
 import { useAppStatuses } from '@/hooks/use-app-statuses'
 import { useRoute } from '@/hooks/use-route'
 import { useRunnerStatus } from '@/hooks/use-runner-status'
@@ -90,6 +91,8 @@ function AppContent() {
     const [workspaceDialogOpen, setWorkspaceDialogOpen] = useState(false)
     const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null)
     const [deletingWorkspace, setDeletingWorkspace] = useState<Workspace | null>(null)
+    const [exportingWorkspace, setExportingWorkspace] = useState<Workspace | null>(null)
+    const [importDialogOpen, setImportDialogOpen] = useState(false)
 
     const [appDialogOpen, setAppDialogOpen] = useState(false)
     const [appDialogWorkspaceId, setAppDialogWorkspaceId] = useState<number | null>(null)
@@ -529,6 +532,8 @@ function AppContent() {
                         setWorkspaceDialogOpen(true)
                     }}
                     onDeleteWorkspace={setDeletingWorkspace}
+                    onExportWorkspace={setExportingWorkspace}
+                    onImportWorkspace={() => setImportDialogOpen(true)}
                     onCreateApp={workspaceId => {
                         setAppDialogWorkspaceId(workspaceId)
                         setEditingApp(null)
@@ -709,6 +714,20 @@ function AppContent() {
                             setAppsByWorkspace(prev => ({ ...prev, [workspace.id]: [] }))
                         }
                     }}
+                />
+
+                <ExportWorkspaceDialog
+                    workspace={exportingWorkspace}
+                    open={!!exportingWorkspace}
+                    onOpenChange={open => {
+                        if (!open) setExportingWorkspace(null)
+                    }}
+                />
+
+                <ImportWorkspaceDialog
+                    open={importDialogOpen}
+                    onOpenChange={setImportDialogOpen}
+                    onImported={() => void reloadLists()}
                 />
 
                 <DeleteWorkspaceDialog
