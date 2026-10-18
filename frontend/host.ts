@@ -133,6 +133,8 @@ export const api = {
         update: (id: number, body: { name: string }) => call(() => Go.ConfigSetsUpdate(id, body)),
         delete: (id: number) => call(() => Go.ConfigSetsDelete(id)),
         activate: (id: number) => call(() => Go.ConfigSetsActivate(id)),
+        compare: (leftId: number, rightId: number) =>
+            call(() => Go.ConfigSetsCompare(leftId, rightId)),
         copyFrom: (id: number, sourceId: number, parts?: CopyParts) =>
             call(() => Go.ConfigSetsCopyFrom(id, sourceId, parts ?? {})),
     },

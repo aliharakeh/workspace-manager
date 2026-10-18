@@ -114,6 +114,10 @@ export function ConfigSetsActivate(arg1) {
   return window['go']['gui']['App']['ConfigSetsActivate'](arg1);
 }
 
+export function ConfigSetsCompare(arg1, arg2) {
+  return window['go']['gui']['App']['ConfigSetsCompare'](arg1, arg2);
+}
+
 export function ConfigSetsCopyFrom(arg1, arg2, arg3) {
   return window['go']['gui']['App']['ConfigSetsCopyFrom'](arg1, arg2, arg3);
 }

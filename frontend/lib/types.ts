@@ -367,3 +367,44 @@ export type DataChangedEvent = {
     entity: string
     ids: number[] | null
 }
+
+export type CompareStatus = "only_left" | "only_right" | "same" | "different" | "changed"
+
+export type ConfigSetEnvDiff = {
+    key: string
+    status: CompareStatus
+    left: string | null
+    right: string | null
+    redacted: boolean
+}
+
+export type ConfigSetTemplateDiff = {
+    file_path: string
+    status: CompareStatus
+    left: string | null
+    right: string | null
+    redacted: boolean
+}
+
+export type ConfigSetCommandDiff = {
+    label: string
+    status: CompareStatus
+    left: string | null
+    right: string | null
+}
+
+export type ConfigSetCommandListDiff = {
+    kind: "setup" | "dev" | "build" | "prod"
+    left_mode: string
+    right_mode: string
+    status: "same" | "different"
+    commands: ConfigSetCommandDiff[]
+}
+
+export type ConfigSetCompare = {
+    left: ConfigSet
+    right: ConfigSet
+    env: ConfigSetEnvDiff[]
+    templates: ConfigSetTemplateDiff[]
+    commands: ConfigSetCommandListDiff[]
+}

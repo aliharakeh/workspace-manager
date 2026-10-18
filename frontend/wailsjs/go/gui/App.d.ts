@@ -58,6 +58,8 @@ export function BlueprintsUpdate(arg1:number,arg2:types.BlueprintInput):Promise<
 
 export function ConfigSetsActivate(arg1:number):Promise<types.ConfigSetActivateResult>;
 
+export function ConfigSetsCompare(arg1:number,arg2:number):Promise<types.ConfigSetCompare>;
+
 export function ConfigSetsCopyFrom(arg1:number,arg2:number,arg3:types.CopyParts):Promise<types.ConfigSet>;
 
 export function ConfigSetsCreate(arg1:number,arg2:types.ConfigSetCreateInput):Promise<types.ConfigSet>;

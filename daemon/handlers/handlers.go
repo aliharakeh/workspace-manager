@@ -37,6 +37,7 @@ func (r *Registry) RegisterAll(srv rpc.Registerer) *Registry {
 	r.workspaces()
 	r.apps()
 	r.configSets()
+	r.configSetCompare()
 	r.envVars()
 	r.templates()
 	r.scripts()

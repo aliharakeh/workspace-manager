@@ -104,6 +104,11 @@ func (a *App) ConfigSetsActivate(id int64) (types.ConfigSetActivateResult, error
 	return call[types.ConfigSetActivateResult](a.link, api.MethodConfigSetsActivate, m{"id": id})
 }
 
+// ConfigSetsCompare diffs two config sets of the same app.
+func (a *App) ConfigSetsCompare(leftID, rightID int64) (types.ConfigSetCompare, error) {
+	return call[types.ConfigSetCompare](a.link, api.MethodConfigSetsCompare, m{"leftID": leftID, "rightID": rightID})
+}
+
 func (a *App) ConfigSetsCopyFrom(id, sourceID int64, parts *types.CopyParts) (types.ConfigSet, error) {
 	return call[types.ConfigSet](a.link, api.MethodConfigSetsCopyFrom, m{"id": id, "sourceID": sourceID, "parts": parts})
 }
