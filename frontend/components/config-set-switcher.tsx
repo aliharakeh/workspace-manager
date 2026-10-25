@@ -281,7 +281,7 @@ function PartsPicker({
         }
       }}
     >
-      <TabsList className="w-full flex-wrap group-data-horizontal/tabs:h-auto">
+      <TabsList className="w-full">
         <TabsTrigger value="env" className="flex-1">
           Env vars
         </TabsTrigger>
@@ -662,7 +662,7 @@ export function ConfigSetSwitcher({
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>New config set</DialogTitle>
             <DialogDescription>

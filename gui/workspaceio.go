@@ -10,7 +10,7 @@ import (
 	"workspace-manager/shared/api"
 	"workspace-manager/shared/api/types"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // maxBundleBytes caps the bundle file the GUI will read.
@@ -43,11 +43,11 @@ func (a *App) WorkspaceExportToFile(id int64, options types.WorkspaceExportOptio
 	if name == "" {
 		name = "workspace"
 	}
-	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
-		Title:           "Export workspace",
-		DefaultFilename: name + ".workspace.json",
-		Filters:         []runtime.FileFilter{{DisplayName: "Workspace bundle (*.json)", Pattern: "*.json"}},
-	})
+	path, err := a.app.Dialog.SaveFileWithOptions(&application.SaveFileDialogOptions{
+		Title:    "Export workspace",
+		Filename: name + ".workspace.json",
+		Filters:  []application.FileFilter{{DisplayName: "Workspace bundle (*.json)", Pattern: "*.json"}},
+	}).PromptForSingleSelection()
 	if err != nil {
 		return types.WorkspaceExportFileResult{}, err
 	}
@@ -68,10 +68,10 @@ func (a *App) WorkspaceExportToFile(id int64, options types.WorkspaceExportOptio
 // WorkspaceImportOpenFile shows an open dialog and reads a bundle from the
 // chosen file; the daemon validates it when it is imported.
 func (a *App) WorkspaceImportOpenFile() (types.WorkspaceBundleFileResult, error) {
-	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+	path, err := a.app.Dialog.OpenFileWithOptions(&application.OpenFileDialogOptions{
 		Title:   "Import workspace",
-		Filters: []runtime.FileFilter{{DisplayName: "Workspace bundle (*.json)", Pattern: "*.json"}},
-	})
+		Filters: []application.FileFilter{{DisplayName: "Workspace bundle (*.json)", Pattern: "*.json"}},
+	}).PromptForSingleSelection()
 	if err != nil {
 		return types.WorkspaceBundleFileResult{}, err
 	}

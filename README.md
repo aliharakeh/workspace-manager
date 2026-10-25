@@ -12,7 +12,7 @@ from VS Code, or from your AI coding agent. They all share one background daemon
 view stays in sync and your apps keep running when you close the window.
 
 [![Go](https://img.shields.io/badge/Go-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
-[![Wails](https://img.shields.io/badge/Wails_v2-DF0000?style=for-the-badge&logo=wails&logoColor=white)](https://wails.io/)
+[![Wails](https://img.shields.io/badge/Wails_v3-DF0000?style=for-the-badge&logo=wails&logoColor=white)](https://wails.io/)
 [![React](https://img.shields.io/badge/React_19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-000000?style=for-the-badge&logo=bun&logoColor=white)](https://bun.sh/)
@@ -100,16 +100,18 @@ starts it on demand, so there is nothing to launch by hand.
 
 ## 🛠️ Development
 
-Needs [Go](https://go.dev/) 🐹, [Wails](https://wails.io/) v2 and [Bun](https://bun.sh/) 🥟 (and Node, to build the VS Code extension).
+Needs [Go](https://go.dev/) 1.26+ 🐹, [Wails](https://v3.wails.io/) v3 (beta.34) and [Bun](https://bun.sh/) 🥟 (and Node, to build the VS Code extension).
+
+Install the matching CLI once: `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.34`.
 
 From the repo root:
 
 ```bash
 go build ./...
 go test ./...
-wails dev                  # Wails + Vite (port 5174); needs wmd, see AGENTS.md
+wails3 task dev            # Wails + Vite (port 5174); builds wmd too
 .\build.ps1                # everything -> build/bin
-wails generate module      # regenerate frontend/wailsjs after Go changes
+wails3 generate bindings -ts -clean=true # regenerate frontend/bindings
 ```
 
 `.\build.ps1` produces the whole kit in `build/bin`:

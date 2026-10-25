@@ -1,5 +1,8 @@
 # Workspace Manager
 
+Uses Go 1.26+ and Wails v3.0.0-beta.34. Install the matching CLI with
+`go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.34`.
+
 One Go module at the repo root with two programs: the Wails desktop app (the
 GUI, `main.go`) and the background daemon `wmd` (`cmd/wmd`). The daemon owns the
 database, the process runner and the blueprints. The GUI is its client; it also
@@ -25,7 +28,7 @@ screen. The React frontend lives in `frontend/`.
 | `shared/api` | Contract both sides use: `methods.go` (the method registry), `events.go` (event types), `types.go` (data folder, socket path, version, errors), `types` (JSON payloads), `lib` (pure helpers). |
 | `shared/rpc`, `shared/client` | The wire protocol (server and connection ends) and the dial/handshake/auto-start client. |
 | `shared/native` | OS helpers: process, ports, editor, folder, browser, notifications, PTY (`pty*.go`). |
-| `frontend/` | The React UI (Vite, TypeScript, Bun). `wailsjs/` is generated. |
+| `frontend/` | The React UI (Vite, TypeScript, Bun). `bindings/` is generated. |
 | `build/` | Wails build assets (icons, installer); `build/bin` is the output (`workspace-manager.exe`, `wmd.exe`, `wm-mcp.exe`). |
 
 ## Who does what
@@ -110,7 +113,7 @@ screen. The React frontend lives in `frontend/`.
   active config set, because the daemon's `envVars.*`/`templates.create` work on it.
 - Adding a GUI-only operation (git, dialogs, AI): put it in `gui/git` or
   `gui/bind.go`; it reaches data only through daemon calls, never the database.
-- Changing the bound surface: edit `gui/bind.go`, then run `wails generate module`
+- Changing the bound surface: edit `gui/bind.go`, then run `wails3 generate bindings -ts -clean=true`
   and check `frontend/host.ts`. Keep helper methods that must not be bound on
   other types (see `gitBackend`), since Wails binds every exported method of
   `App`.
@@ -161,18 +164,18 @@ go build ./...
 go test ./...
 go vet ./...
 sqlc generate                  # after schema/query edits
-wails dev                      # Vite on port 5174; needs wmd (see below)
-wails build                    # -> build/bin/workspace-manager.exe (no wmd)
-wails generate module          # after changing bind.go (writes frontend/wailsjs/go/gui)
-.\build.ps1                    # wmd.exe + wails build + size listing
+wails3 task dev                # Vite on port 5174; builds wmd too
+wails3 build                   # -> build/bin/workspace-manager.exe + wmd.exe
+wails3 generate bindings -ts -clean=true # after changing bind.go (frontend/bindings)
+.\build.ps1                    # wmd.exe + wails3 build + size listing
 ```
 
 `wmd` must sit next to the app (or `wm-mcp`), or be named by `WM_DAEMON`, or be on PATH. For
-`wails dev`, build it once and point at it:
+`wails3 task dev`, the build task creates it next to the app. To use another daemon:
 
 ```bash
 go build -o build/bin/wmd.exe ./cmd/wmd
-WM_DAEMON=$PWD/build/bin/wmd.exe wails dev
+WM_DAEMON=$PWD/build/bin/wmd.exe wails3 task dev
 ```
 
 A stale `wmd` keeps running after you rebuild it; stop it (`wmd.exe` in the task

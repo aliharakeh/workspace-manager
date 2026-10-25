@@ -7,14 +7,11 @@ Set-Location $PSScriptRoot
 
 New-Item -ItemType Directory -Force build/bin | Out-Null
 
-go build -ldflags "-s -w -H windowsgui" -o build/bin/wmd.exe ./cmd/wmd
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
 # The MCP server talks over stdio, so it stays a console program.
 go build -ldflags "-s -w" -o build/bin/wm-mcp.exe ./cmd/wm-mcp
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-wails build
+wails3 build
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # The VS Code extension; its build writes the .vsix to build/bin.

@@ -11,8 +11,6 @@ import (
 	"workspace-manager/shared/api"
 	"workspace-manager/shared/api/lib"
 	"workspace-manager/shared/api/types"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // Every method below is a proxy to the wmd daemon, which owns the database, the
@@ -146,7 +144,7 @@ func (a *App) EnvVarsImport(appID int64) (types.ImportEnvResult, error) {
 	if err != nil {
 		return types.ImportEnvResult{}, err
 	}
-	picked, err := PickFile(a.ctx, app.ProjectPath)
+	picked, err := PickFile(a.app, app.ProjectPath)
 	if err != nil {
 		return types.ImportEnvResult{}, err
 	}
@@ -521,7 +519,7 @@ func (a *App) AIAppChat(body types.AppAIChatInput) (types.AppAIChatResult, error
 				"output": ev.Call.Output,
 			}
 		}
-		EventsEmitAppAI(a.ctx, payload)
+		EventsEmitAppAI(a.app, payload)
 	})
 }
 
@@ -581,7 +579,7 @@ func (a *App) FsPickFolder(body types.FsPickFolderInput) (types.PickFolderResult
 	if body.StartDir != nil {
 		start = strings.TrimSpace(*body.StartDir)
 	}
-	picked, err := PickFolder(a.ctx, start)
+	picked, err := PickFolder(a.app, start)
 	if err != nil {
 		return types.PickFolderResult{}, err
 	}
@@ -607,7 +605,7 @@ func (a *App) FsPickFile(body types.FsPickFileInput) (types.PickFileResult, erro
 			dir = app.ProjectPath
 		}
 	}
-	picked, err := PickFile(a.ctx, dir)
+	picked, err := PickFile(a.app, dir)
 	if err != nil {
 		return types.PickFileResult{}, err
 	}
@@ -633,7 +631,7 @@ func (a *App) FsPickAppFile(appID int64) (types.PickFileResult, error) {
 	if err != nil {
 		return types.PickFileResult{}, err
 	}
-	picked, err := PickFile(a.ctx, app.ProjectPath)
+	picked, err := PickFile(a.app, app.ProjectPath)
 	if err != nil {
 		return types.PickFileResult{}, err
 	}
@@ -662,7 +660,9 @@ func (a *App) OpenExternal(url string) (types.Ok, error) {
 	if url == "" {
 		return types.Ok{}, fmt.Errorf("url is required")
 	}
-	runtime.BrowserOpenURL(a.ctx, url)
+	if err := a.app.Browser.OpenURL(url); err != nil {
+		return types.Ok{}, err
+	}
 	return types.Ok{Ok: true}, nil
 }
 

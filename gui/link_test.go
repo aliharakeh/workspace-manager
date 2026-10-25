@@ -24,7 +24,7 @@ func TestAppTalksToTheDaemon(t *testing.T) {
 	t.Setenv("WM_DAEMON", exe)
 	t.Setenv("WM_DATA_DIR", t.TempDir())
 
-	app := NewApp()
+	app := NewApp(nil)
 	t.Cleanup(func() {
 		_ = app.link.Call(api.MethodStop, nil, nil)
 		app.link.Close()

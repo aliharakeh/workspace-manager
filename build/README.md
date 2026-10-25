@@ -1,35 +1,17 @@
-# Build Directory
+# Build directory
 
-The build directory is used to house all the build files and assets for your application. 
+`wails3 build` uses the root Taskfile to generate bindings, build the frontend,
+build wmd and the desktop app, and embed Windows resources. Output goes to
+`build/bin`. `build.ps1` also builds wm-mcp and the VS Code extension.
 
-The structure is:
+`config.yml` holds v3 application metadata and development watcher settings.
+The Windows resource JSON, manifest, NSIS helpers, and macOS plists are concrete
+v3 assets. Keep their metadata in sync when changing the application version.
+The icons in `windows/` and `appicon.png` remain the app's existing icons.
 
-* bin - Output directory
-* darwin - macOS specific files
-* windows - Windows specific files
+On Windows, `wails3 task package` builds the app, wmd and wm-mcp and creates an
+NSIS installer in `build/bin`; it requires `makensis` on PATH. The installer
+includes all three executables. It downloads the WebView2 bootstrapper as needed.
 
-## Mac
-
-The `darwin` directory holds files specific to Mac builds.
-These may be customised and used as part of the build. To return these files to the default state, simply delete them
-and
-build with `wails build`.
-
-The directory contains the following files:
-
-- `Info.plist` - the main plist file used for Mac builds. It is used when building using `wails build`.
-- `Info.dev.plist` - same as the main plist file but used when building using `wails dev`.
-
-## Windows
-
-The `windows` directory contains the manifest and rc files used when building with `wails build`.
-These may be customised for your application. To return these files to the default state, simply delete them and
-build with `wails build`.
-
-- `icon.ico` - The icon used for the application. This is used when building using `wails build`. If you wish to
-  use a different icon, simply replace this file with your own. If it is missing, a new `icon.ico` file
-  will be created using the `appicon.png` file in the build directory.
-- `installer/*` - The files used to create the Windows installer. These are used when building using `wails build`.
-- `info.json` - Application details used for Windows builds. The data here will be used by the Windows installer,
-  as well as the application itself (right click the exe -> properties -> details)
-- `wails.exe.manifest` - The main application manifest file.
+Use `wails3 task dev` for the Vite development server on port 5174 and automatic
+Go rebuilds. Quitting the GUI leaves the daemon and active app runs alive.

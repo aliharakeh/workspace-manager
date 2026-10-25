@@ -4,11 +4,11 @@ import (
 	"context"
 	"log"
 
+	"workspace-manager/gui/git"
 	"workspace-manager/shared/api"
 	"workspace-manager/shared/api/types"
-	"workspace-manager/gui/git"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // App is the Wails-bound API surface. The data, the runner and the blueprints
@@ -16,33 +16,34 @@ import (
 // and the terminal events' path to the frontend are handled here.
 type App struct {
 	ctx  context.Context
+	app  *application.App
 	link *Link
 	git  *git.Git
 }
 
-func NewApp() *App {
-	a := &App{}
+func NewApp(app *application.App) *App {
+	a := &App{app: app}
 	a.link = newLink(a.relay, a.reloadAll)
 	a.git = git.New(gitBackend{a})
 	return a
 }
 
-func (a *App) Startup(ctx context.Context) {
+func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	a.ctx = ctx
-	_ = runtime.InitializeNotifications(ctx)
 	// Connect now so the daemon is up and events flow; a failure is retried by
 	// the first call.
 	if _, err := a.link.client(); err != nil {
 		log.Println("workspace-manager: daemon:", err)
 	}
+	return nil
 }
 
-func (a *App) Shutdown(ctx context.Context) {
+func (a *App) ServiceShutdown() error {
 	log.Println("workspace-manager: shutdown")
-	runtime.CleanupNotifications(ctx)
 	// Only the connection ends: the daemon keeps running, and with it the apps
 	// it started.
 	a.link.Close()
+	return nil
 }
 
 // relay forwards a daemon event to the frontend under the event names it
@@ -53,11 +54,11 @@ func (a *App) relay(ev api.Event) {
 	}
 	switch ev.Type {
 	case api.EventRunner:
-		EventsEmitRunner(a.ctx, ev.App, ev.Data)
+		EventsEmitRunner(a.app, ev.App, ev.Data)
 	case api.EventBlueprint:
-		EventsEmitBlueprint(a.ctx, ev.Data)
+		EventsEmitBlueprint(a.app, ev.Data)
 	case api.EventDataChanged:
-		EventsEmitDataChanged(a.ctx, ev.Data)
+		EventsEmitDataChanged(a.app, ev.Data)
 	}
 }
 
@@ -68,7 +69,7 @@ func (a *App) reloadAll() {
 		return
 	}
 	for _, entity := range []string{"workspace", "app"} {
-		EventsEmitDataChanged(a.ctx, api.DataChanged{Entity: entity, IDs: []int64{}})
+		EventsEmitDataChanged(a.app, api.DataChanged{Entity: entity, IDs: []int64{}})
 	}
 }
 
@@ -103,5 +104,5 @@ func (b gitBackend) Changed(entity string, ids ...int64) {
 	if ids == nil {
 		ids = []int64{}
 	}
-	EventsEmitDataChanged(b.a.ctx, api.DataChanged{Entity: entity, IDs: ids})
+	EventsEmitDataChanged(b.a.app, api.DataChanged{Entity: entity, IDs: ids})
 }

@@ -6,6 +6,9 @@ node_modules/
 
 *.exe
 wails-dev.log
+*.syso
+.task/
+build/windows/installer/MicrosoftEdgeWebview2Setup.exe
 
 vscode/node_modules/
 vscode/out/

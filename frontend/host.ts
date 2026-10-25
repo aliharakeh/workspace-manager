@@ -1,6 +1,9 @@
 import type { AppAIChatResult, AppAIPatch, AppAIStreamEvent } from '@/lib/app-ai'
 import type {
+    AIConfigInfo,
     AIProviderConfig,
+    ConfigSetDetail,
+    RunConfig,
     App,
     BlueprintAIInput,
     BlueprintInput,
@@ -24,15 +27,15 @@ import type {
     WorkspaceImportOptions,
     WorkspaceImportResult,
 } from '@/lib/types'
-import * as Go from './wailsjs/go/gui/App'
-import { types } from './wailsjs/go/models'
-import { EventsOn, OnFileDrop, OnFileDropOff } from './wailsjs/runtime/runtime'
+import * as Go from './bindings/workspace-manager/gui/app'
+import * as types from './bindings/workspace-manager/shared/api/types/models'
+import { Events } from '@wailsio/runtime'
 
 type RunnerEventHandler = (appId: number, event: RunnerEvent) => void
 
 const listeners = new Set<RunnerEventHandler>()
 
-EventsOn('runnerEvent', (payload: { appId: number; event: RunnerEvent }) => {
+Events.On('runnerEvent', ({ data: payload }: { data: { appId: number; event: RunnerEvent } }) => {
     if (!payload) return
     for (const handler of listeners) handler(payload.appId, payload.event)
 })
@@ -46,24 +49,23 @@ export function onRunnerEvent(handler: RunnerEventHandler, appId?: number) {
 }
 
 export function onBlueprintLog(handler: (event: BlueprintLogEvent) => void) {
-    return EventsOn('blueprintEvent', (event: BlueprintLogEvent) => {
+    return Events.On('blueprintEvent', ({ data: event }: { data: BlueprintLogEvent }) => {
         if (event) handler(event)
     })
 }
 
 /** Calls `handler` for every write the server reports, whoever made it. */
 export function onDataChanged(handler: (event: DataChangedEvent) => void) {
-    return EventsOn('dataChanged', (event: DataChangedEvent) => {
+    return Events.On('dataChanged', ({ data: event }: { data: DataChangedEvent }) => {
         if (event) handler(event)
     })
 }
 
 /** Calls `handler` with the absolute paths of files/folders dropped on the window. */
 export function onFileDrop(handler: (paths: string[]) => void) {
-    OnFileDrop((_x, _y, paths) => {
+    return Events.On('filesDropped', ({ data: paths }: { data: string[] }) => {
         if (paths?.length) handler(paths)
-    }, false)
-    return () => OnFileDropOff()
+    })
 }
 
 class ApiError extends Error {
@@ -86,9 +88,11 @@ export const api = {
     workspaces: {
         list: () => call(() => Go.WorkspacesList()),
         create: (body: { name: string; icon?: string | null; color?: string | null }) =>
-            call(() => Go.WorkspacesCreate(body)),
-        update: (id: number, body: { name?: string; icon?: string | null; color?: string | null }) =>
-            call(() => Go.WorkspacesUpdate(id, body)),
+            call(() => Go.WorkspacesCreate(types.WorkspaceCreateInput.createFrom(body))),
+        update: (
+            id: number,
+            body: { name?: string; icon?: string | null; color?: string | null },
+        ) => call(() => Go.WorkspacesUpdate(id, types.WorkspaceUpdateInput.createFrom(body))),
         delete: (id: number) => call(() => Go.WorkspacesDelete(id)),
         /** Shows a save dialog and writes the workspace bundle to the chosen file. */
         exportToFile: (id: number, options: WorkspaceExportOptions) =>
@@ -114,8 +118,21 @@ export const api = {
         get: (id: number) => call(() => Go.AppsGet(id)),
         create: (workspaceId: number, body: { name: string; project_path: string }) =>
             call(() => Go.AppsCreate(workspaceId, body)),
-        update: (id: number, body: { name?: string; project_path?: string; exclude_from_start_all?: boolean }) =>
-            call(() => Go.AppsUpdate(id, body) as unknown as Promise<App>),
+        update: (
+            id: number,
+            body: {
+                name?: string
+                project_path?: string
+                exclude_from_start_all?: boolean
+            },
+        ) =>
+            call(
+                () =>
+                    Go.AppsUpdate(
+                        id,
+                        types.AppUpdateInput.createFrom(body),
+                    ) as unknown as Promise<App>,
+            ),
         reorder: (workspaceId: number, ids: number[]) =>
             call(() => Go.AppsReorder(workspaceId, ids)),
         delete: (id: number) => call(() => Go.AppsDelete(id)),
@@ -144,7 +161,8 @@ export const api = {
 
     configSets: {
         list: (appId: number) => call(() => Go.ConfigSetsList(appId)),
-        getDetail: (id: number) => call(() => Go.ConfigSetsGetDetail(id)),
+        getDetail: (id: number) =>
+            call(() => Go.ConfigSetsGetDetail(id) as Promise<ConfigSetDetail>),
         create: (
             appId: number,
             body: {
@@ -153,7 +171,7 @@ export const api = {
                 activate?: boolean
                 parts?: CopyParts
             },
-        ) => call(() => Go.ConfigSetsCreate(appId, body)),
+        ) => call(() => Go.ConfigSetsCreate(appId, types.ConfigSetCreateInput.createFrom(body))),
         update: (id: number, body: { name: string }) => call(() => Go.ConfigSetsUpdate(id, body)),
         delete: (id: number) => call(() => Go.ConfigSetsDelete(id)),
         activate: (id: number) => call(() => Go.ConfigSetsActivate(id)),
@@ -166,19 +184,23 @@ export const api = {
     envVars: {
         list: (appId: number) => call(() => Go.EnvVarsList(appId)),
         create: (appId: number, body: { key: string; value?: string; include_in_ai?: boolean }) =>
-            call(() => Go.EnvVarsCreate(appId, body)),
+            call(() => Go.EnvVarsCreate(appId, types.EnvVarCreateInput.createFrom(body))),
         update: (id: number, body: { key?: string; value?: string; include_in_ai?: boolean }) =>
-            call(() => Go.EnvVarsUpdate(id, body)),
+            call(() => Go.EnvVarsUpdate(id, types.EnvVarUpdateInput.createFrom(body))),
         delete: (id: number) => call(() => Go.EnvVarsDelete(id)),
         importEnv: (appId: number) => call(() => Go.EnvVarsImport(appId)),
     },
 
     templates: {
         list: (appId: number) => call(() => Go.TemplatesList(appId)),
-        create: (appId: number, body: { file_path: string; content?: string; include_in_ai?: boolean }) =>
-            call(() => Go.TemplatesCreate(appId, body)),
-        update: (id: number, body: { file_path?: string; content?: string; include_in_ai?: boolean }) =>
-            call(() => Go.TemplatesUpdate(id, body)),
+        create: (
+            appId: number,
+            body: { file_path: string; content?: string; include_in_ai?: boolean },
+        ) => call(() => Go.TemplatesCreate(appId, types.TemplateCreateInput.createFrom(body))),
+        update: (
+            id: number,
+            body: { file_path?: string; content?: string; include_in_ai?: boolean },
+        ) => call(() => Go.TemplatesUpdate(id, types.TemplateUpdateInput.createFrom(body))),
         delete: (id: number) => call(() => Go.TemplatesDelete(id)),
     },
 
@@ -188,7 +210,8 @@ export const api = {
 
     /** The active config set's setup, dev, build or prod commands, by `kind`. */
     runConfig: {
-        get: (appId: number, kind: CommandKind) => call(() => Go.RunConfigGet(appId, kind)),
+        get: (appId: number, kind: CommandKind) =>
+            call(() => Go.RunConfigGet(appId, kind) as Promise<RunConfig>),
         save: (
             appId: number,
             kind: CommandKind,
@@ -196,22 +219,31 @@ export const api = {
                 mode?: RunMode
                 commands?: Array<{ label?: string | null; command: string }>
             },
-        ) => call(() => Go.RunConfigSave(appId, kind, body)),
+        ) =>
+            call(
+                () =>
+                    Go.RunConfigSave(
+                        appId,
+                        kind,
+                        types.RunConfigSaveInput.createFrom(body),
+                    ) as Promise<RunConfig>,
+            ),
     },
 
     runner: {
-        status: (appId: number) => call(() => Go.RunnerStatus(appId)),
-        workspaceStatus: (workspaceId: number) => call(() => Go.RunnerWorkspaceStatus(workspaceId)),
+        status: (appId: number) => call(() => Go.RunnerStatus(appId) as Promise<StatusEvent>),
+        workspaceStatus: (workspaceId: number) =>
+            call(() => Go.RunnerWorkspaceStatus(workspaceId) as Promise<StatusEvent[]>),
         output: (appId: number, commandId: number) => call(() => Go.RunnerOutput(appId, commandId)),
         resize: (appId: number, commandId: number, cols: number, rows: number) =>
             call(() => Go.RunnerResize(appId, commandId, cols, rows)),
-        run: (appId: number) => call(() => Go.RunnerRun(appId)),
-        dev: (appId: number) => call(() => Go.RunnerDev(appId)),
-        prod: (appId: number) => call(() => Go.RunnerProd(appId)),
-        build: (appId: number) => call(() => Go.RunnerBuild(appId)),
-        setup: (appId: number) => call(() => Go.RunnerSetup(appId)),
-        stop: (appId: number) => call(() => Go.RunnerStop(appId)),
-        reload: (appId: number) => call(() => Go.RunnerReload(appId)),
+        run: (appId: number) => call(() => Go.RunnerRun(appId) as Promise<StatusEvent>),
+        dev: (appId: number) => call(() => Go.RunnerDev(appId) as Promise<StatusEvent>),
+        prod: (appId: number) => call(() => Go.RunnerProd(appId) as Promise<StatusEvent>),
+        build: (appId: number) => call(() => Go.RunnerBuild(appId) as Promise<StatusEvent>),
+        setup: (appId: number) => call(() => Go.RunnerSetup(appId) as Promise<StatusEvent>),
+        stop: (appId: number) => call(() => Go.RunnerStop(appId) as Promise<StatusEvent>),
+        reload: (appId: number) => call(() => Go.RunnerReload(appId) as Promise<StatusEvent>),
         startWorkspace: (workspaceId: number, excludeAppIds: number[], sequential: boolean) =>
             call(() => Go.RunnerStartWorkspace(workspaceId, excludeAppIds, sequential)),
         stopWorkspace: (workspaceId: number, excludeAppIds: number[]) =>
@@ -272,22 +304,34 @@ export const api = {
     readyUrlPatterns: {
         list: () => call(() => Go.ReadyUrlPatternsList()),
         create: (body: { label: string; pattern: string; flags?: string }) =>
-            call(() => Go.ReadyUrlPatternsCreate(body)),
+            call(() =>
+                Go.ReadyUrlPatternsCreate(types.ReadyUrlPatternCreateInput.createFrom(body)),
+            ),
         update: (id: number, body: { label?: string; pattern?: string; flags?: string }) =>
-            call(() => Go.ReadyUrlPatternsUpdate(id, body)),
+            call(() =>
+                Go.ReadyUrlPatternsUpdate(id, types.ReadyUrlPatternUpdateInput.createFrom(body)),
+            ),
         delete: (id: number) => call(() => Go.ReadyUrlPatternsDelete(id)),
     },
 
     settings: {
-        get: () => call(() => Go.SettingsGet()),
+        get: () => call(() => Go.SettingsGet() as Promise<Record<string, string>>),
         set: (key: string, value: string) => call(() => Go.SettingsSet(key, value)),
     },
 
     ai: {
-        getConfig: () => call(() => Go.AIConfigGet()),
-        saveConfig: (body: AIProviderConfig) => call(() => Go.AIConfigSave(body)),
-        deleteConfig: (name: string) => call(() => Go.AIConfigDelete(name)),
-        activate: (name: string) => call(() => Go.AIConfigActivate({ name })),
+        getConfig: () => call(() => Go.AIConfigGet() as Promise<AIConfigInfo>),
+        saveConfig: (body: AIProviderConfig) =>
+            call(
+                () =>
+                    Go.AIConfigSave(
+                        types.AIProviderConfigInput.createFrom(body),
+                    ) as Promise<AIConfigInfo>,
+            ),
+        deleteConfig: (name: string) =>
+            call(() => Go.AIConfigDelete(name) as Promise<AIConfigInfo>),
+        activate: (name: string) =>
+            call(() => Go.AIConfigActivate({ name }) as Promise<AIConfigInfo>),
         chat: (body: { system?: string; prompt: string }) => call(() => Go.AIChat(body)),
         appChat: async (
             body: {
@@ -303,10 +347,12 @@ export const api = {
             onEvent?: (ev: AppAIStreamEvent) => void,
         ): Promise<AppAIChatResult> => {
             const off = onEvent
-                ? EventsOn('appAIEvent', (ev: AppAIStreamEvent) => onEvent(ev))
+                ? Events.On('appAIEvent', ({ data }: { data: AppAIStreamEvent }) => onEvent(data))
                 : undefined
             try {
-                return (await call(() => Go.AIAppChat(body))) as AppAIChatResult
+                return (await call(() =>
+                    Go.AIAppChat(types.AppAIChatInput.createFrom(body)),
+                )) as AppAIChatResult
             } finally {
                 off?.()
             }
@@ -319,9 +365,10 @@ export const api = {
 
     fs: {
         validatePath: (path: string) => call(() => Go.FsValidatePath(path)),
-        pickFolder: (opts?: { startDir?: string }) => call(() => Go.FsPickFolder(opts ?? {})),
+        pickFolder: (opts?: { startDir?: string }) =>
+            call(() => Go.FsPickFolder(types.FsPickFolderInput.createFrom(opts ?? {}))),
         pickFile: (opts?: { startDir?: string; appId?: number }) =>
-            call(() => Go.FsPickFile(opts ?? {})),
+            call(() => Go.FsPickFile(types.FsPickFileInput.createFrom(opts ?? {}))),
         pickAppFile: (appId: number) => call(() => Go.FsPickAppFile(appId)),
         readAppFile: (appId: number, path: string) => call(() => Go.FsReadAppFile(appId, path)),
     },

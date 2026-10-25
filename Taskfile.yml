@@ -1,0 +1,62 @@
+version: '3'
+
+vars:
+  APP_NAME: workspace-manager
+  BIN_DIR: build/bin
+  VITE_PORT: '{{.WAILS_VITE_PORT | default 5174}}'
+  EXE: '{{if eq OS "windows"}}.exe{{end}}'
+
+tasks:
+  build:
+    cmds:
+      - task: bindings
+      - task: frontend:build
+      - task: build:go
+
+  bindings:
+    cmds:
+      - wails3 generate bindings -ts -clean=true
+
+  frontend:build:
+    dir: frontend
+    cmds:
+      - bun install --frozen-lockfile
+      - bun run build
+
+  common:dev:frontend:
+    dir: frontend
+    cmds:
+      - bun run dev --port {{.VITE_PORT}} --strictPort
+
+  build:go:
+    cmds:
+      - go build -ldflags="-s -w{{if eq OS "windows"}} -H windowsgui{{end}}" -o {{.BIN_DIR}}/wmd{{.EXE}} ./cmd/wmd
+      - task: build:resources
+      - go build {{if ne .DEV "true"}}-tags production -trimpath -ldflags="-s -w{{if eq OS "windows"}} -H windowsgui{{end}}"{{else}}-buildvcs=false -gcflags=all="-l"{{end}} -o {{.BIN_DIR}}/{{.APP_NAME}}{{.EXE}} .
+
+  build:resources:
+    platforms: [windows]
+    cmds:
+      - wails3 generate syso -arch {{ARCH}} -icon build/windows/icon.ico -manifest build/windows/wails.exe.manifest -info build/windows/info.json -out wails_windows_{{ARCH}}.syso
+
+  run:
+    cmds:
+      - '{{.BIN_DIR}}/{{.APP_NAME}}{{.EXE}}'
+
+  dev:
+    cmds:
+      - wails3 dev -config build/config.yml -port {{.VITE_PORT}}
+
+  package:
+    platforms: [windows]
+    cmds:
+      - task: build
+      - go build -ldflags="-s -w" -o {{.BIN_DIR}}/wm-mcp.exe ./cmd/wm-mcp
+      - wails3 generate webview2bootstrapper -dir build/windows/installer
+      - task: installer
+
+  installer:
+    internal: true
+    dir: build/windows/installer
+    cmds:
+      - makensis -DARG_WAILS_{{if eq ARCH "arm64"}}ARM64{{else}}AMD64{{end}}_BINARY=../../bin/{{.APP_NAME}}.exe project.nsi

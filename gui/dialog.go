@@ -1,12 +1,11 @@
 package gui
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 type PickResult struct {
@@ -14,13 +13,14 @@ type PickResult struct {
 	Cancelled bool
 }
 
-func PickFolder(ctx context.Context, startDir string) (PickResult, error) {
-	opts := runtime.OpenDialogOptions{
+func PickFolder(app *application.App, startDir string) (PickResult, error) {
+	opts := application.OpenFileDialogOptions{
 		Title:                "Select project folder",
 		CanCreateDirectories: true,
-		DefaultDirectory:     existingDir(startDir),
+		CanChooseDirectories: true,
+		Directory:            existingDir(startDir),
 	}
-	path, err := runtime.OpenDirectoryDialog(ctx, opts)
+	path, err := app.Dialog.OpenFileWithOptions(&opts).PromptForSingleSelection()
 	if err != nil {
 		return PickResult{}, err
 	}
@@ -30,12 +30,12 @@ func PickFolder(ctx context.Context, startDir string) (PickResult, error) {
 	return PickResult{Path: path}, nil
 }
 
-func PickFile(ctx context.Context, startDir string) (PickResult, error) {
-	opts := runtime.OpenDialogOptions{
-		Title:            "Select template file",
-		DefaultDirectory: existingDir(startDir),
+func PickFile(app *application.App, startDir string) (PickResult, error) {
+	opts := application.OpenFileDialogOptions{
+		Title:     "Select template file",
+		Directory: existingDir(startDir),
 	}
-	path, err := runtime.OpenFileDialog(ctx, opts)
+	path, err := app.Dialog.OpenFileWithOptions(&opts).PromptForSingleSelection()
 	if err != nil {
 		return PickResult{}, err
 	}
