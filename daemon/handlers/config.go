@@ -2,11 +2,12 @@ package handlers
 
 import (
 	"context"
+	"strings"
 
-	"workspace-manager/shared/api"
-	"workspace-manager/shared/rpc"
-	"workspace-manager/shared/api/types"
 	"workspace-manager/daemon/ops"
+	"workspace-manager/shared/api"
+	"workspace-manager/shared/api/types"
+	"workspace-manager/shared/rpc"
 )
 
 // kindInput is a handler that needs both its parameters and the client kind.
@@ -107,8 +108,20 @@ func (r *Registry) envVars() {
 		ID   int64                   `json:"id"`
 		Body types.EnvVarUpdateInput `json:"body"`
 	}) (types.EnvVar, error) {
-		if err := requireVisibleVarID(kind, o, in.ID); err != nil {
-			return types.EnvVar{}, err
+		if kind == ClientAgent {
+			existing, err := o.GetEnvVarByID(in.ID)
+			if err != nil {
+				return types.EnvVar{}, err
+			}
+			if !existing.IncludeInAI {
+				// Hidden variables allow value replacement, never renaming or unhiding.
+				if in.Body.Value == nil ||
+					(in.Body.Key != nil && strings.TrimSpace(*in.Body.Key) != existing.Key) ||
+					(in.Body.IncludeInAI != nil && *in.Body.IncludeInAI) {
+					return types.EnvVar{}, errHidden()
+				}
+				in.Body.IncludeInAI = &existing.IncludeInAI
+			}
 		}
 		v, err := o.EnvVarsUpdate(in.ID, in.Body)
 		if err != nil {

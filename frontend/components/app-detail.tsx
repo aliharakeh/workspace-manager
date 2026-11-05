@@ -131,6 +131,7 @@ export function AppDetail({
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <AppRunControls
             appId={app.id}
+            activeConfigSetId={app.active_config_set_id ?? null}
             running={running}
             kind={status?.kind}
             onStatus={handleStatus}

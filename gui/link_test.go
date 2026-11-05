@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"workspace-manager/shared/api"
 	"workspace-manager/shared/api/types"
@@ -50,6 +51,45 @@ func TestAppTalksToTheDaemon(t *testing.T) {
 	}
 	if st := app.RunnerStatus(created.ID); st.Running {
 		t.Errorf("a fresh app is running: %+v", st)
+	}
+
+	// Every bound start command forwards a per-run set without activating it.
+	selected, err := app.ConfigSetsCreate(created.ID, types.ConfigSetCreateInput{Name: "staging"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{types.KindDev, types.KindProd, types.KindBuild, types.KindSetup} {
+		if _, err := app.RunConfigSave(created.ID, kind, types.RunConfigSaveInput{
+			Commands: []types.RunCommandInput{{Command: "echo selected-" + kind}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := app.ConfigSetsActivate(*created.ActiveConfigSetID); err != nil {
+		t.Fatal(err)
+	}
+	for _, start := range []struct {
+		name string
+		fn   func(int64, int64) (types.StatusEvent, error)
+	}{
+		{"dev", app.RunnerDev}, {"prod", app.RunnerProd},
+		{"build", app.RunnerBuild}, {"setup", app.RunnerSetup}, {"run", app.RunnerRun},
+	} {
+		st, err := start.fn(created.ID, selected.ID)
+		if err != nil || st.ConfigSetID != selected.ID {
+			t.Fatalf("%s: status=%+v, err=%v", start.name, st, err)
+		}
+		deadline := time.Now().Add(20 * time.Second)
+		for app.RunnerStatus(created.ID).Running {
+			if time.Now().After(deadline) {
+				t.Fatalf("%s did not finish", start.name)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		current, err := app.AppsGet(created.ID)
+		if err != nil || current.ActiveConfigSetID == nil || *current.ActiveConfigSetID != *created.ActiveConfigSetID {
+			t.Fatalf("%s changed the active config set: %+v, %v", start.name, current, err)
+		}
 	}
 
 	// Git runs here; a folder that is not a repo is an error, not a panic.

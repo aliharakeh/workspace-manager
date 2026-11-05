@@ -8,7 +8,7 @@
 
 Workspace Manager brings your projects, startup setup, and live output into one place.
 Group related apps into a workspace, then start, stop, or restart them from the desktop app,
-from VS Code, or from your AI coding agent. They all share one background daemon, so every
+from VS Code, OpenCode Desktop, or your AI coding agent. They all share one background daemon, so every
 view stays in sync and your apps keep running when you close the window.
 
 [![Go](https://img.shields.io/badge/Go-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
@@ -28,6 +28,7 @@ view stays in sync and your apps keep running when you close the window.
 flowchart LR
     APP(["🖥️ Desktop app"]) --> D
     VS(["🧑‍💻 VS Code"]) --> D
+    OC(["🔌 OpenCode Desktop"]) --> D
     AI(["🤖 Coding agents (MCP)"]) --> D
     D{{"🧩 wmd daemon"}} --> DB[("🗄️ SQLite")]
     D --> R(["▶️ runner + terminals"])
@@ -49,12 +50,13 @@ to the work.
 
 ## 🚪 Pick your door
 
-One setup, three ways in. Change something in any of them and the others update live.
+One setup, four ways in. Change something in any of them and the others update live.
 
 | | Client | Best when you want to | Learn more |
 |:---:|---|---|---|
 | 🖥️ | **Desktop app** | See every workspace at once, follow live terminals, manage branches and worktrees, draft blueprints with AI. | this page |
 | 🧑‍💻 | **VS Code extension** | Stay in the editor: switch config sets from the status bar, edit templates in a normal tab, and press Dev, Build or Prod without leaving your code. | [vscode/](vscode/README.md) |
+| 🔌 | **OpenCode Desktop plugin** | Manage config sets, env vars and templates, and run commands with live terminal output from a session side panel. | [opencode/](opencode/README.md) |
 | 🤖 | **MCP server** | Let Claude Code or any MCP agent list your apps, tweak config, and start or stop them, with secrets you've marked private kept out of its sight. | [cmd/wm-mcp/](cmd/wm-mcp/README.md) |
 
 ## 🧩 One daemon behind it all
@@ -93,6 +95,7 @@ starts it on demand, so there is nothing to launch by hand.
 | `cmd/wmd` | The background daemon |
 | `cmd/wm-mcp` | MCP server so coding agents can drive the daemon ([details](cmd/wm-mcp/README.md)) |
 | `vscode` | VS Code extension for config sets, env vars, templates and run buttons ([details](vscode/README.md)) |
+| `opencode` | OpenCode V2 Desktop GUI plugin, reusing the VS Code daemon client/service ([details](opencode/README.md)) |
 | `daemon` | What `wmd` runs: `db`, `ops`, `services` (runner, templates, blueprints), `handlers` |
 | `shared` | What every side uses: `api` (types and the method list), `rpc`, `client`, `native` |
 | `frontend/` | The React UI |
@@ -122,6 +125,7 @@ wails3 generate bindings -ts -clean=true # regenerate frontend/bindings
 | `wmd.exe` | The daemon (keep it next to the app and the MCP server) |
 | `wm-mcp.exe` | The MCP server for coding agents |
 | `workspace-manager-*.vsix` | The VS Code extension |
+| `workspace-manager-opencode-*.tgz` | The OpenCode Desktop GUI plugin |
 
 From `frontend/` (run `bun install` once):
 

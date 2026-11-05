@@ -93,37 +93,34 @@ func (o *Ops) RunnerResize(appID, commandID int64, cols, rows int) types.Ok {
 }
 
 func (o *Ops) RunnerRun(appID int64) (types.StatusEvent, error) {
-	if _, err := o.DB.GetAppT(o.Ctx(), appID); err != nil {
-		return types.StatusEvent{}, err
-	}
-	return o.Runner.Start(o.Ctx(), appID, types.KindDev)
+	return o.RunnerStart(appID, types.KindDev, 0)
 }
 
 func (o *Ops) RunnerProd(appID int64) (types.StatusEvent, error) {
-	if _, err := o.DB.GetAppT(o.Ctx(), appID); err != nil {
-		return types.StatusEvent{}, err
-	}
-	return o.Runner.Start(o.Ctx(), appID, types.KindProd)
+	return o.RunnerStart(appID, types.KindProd, 0)
 }
 
 // RunnerBuild runs the active config set's build commands. It shares the app's
 // session with RunnerRun: it fails while the app is running or building, and
 // RunnerStop stops it.
 func (o *Ops) RunnerBuild(appID int64) (types.StatusEvent, error) {
-	if _, err := o.DB.GetAppT(o.Ctx(), appID); err != nil {
-		return types.StatusEvent{}, err
-	}
-	return o.Runner.Start(o.Ctx(), appID, types.KindBuild)
+	return o.RunnerStart(appID, types.KindBuild, 0)
 }
 
 // RunnerSetup runs the active config set's setup commands. Like RunnerBuild it
 // shares the app's session: it fails while the app is running, building or
 // being set up, and RunnerStop stops it.
 func (o *Ops) RunnerSetup(appID int64) (types.StatusEvent, error) {
-	if _, err := o.DB.GetAppT(o.Ctx(), appID); err != nil {
+	return o.RunnerStart(appID, types.KindSetup, 0)
+}
+
+// RunnerStart selects a config set for this run without changing the app's
+// active set. A zero configSetID keeps the GUI and older clients' default.
+func (o *Ops) RunnerStart(appID int64, kind string, configSetID int64) (types.StatusEvent, error) {
+	if err := checkConfigKind(kind); err != nil {
 		return types.StatusEvent{}, err
 	}
-	return o.Runner.Start(o.Ctx(), appID, types.KindSetup)
+	return o.Runner.StartIn(o.Ctx(), appID, kind, "", "", configSetID)
 }
 
 func (o *Ops) RunnerStop(appID int64) (types.StatusEvent, error) {

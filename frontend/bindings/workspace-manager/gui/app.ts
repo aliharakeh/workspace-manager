@@ -538,18 +538,18 @@ export function RunConfigSave(appID: number, kind: string, body: types$0.RunConf
 }
 
 /**
- * RunnerBuild runs the active config set's build commands. It shares the app's
+ * RunnerBuild runs the selected config set's build commands (0: active). It shares the app's
  * session with RunnerRun: it fails while the app is running or building, and
  * RunnerStop stops it.
  */
-export function RunnerBuild(appID: number): $CancellablePromise<types$0.StatusEvent> {
-    return $Call.ByID(4017136809, appID).then(($result: any) => {
+export function RunnerBuild(appID: number, configSetID: number): $CancellablePromise<types$0.StatusEvent> {
+    return $Call.ByID(4017136809, appID, configSetID).then(($result: any) => {
         return $$createType31($result);
     });
 }
 
-export function RunnerDev(appID: number): $CancellablePromise<types$0.StatusEvent> {
-    return $Call.ByID(2988787170, appID).then(($result: any) => {
+export function RunnerDev(appID: number, configSetID: number): $CancellablePromise<types$0.StatusEvent> {
+    return $Call.ByID(2988787170, appID, configSetID).then(($result: any) => {
         return $$createType31($result);
     });
 }
@@ -564,8 +564,8 @@ export function RunnerOutput(appID: number, commandID: number): $CancellableProm
     });
 }
 
-export function RunnerProd(appID: number): $CancellablePromise<types$0.StatusEvent> {
-    return $Call.ByID(3707510858, appID).then(($result: any) => {
+export function RunnerProd(appID: number, configSetID: number): $CancellablePromise<types$0.StatusEvent> {
+    return $Call.ByID(3707510858, appID, configSetID).then(($result: any) => {
         return $$createType31($result);
     });
 }
@@ -585,19 +585,19 @@ export function RunnerResize(appID: number, commandID: number, cols: number, row
     });
 }
 
-export function RunnerRun(appID: number): $CancellablePromise<types$0.StatusEvent> {
-    return $Call.ByID(3928415748, appID).then(($result: any) => {
+export function RunnerRun(appID: number, configSetID: number): $CancellablePromise<types$0.StatusEvent> {
+    return $Call.ByID(3928415748, appID, configSetID).then(($result: any) => {
         return $$createType31($result);
     });
 }
 
 /**
- * RunnerSetup runs the active config set's setup commands. Like RunnerBuild it
+ * RunnerSetup runs the selected config set's setup commands (0: active). Like RunnerBuild it
  * shares the app's session: it fails while the app is running, building or
  * being set up, and RunnerStop stops it.
  */
-export function RunnerSetup(appID: number): $CancellablePromise<types$0.StatusEvent> {
-    return $Call.ByID(1903706212, appID).then(($result: any) => {
+export function RunnerSetup(appID: number, configSetID: number): $CancellablePromise<types$0.StatusEvent> {
+    return $Call.ByID(1903706212, appID, configSetID).then(($result: any) => {
         return $$createType31($result);
     });
 }

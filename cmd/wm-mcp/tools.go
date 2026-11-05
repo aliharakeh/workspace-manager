@@ -461,14 +461,14 @@ func splitComma(s string) []string {
 func envTool() mcpTool {
 	return mcpTool{
 		Name:        "wm_env",
-		Description: "Manage an app's environment variables on its active config set. Values with include_in_ai=false are hidden from this MCP server.",
+		Description: "Manage an app's environment variables on its active config set. Hidden values can be replaced, but are never returned or made visible by this MCP server.",
 		Schema: schema("Environment variables", map[string]any{
 			"action":    map[string]any{"type": "string", "description": "list, set (create or update), delete, import", "enum": []string{"list", "set", "delete", "import"}},
 			"app":       strProp(appRefDesc),
 			"configSet": strProp("config set id or name to list (list only; writes go to the active set)"),
 			"key":       strProp("variable name (set/delete)"),
 			"value":     strProp("variable value (set; omit to keep the stored value on update)"),
-			"hidden":    boolProp("hide the value from AI clients, i.e. include_in_ai=false (set)"),
+			"hidden":    boolProp("hide the value from AI clients, i.e. include_in_ai=false (set); omit to preserve visibility on update; hidden variables cannot be unhidden here"),
 			"file":      strProp(".env or YAML file to import (import)"),
 		}, "action"),
 		Handler: func(args map[string]any) (any, error) {
@@ -512,7 +512,10 @@ func envTool() mcpTool {
 				for _, v := range list {
 					if v["key"] == key {
 						id, _ := v["id"].(float64)
-						body := map[string]any{"key": key, "include_in_ai": include}
+						body := map[string]any{"key": key}
+						if _, specified := args["hidden"]; specified {
+							body["include_in_ai"] = include
+						}
 						if hasValue {
 							body["value"] = value
 						}
@@ -654,10 +657,11 @@ func templateTool() mcpTool {
 func runTool() mcpTool {
 	return mcpTool{
 		Name:        "wm_run",
-		Description: "Run, build and stop apps; check runner status; read terminal output. An app runs one session at a time.",
+		Description: "Run, build and stop apps; check runner status; read terminal output. Select a configSet for each start without changing the app's active set. An app runs one session at a time.",
 		Schema: schema("Runner", map[string]any{
 			"action":     map[string]any{"type": "string", "description": "dev, prod, build, setup, stop, reload, status, logs (run is a legacy alias for dev); startAll and stopAll act on every app of a workspace", "enum": []string{"dev", "prod", "run", "build", "setup", "stop", "reload", "status", "logs", "startAll", "stopAll"}},
 			"app":        strProp(appRefDesc),
+			"configSet":  strProp("config set id or name for dev, prod, run, build or setup; omit for the active set; does not activate it"),
 			"workspace":  strProp("workspace name or id (startAll, stopAll)"),
 			"exclude":    arrProp("apps to leave out, by name or id (startAll, stopAll); apps flagged \"exclude from Start all\" are always left out of startAll", "string"),
 			"sequential": boolProp("startAll: start the apps one after another instead of together"),
@@ -705,7 +709,15 @@ func runTool() mcpTool {
 				case "setup":
 					method = api.MethodRunnerSetup
 				}
-				return daoCall(method, map[string]any{"appID": appID})
+				params := map[string]any{"appID": appID}
+				if ref, ok := argOpt(args, "configSet"); ok {
+					set, err := resolveConfigSet(app, ref)
+					if err != nil {
+						return nil, err
+					}
+					params["configSetID"] = set.ID
+				}
+				return daoCall(method, params)
 			case "stop":
 				return daoCall(api.MethodRunnerStop, map[string]any{"appID": appID})
 			case "reload":

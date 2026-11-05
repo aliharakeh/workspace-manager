@@ -1,0 +1,21 @@
+.wm-panel { padding: 16px; height: 100%; overflow: auto; font-size: 13px; }
+.wm-panel header, .wm-row, .wm-actions { display: flex; align-items: center; gap: 8px; }
+.wm-panel header { justify-content: space-between; }
+.wm-panel small { display: block; opacity: .65; overflow-wrap: anywhere; }
+.wm-panel header small { max-width: 260px; }
+.wm-panel section { padding: 16px 0; border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
+.wm-panel h3 { font-weight: 600; margin: 0 0 10px; }
+.wm-actions { flex-wrap: wrap; margin-top: 10px; }
+.wm-row { flex-wrap: wrap; margin: 8px 0; }
+.wm-row code { flex: 1; min-width: 80px; overflow-wrap: anywhere; }
+.wm-panel [role=alert] { color: #d45d5d; white-space: pre-wrap; }
+.wm-form { height: auto; display: grid; gap: 12px; }
+.wm-form label { display: grid; gap: 5px; }
+.wm-form input:not([type=checkbox]), .wm-form select, .wm-form textarea { width: 100%; padding: 8px; color: inherit; background: transparent; border: 1px solid color-mix(in srgb, currentColor 30%, transparent); border-radius: 5px; }
+.wm-form textarea { font-family: monospace; resize: vertical; }
+.wm-form .wm-check { display: inline-flex; margin: 6px; gap: 5px; }
+.wm-preview { padding: 16px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.wm-process { display: grid; gap: 4px; margin: 12px 0; }
+.wm-process a { text-decoration: underline; overflow-wrap: anywhere; }
+.wm-terminal { height: 280px; margin-top: 12px; background: #111; }
+.wm-note { opacity: .65; margin-top: 14px; }

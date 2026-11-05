@@ -9,6 +9,12 @@ demand, so there is nothing to run by hand. It identifies as an `agent` client:
 AI methods stay unavailable and values with `include_in_ai=false` stay hidden,
 exactly as for any external agent.
 
+`wm_env` can replace a hidden variable's value without reading the previous one.
+Omit `hidden` when updating to preserve the existing flag, or pass `hidden: true`.
+The stored value stays blank in lists, config details and write responses.
+Hidden variables cannot be renamed, deleted or made visible through MCP; use
+the GUI for those changes. New variables default to visible unless `hidden: true`.
+
 ## Build
 
 From the repo root:
@@ -54,3 +60,19 @@ Environment is inherited, so the server uses your normal data folder. Set
 
 Apps, workspaces and config sets accept an id or a name; ambiguity is reported
 instead of guessed.
+
+Pass `configSet` directly to `wm_run` to choose the commands, environment and
+templates for that run without changing the app's active config set:
+
+```json
+{"action": "dev", "app": "my-app", "configSet": "staging"}
+```
+
+This works for `dev`, `prod`, `build`, `setup` and the legacy `run` alias.
+Omitting `configSet` uses the app's active set, as the GUI does. Each app still
+allows only one session at a time. Reload keeps an explicitly selected set;
+stop the app before starting it with a different set. `startAll` continues to
+use each app's active set.
+
+Raw daemon calls to `runner.dev`, `runner.prod`, `runner.build`, `runner.setup`
+and `runner.run` accept the optional numeric `configSetID` parameter.

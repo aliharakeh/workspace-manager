@@ -8,9 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"workspace-manager/daemon/db"
 	"workspace-manager/shared/api"
 	"workspace-manager/shared/api/types"
-	"workspace-manager/daemon/db"
 	"workspace-manager/shared/native"
 )
 
@@ -30,6 +30,7 @@ type session struct {
 	worktree string
 	// setID is the config set the session runs with (env, templates, commands).
 	setID           int64
+	explicitSet     bool
 	mode            string
 	processes       []types.ProcessState
 	children        map[int64]*childProc
@@ -435,18 +436,19 @@ func (r *Runner) createSession(ctx context.Context, appID int64, kind, dir, work
 		})
 	}
 	return &session{
-		id:        fmt.Sprintf("%d-%d", appID, time.Now().UnixMilli()),
-		appID:     appID,
-		kind:      kind,
-		dir:       dir,
-		worktree:  worktree,
-		setID:     set.ID,
-		mode:      config.Mode,
-		processes: procs,
-		children:  map[int64]*childProc{},
-		running:   true,
-		idleDone:  make(chan struct{}),
-		outputs:   map[int64]*termBuffer{},
+		id:          fmt.Sprintf("%d-%d", appID, time.Now().UnixMilli()),
+		appID:       appID,
+		kind:        kind,
+		dir:         dir,
+		worktree:    worktree,
+		setID:       set.ID,
+		explicitSet: setID != 0,
+		mode:        config.Mode,
+		processes:   procs,
+		children:    map[int64]*childProc{},
+		running:     true,
+		idleDone:    make(chan struct{}),
+		outputs:     map[int64]*termBuffer{},
 	}, nil
 }
 
@@ -526,13 +528,11 @@ func (r *Runner) StartIn(ctx context.Context, appID int64, kind, dir, worktree s
 		}
 		return types.StatusEvent{}, api.Errf(api.KindConflict, "App is already running")
 	}
-	r.mu.Unlock()
-
 	s, err := r.createSession(ctx, appID, kind, dir, worktree, setID)
 	if err != nil {
+		r.mu.Unlock()
 		return types.StatusEvent{}, err
 	}
-	r.mu.Lock()
 	r.sessions[appID] = s
 	r.mu.Unlock()
 	r.emit(s, r.statusEvent(s, ""))
@@ -587,14 +587,15 @@ func (r *Runner) Reload(ctx context.Context, appID int64) (types.StatusEvent, er
 	r.mu.Lock()
 	existing := r.sessions[appID]
 	running := existing != nil && existing.running
-	// A reload stays in the worktree the last session ran in.
+	// A reload keeps an explicitly selected config set and worktree. Default
+	// GUI runs still resolve the app's current active set.
 	var dir, worktree string
 	var setID int64
 	kind := types.KindDev
 	if existing != nil && types.IsServing(existing.kind) {
 		kind = existing.kind
 	}
-	if existing != nil && existing.worktree != "" {
+	if existing != nil && (existing.worktree != "" || existing.explicitSet) {
 		dir, worktree, setID = existing.dir, existing.worktree, existing.setID
 	}
 	r.mu.Unlock()

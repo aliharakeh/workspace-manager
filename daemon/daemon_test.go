@@ -168,7 +168,7 @@ func TestRunnerSessionOverTheProtocol(t *testing.T) {
 	}
 
 	// A second run while the session is alive is a conflict.
-	err = c.Call(api.MethodRunnerRun, map[string]any{"appID": app.ID}, nil)
+	err = c.Call(api.MethodRunnerRun, map[string]any{"appID": app.ID, "configSetID": started.ConfigSetID}, nil)
 	if kind := api.KindOf(err); kind != api.KindConflict {
 		t.Fatalf("second run: want a conflict, got %v (%v)", kind, err)
 	}

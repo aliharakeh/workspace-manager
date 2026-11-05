@@ -44,7 +44,8 @@ export class DaemonClient extends EventEmitter {
    * @param {string} [opts.dataDir] data folder override
    * @param {string} [opts.daemonPath] path to wmd; empty: WM_DAEMON, then PATH
    * @param {boolean} [opts.autoStart] start the daemon when it is not running (default true)
-   * @param {string} [opts.version] client version sent in hello
+    * @param {string} [opts.version] client version sent in hello
+    * @param {string} [opts.name] client name sent in hello (default vscode)
    * @param {(line: string) => void} [opts.log]
    */
   constructor(opts = {}) {
@@ -131,7 +132,7 @@ export class DaemonClient extends EventEmitter {
     socket.on('close', () => this.#onClose(socket));
     this.socket = socket;
     try {
-      await this.call('hello', { kind: 'gui', name: 'vscode', version: this.opts.version, token: ep.token });
+      await this.call('hello', { kind: 'gui', name: this.opts.name || 'vscode', version: this.opts.version, token: ep.token });
       await this.call('events.subscribe', {});
     } catch (err) {
       socket.destroy();

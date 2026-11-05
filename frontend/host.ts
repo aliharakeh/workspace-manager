@@ -237,11 +237,11 @@ export const api = {
         output: (appId: number, commandId: number) => call(() => Go.RunnerOutput(appId, commandId)),
         resize: (appId: number, commandId: number, cols: number, rows: number) =>
             call(() => Go.RunnerResize(appId, commandId, cols, rows)),
-        run: (appId: number) => call(() => Go.RunnerRun(appId) as Promise<StatusEvent>),
-        dev: (appId: number) => call(() => Go.RunnerDev(appId) as Promise<StatusEvent>),
-        prod: (appId: number) => call(() => Go.RunnerProd(appId) as Promise<StatusEvent>),
-        build: (appId: number) => call(() => Go.RunnerBuild(appId) as Promise<StatusEvent>),
-        setup: (appId: number) => call(() => Go.RunnerSetup(appId) as Promise<StatusEvent>),
+        run: (appId: number, configSetId = 0) => call(() => Go.RunnerRun(appId, configSetId) as Promise<StatusEvent>),
+        dev: (appId: number, configSetId = 0) => call(() => Go.RunnerDev(appId, configSetId) as Promise<StatusEvent>),
+        prod: (appId: number, configSetId = 0) => call(() => Go.RunnerProd(appId, configSetId) as Promise<StatusEvent>),
+        build: (appId: number, configSetId = 0) => call(() => Go.RunnerBuild(appId, configSetId) as Promise<StatusEvent>),
+        setup: (appId: number, configSetId = 0) => call(() => Go.RunnerSetup(appId, configSetId) as Promise<StatusEvent>),
         stop: (appId: number) => call(() => Go.RunnerStop(appId) as Promise<StatusEvent>),
         reload: (appId: number) => call(() => Go.RunnerReload(appId) as Promise<StatusEvent>),
         startWorkspace: (workspaceId: number, excludeAppIds: number[], sequential: boolean) =>

@@ -212,30 +212,30 @@ func (a *App) RunnerResize(appID, commandID int64, cols, rows int) types.Ok {
 	return out
 }
 
-func (a *App) RunnerRun(appID int64) (types.StatusEvent, error) {
-	return call[types.StatusEvent](a.link, api.MethodRunnerRun, m{"appID": appID})
+func (a *App) RunnerRun(appID, configSetID int64) (types.StatusEvent, error) {
+	return call[types.StatusEvent](a.link, api.MethodRunnerRun, m{"appID": appID, "configSetID": configSetID})
 }
 
-func (a *App) RunnerDev(appID int64) (types.StatusEvent, error) {
-	return call[types.StatusEvent](a.link, api.MethodRunnerDev, m{"appID": appID})
+func (a *App) RunnerDev(appID, configSetID int64) (types.StatusEvent, error) {
+	return call[types.StatusEvent](a.link, api.MethodRunnerDev, m{"appID": appID, "configSetID": configSetID})
 }
 
-func (a *App) RunnerProd(appID int64) (types.StatusEvent, error) {
-	return call[types.StatusEvent](a.link, api.MethodRunnerProd, m{"appID": appID})
+func (a *App) RunnerProd(appID, configSetID int64) (types.StatusEvent, error) {
+	return call[types.StatusEvent](a.link, api.MethodRunnerProd, m{"appID": appID, "configSetID": configSetID})
 }
 
-// RunnerBuild runs the active config set's build commands. It shares the app's
+// RunnerBuild runs the selected config set's build commands (0: active). It shares the app's
 // session with RunnerRun: it fails while the app is running or building, and
 // RunnerStop stops it.
-func (a *App) RunnerBuild(appID int64) (types.StatusEvent, error) {
-	return call[types.StatusEvent](a.link, api.MethodRunnerBuild, m{"appID": appID})
+func (a *App) RunnerBuild(appID, configSetID int64) (types.StatusEvent, error) {
+	return call[types.StatusEvent](a.link, api.MethodRunnerBuild, m{"appID": appID, "configSetID": configSetID})
 }
 
-// RunnerSetup runs the active config set's setup commands. Like RunnerBuild it
+// RunnerSetup runs the selected config set's setup commands (0: active). Like RunnerBuild it
 // shares the app's session: it fails while the app is running, building or
 // being set up, and RunnerStop stops it.
-func (a *App) RunnerSetup(appID int64) (types.StatusEvent, error) {
-	return call[types.StatusEvent](a.link, api.MethodRunnerSetup, m{"appID": appID})
+func (a *App) RunnerSetup(appID, configSetID int64) (types.StatusEvent, error) {
+	return call[types.StatusEvent](a.link, api.MethodRunnerSetup, m{"appID": appID, "configSetID": configSetID})
 }
 
 func (a *App) RunnerStop(appID int64) (types.StatusEvent, error) {

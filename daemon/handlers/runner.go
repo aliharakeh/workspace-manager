@@ -56,29 +56,34 @@ func (r *Registry) runner() {
 		return o.RunnerResize(in.AppID, in.CommandID, in.Cols, in.Rows), nil
 	}))
 	r.handle(api.MethodRunnerRun, typed(func(in struct {
-		AppID int64 `json:"appID"`
+		AppID       int64 `json:"appID"`
+		ConfigSetID int64 `json:"configSetID"`
 	}) (types.StatusEvent, error) {
-		return o.RunnerRun(in.AppID)
+		return o.RunnerStart(in.AppID, types.KindDev, in.ConfigSetID)
 	}))
 	r.handle(api.MethodRunnerBuild, typed(func(in struct {
-		AppID int64 `json:"appID"`
+		AppID       int64 `json:"appID"`
+		ConfigSetID int64 `json:"configSetID"`
 	}) (types.StatusEvent, error) {
-		return o.RunnerBuild(in.AppID)
+		return o.RunnerStart(in.AppID, types.KindBuild, in.ConfigSetID)
 	}))
 	r.handle(api.MethodRunnerDev, typed(func(in struct {
-		AppID int64 `json:"appID"`
+		AppID       int64 `json:"appID"`
+		ConfigSetID int64 `json:"configSetID"`
 	}) (types.StatusEvent, error) {
-		return o.RunnerRun(in.AppID)
+		return o.RunnerStart(in.AppID, types.KindDev, in.ConfigSetID)
 	}))
 	r.handle(api.MethodRunnerProd, typed(func(in struct {
-		AppID int64 `json:"appID"`
+		AppID       int64 `json:"appID"`
+		ConfigSetID int64 `json:"configSetID"`
 	}) (types.StatusEvent, error) {
-		return o.RunnerProd(in.AppID)
+		return o.RunnerStart(in.AppID, types.KindProd, in.ConfigSetID)
 	}))
 	r.handle(api.MethodRunnerSetup, typed(func(in struct {
-		AppID int64 `json:"appID"`
+		AppID       int64 `json:"appID"`
+		ConfigSetID int64 `json:"configSetID"`
 	}) (types.StatusEvent, error) {
-		return o.RunnerSetup(in.AppID)
+		return o.RunnerStart(in.AppID, types.KindSetup, in.ConfigSetID)
 	}))
 	r.handle(api.MethodRunnerStop, typed(func(in struct {
 		AppID int64 `json:"appID"`

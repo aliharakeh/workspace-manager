@@ -3,12 +3,16 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
+
+	"workspace-manager/shared/api/types"
 )
 
 // TestStartsDaemonAndServesTools runs the real wm-mcp binary against a fresh
@@ -68,6 +72,80 @@ func TestStartsDaemonAndServesTools(t *testing.T) {
 	overview := mcpCall(t, stdin, out, 4, "wm_overview", map[string]any{})
 	if !strings.Contains(overview, "mcp-ws") {
 		t.Fatalf("wm_overview misses the workspace: %s", overview)
+	}
+
+	// Choose a config set on the run itself, leaving the app's active set alone.
+	call := func(name string, args map[string]any, target any) {
+		t.Helper()
+		resp := send(stdin, out, 10, "tools/call", map[string]any{"name": name, "arguments": args})
+		result, ok := resp["result"].(map[string]any)
+		if !ok || result["isError"] == true {
+			t.Fatalf("%s: %v", name, resp)
+		}
+		if target != nil {
+			content := result["content"].([]any)[0].(map[string]any)["text"].(string)
+			if err := json.Unmarshal([]byte(content), target); err != nil {
+				t.Fatalf("decode %s: %v", name, err)
+			}
+		}
+	}
+	var app types.App
+	call("wm_app", map[string]any{"action": "create", "name": "demo", "workspace": "mcp-ws", "path": t.TempDir()}, &app)
+	var secret types.EnvVar
+	call("wm_env", map[string]any{"action": "set", "key": "SECRET", "value": "original-secret", "hidden": true}, &secret)
+	if secret.Value != "" || secret.IncludeInAI {
+		t.Fatal("creating a hidden variable exposed its value")
+	}
+	// Omitting hidden must preserve the flag rather than making the variable visible.
+	call("wm_env", map[string]any{"action": "set", "key": "SECRET", "value": "replacement-secret"}, &secret)
+	if secret.Value != "" || secret.IncludeInAI {
+		t.Fatal("updating a hidden variable exposed its value")
+	}
+	var vars []types.EnvVar
+	call("wm_env", map[string]any{"action": "list"}, &vars)
+	if len(vars) != 1 || vars[0].Value != "" || vars[0].IncludeInAI {
+		t.Fatal("listing a hidden variable exposed its value")
+	}
+	refused := send(stdin, out, 11, "tools/call", map[string]any{
+		"name": "wm_env", "arguments": map[string]any{"action": "set", "key": "SECRET", "hidden": false},
+	})
+	if !strings.Contains(toJSON(refused), `"isError":true`) {
+		t.Fatal("MCP could make a hidden variable visible")
+	}
+	var active types.ConfigSet
+	call("wm_config", map[string]any{"action": "create", "name": "selected"}, &active)
+	for _, kind := range []string{"dev", "prod", "build", "setup"} {
+		call("wm_config", map[string]any{
+			"action": "save_commands", "kind": kind,
+			"commands": []any{map[string]any{"command": "echo selected-" + kind}},
+		}, nil)
+	}
+	// Create an empty active set so a start using it would fail.
+	var guiSet types.ConfigSet
+	call("wm_config", map[string]any{"action": "create", "name": "gui"}, &guiSet)
+	for _, kind := range []string{"dev", "prod", "build", "setup", "run"} {
+		ref := "selected"
+		if kind == "run" {
+			ref = fmt.Sprint(active.ID)
+		}
+		var status types.StatusEvent
+		call("wm_run", map[string]any{"action": kind, "configSet": ref}, &status)
+		if status.ConfigSetID != active.ID || !status.Running {
+			t.Fatalf("%s used the wrong config set: %+v", kind, status)
+		}
+		deadline := time.Now().Add(20 * time.Second)
+		for status.Running {
+			if time.Now().After(deadline) {
+				t.Fatalf("%s did not finish", kind)
+			}
+			time.Sleep(20 * time.Millisecond)
+			call("wm_run", map[string]any{"action": "status"}, &status)
+		}
+		var current types.App
+		call("wm_call", map[string]any{"method": "apps.get", "params": map[string]any{"id": app.ID}}, &current)
+		if current.ActiveConfigSetID == nil || *current.ActiveConfigSetID != guiSet.ID {
+			t.Fatalf("%s changed the active set: %+v", kind, current)
+		}
 	}
 
 	// GUI-only methods are refused to an agent.

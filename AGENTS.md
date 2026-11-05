@@ -17,6 +17,7 @@ screen. The React frontend lives in `frontend/`.
 | `cmd/wmd` | The daemon's entry point: opens the database, runs the server. |
 | `cmd/wm-mcp` | The MCP server (stdio) for external coding agents. An `agent` client of the daemon; starts it on demand. See its README. |
 | `vscode` | The VS Code extension (JS, esbuild): config sets, env vars, templates and run buttons backed by the daemon, as a `gui` client over the TCP endpoint. See its README. |
+| `opencode` | OpenCode V2 Desktop GUI plugin (Solid, Vite): reuses `vscode/daemon.js` and `vscode/service.js` in Electron main, with schema-validated IPC to its session side panel. See its README. |
 | `gui` | The desktop app's Go side. `app.go` (the `App` struct, event relay), `link.go` (`Link`, the connection to `wmd`: dials, auto-starts it, resubscribes), `bind.go` (the Wails-bound surface; data, runner and blueprint methods proxy to the daemon, the rest runs here), `events.go`, `dialog.go` (Wails events and file pickers). |
 | `gui/ai` | AI connections and the two agents (app config, blueprint). |
 | `gui/git` | Git and worktrees: `git.go`, `worktreelinks.go` (the git plumbing) and `operations.go` (the Git panel's operations, reading what they need from the daemon through a `Backend`). |
@@ -60,8 +61,9 @@ screen. The React frontend lives in `frontend/`.
   `Agent: false` in `shared/api/methods.go` are refused to agent clients
   (settings, the worktree support methods, `configSets.applyChanges`, terminal
   resizes), and env vars/templates with `include_in_ai=false` are blanked for
-  agents and refuse their writes. A client that omits its kind is an agent, the
-  least-privileged kind, never the GUI. Any new secret-like value needs the same
+  agents. Hidden env vars allow value-only replacements, but not renaming,
+  deleting or unhiding; hidden templates refuse writes. A client that omits its
+  kind is an agent, the least-privileged kind, never the GUI. Any new secret-like value needs the same
   treatment in `daemon/handlers`. `wm-mcp` is the agent client; the GUI is the other.
 - **Lifecycle.** The daemon takes a lock in the data folder, so there is one
   instance per data folder. `Link` starts it on demand (`client.StartDaemon`
@@ -113,6 +115,11 @@ screen. The React frontend lives in `frontend/`.
   active config set, because the daemon's `envVars.*`/`templates.create` work on it.
 - Adding a GUI-only operation (git, dialogs, AI): put it in `gui/git` or
   `gui/bind.go`; it reaches data only through daemon calls, never the database.
+- The OpenCode Desktop plugin (`opencode/`) bundles the VS Code client/service;
+  keep them free of host-specific imports. Its GUI-privileged connection belongs
+  in Electron main, never model tools. Add panel operations to the allowlist in
+  `src/backend.js` and the IPC contract as needed. Run `npm run typecheck` and
+  `npm test` from `opencode/`; rebuild with `npm run build` after shared client edits.
 - Changing the bound surface: edit `gui/bind.go`, then run `wails3 generate bindings -ts -clean=true`
   and check `frontend/host.ts`. Keep helper methods that must not be bound on
   other types (see `gitBackend`), since Wails binds every exported method of
