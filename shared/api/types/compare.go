@@ -11,7 +11,7 @@ const (
 )
 
 // ConfigSetEnvDiff is one env var key across two config sets. Redacted entries
-// (include_in_ai=false, seen by an agent) carry the status only: Left and
+// (private, seen by an agent) carry the status only: Left and
 // Right are nil.
 type ConfigSetEnvDiff struct {
 	Key      string  `json:"key"`
@@ -19,6 +19,10 @@ type ConfigSetEnvDiff struct {
 	Left     *string `json:"left"`
 	Right    *string `json:"right"`
 	Redacted bool    `json:"redacted"`
+	// LeftShared and RightShared mark a side whose variable is taken from the
+	// workspace's shared config (read-only there).
+	LeftShared  bool `json:"left_shared,omitempty"`
+	RightShared bool `json:"right_shared,omitempty"`
 }
 
 // ConfigSetTemplateDiff is one template (matched on file_path). Left/Right are

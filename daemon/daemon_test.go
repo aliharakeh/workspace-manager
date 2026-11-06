@@ -193,10 +193,10 @@ func TestAgentClientCannotSeeHiddenValues(t *testing.T) {
 	c := startServer(t)
 	app := makeApp(t, c)
 
-	hidden := false
+	hidden := true
 	if err := c.Call(api.MethodEnvVarsCreate, map[string]any{
 		"appID": app.ID,
-		"body":  types.EnvVarCreateInput{Key: "SECRET", IncludeInAI: &hidden},
+		"body":  types.EnvVarCreateInput{Key: "SECRET", Private: &hidden},
 	}, nil); err != nil {
 		t.Fatalf("create hidden var: %v", err)
 	}
@@ -223,11 +223,11 @@ func TestUnnamedClientIsTreatedAsAgent(t *testing.T) {
 	c := startServer(t)
 	app := makeApp(t, c)
 
-	hidden := false
+	hidden := true
 	value := "s3cret"
 	if err := c.Call(api.MethodEnvVarsCreate, map[string]any{
 		"appID": app.ID,
-		"body":  types.EnvVarCreateInput{Key: "SECRET", Value: &value, IncludeInAI: &hidden},
+		"body":  types.EnvVarCreateInput{Key: "SECRET", Value: &value, Private: &hidden},
 	}, nil); err != nil {
 		t.Fatalf("create hidden var: %v", err)
 	}
@@ -350,11 +350,11 @@ func TestWritesAreAnnouncedAsDataChanged(t *testing.T) {
 		t.Fatalf("the test needs a config set id that differs from the app id (both %d)", set.ID)
 	}
 	value := "3000"
-	visible := true
+	visible := false
 	var created types.EnvVar
 	if err := c.Call(api.MethodEnvVarsCreate, map[string]any{
 		"appID": other.ID,
-		"body":  types.EnvVarCreateInput{Key: "PORT", Value: &value, IncludeInAI: &visible},
+		"body":  types.EnvVarCreateInput{Key: "PORT", Value: &value, Private: &visible},
 	}, &created); err != nil {
 		t.Fatalf("create env var: %v", err)
 	}
@@ -403,11 +403,11 @@ func TestApplyChangesWritesAndSkipsHidden(t *testing.T) {
 	c := startServer(t)
 	app := makeApp(t, c)
 
-	visible, hidden := true, false
+	visible, hidden := false, true
 	one, secret := "1", "secret"
 	for _, v := range []types.EnvVarCreateInput{
-		{Key: "PORT", Value: &one, IncludeInAI: &visible},
-		{Key: "SECRET", Value: &secret, IncludeInAI: &hidden},
+		{Key: "PORT", Value: &one, Private: &visible},
+		{Key: "SECRET", Value: &secret, Private: &hidden},
 	} {
 		if err := c.Call(api.MethodEnvVarsCreate, map[string]any{"appID": app.ID, "body": v}, nil); err != nil {
 			t.Fatalf("create %s: %v", v.Key, err)

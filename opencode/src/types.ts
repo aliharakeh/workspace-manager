@@ -10,7 +10,7 @@ export interface Snapshot {
   sets?: ConfigSet[];
   detail?: {
     id: number; name: string;
-    env_vars: { key: string; value: string }[];
+    env_vars: { key: string; value: string; shared_var_id?: number | null }[];
     templates: Template[];
   };
   status?: { sessionId: string; running: boolean; kind: string | null; error: string | null; processes: Process[] };

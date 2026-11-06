@@ -28,13 +28,19 @@ func applySchema(sqlDB *sql.DB) error {
 	if err := addWorkspaceColor(sqlDB); err != nil {
 		return err
 	}
-	if err := addTemplateIncludeInAI(sqlDB); err != nil {
+	if err := addTemplatePrivate(sqlDB); err != nil {
+		return err
+	}
+	if err := renameAIFlagToPrivate(sqlDB); err != nil {
 		return err
 	}
 	if err := addAppExcludeFromStartAll(sqlDB); err != nil {
 		return err
 	}
 	if err := addEnvVarOptions(sqlDB); err != nil {
+		return err
+	}
+	if err := addSharedLinkColumns(sqlDB); err != nil {
 		return err
 	}
 	if _, err := sqlDB.Exec(schemaSQL); err != nil {
@@ -125,20 +131,49 @@ func addWorkspaceColor(sqlDB *sql.DB) error {
 	return err
 }
 
-// addTemplateIncludeInAI upgrades a templates table created before templates
-// could be hidden from the AI. Existing templates stay visible to it. A fresh
-// table already has the column from schemaSQL.
-func addTemplateIncludeInAI(sqlDB *sql.DB) error {
+// legacyAIFlag is the column the private flag replaced. It meant the opposite:
+// true was visible to agents.
+const legacyAIFlag = "include_in_ai"
+
+// addTemplatePrivate upgrades a templates table created before templates could
+// be private. Existing templates stay visible to agents. A fresh table already
+// has the column from schemaSQL. A table that still has the older include_in_ai
+// column is handled by renameAIFlagToPrivate.
+func addTemplatePrivate(sqlDB *sql.DB) error {
 	cols, err := tableColumns(sqlDB, "templates")
 	if err != nil || len(cols) == 0 {
-		return err // fresh database: schemaSQL creates the table with include_in_ai
+		return err // fresh database: schemaSQL creates the table with private
 	}
-	has, err := hasColumn(sqlDB, "templates", "include_in_ai")
-	if err != nil || has {
-		return err
+	for _, c := range cols {
+		if c == "private" || c == legacyAIFlag {
+			return nil
+		}
 	}
-	_, err = sqlDB.Exec(`ALTER TABLE templates ADD COLUMN include_in_ai integer DEFAULT true NOT NULL`)
+	_, err = sqlDB.Exec(`ALTER TABLE templates ADD COLUMN private integer DEFAULT false NOT NULL`)
 	return err
+}
+
+// renameAIFlagToPrivate upgrades the tables that still carry the earlier
+// include_in_ai flag (true = visible to agents) to private (true = hidden from
+// them). The meaning is the same, so the value is inverted. It runs before
+// schemaSQL and is a no-op once the column is gone.
+func renameAIFlagToPrivate(sqlDB *sql.DB) error {
+	for _, table := range []string{"env_vars", "templates", "workspace_env_vars"} {
+		has, err := hasColumn(sqlDB, table, legacyAIFlag)
+		if err != nil {
+			return err
+		}
+		if !has {
+			continue
+		}
+		if _, err := sqlDB.Exec(`
+			ALTER TABLE ` + table + ` ADD COLUMN private integer DEFAULT false NOT NULL;
+			UPDATE ` + table + ` SET private = CASE WHEN ` + legacyAIFlag + ` = 0 THEN 1 ELSE 0 END;
+			ALTER TABLE ` + table + ` DROP COLUMN ` + legacyAIFlag + `;`); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // addEnvVarOptions upgrades an env_vars table created before variables could
@@ -157,6 +192,64 @@ func addEnvVarOptions(sqlDB *sql.DB) error {
 		ALTER TABLE env_vars ADD COLUMN options text DEFAULT '[]' NOT NULL;
 		ALTER TABLE env_vars ADD COLUMN selected text DEFAULT '' NOT NULL;`)
 	return err
+}
+
+// addSharedLinkColumns upgrades config_sets and env_vars tables created before
+// workspaces had shared config. It runs before schemaSQL, which indexes
+// env_vars.shared_var_id. A column can only reference a table that exists, so
+// the two workspace tables are created here first (schemaSQL's own statements
+// for them are then no-ops). SQLite allows adding a REFERENCES column when its
+// default is NULL.
+func addSharedLinkColumns(sqlDB *sql.DB) error {
+	envCols, err := tableColumns(sqlDB, "env_vars")
+	if err != nil || len(envCols) == 0 {
+		return err // fresh database: schemaSQL creates everything
+	}
+	hasVar, err := hasColumn(sqlDB, "env_vars", "shared_var_id")
+	if err != nil {
+		return err
+	}
+	hasSet, err := hasColumn(sqlDB, "config_sets", "shared_set_id")
+	if err != nil {
+		return err
+	}
+	if hasVar && hasSet {
+		return nil
+	}
+	if _, err := sqlDB.Exec(`
+		CREATE TABLE IF NOT EXISTS workspace_config_sets (
+		  id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+		  workspace_id integer NOT NULL,
+		  name text NOT NULL,
+		  created_at text DEFAULT (datetime('now')) NOT NULL,
+		  updated_at text DEFAULT (datetime('now')) NOT NULL,
+		  FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE cascade
+		);
+		CREATE TABLE IF NOT EXISTS workspace_env_vars (
+		  id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+		  workspace_config_set_id integer NOT NULL,
+		  key text NOT NULL,
+		  value text DEFAULT '' NOT NULL,
+		  private integer DEFAULT false NOT NULL,
+		  options text DEFAULT '[]' NOT NULL,
+		  selected text DEFAULT '' NOT NULL,
+		  created_at text DEFAULT (datetime('now')) NOT NULL,
+		  updated_at text DEFAULT (datetime('now')) NOT NULL,
+		  FOREIGN KEY (workspace_config_set_id) REFERENCES workspace_config_sets (id) ON DELETE cascade
+		);`); err != nil {
+		return err
+	}
+	if !hasSet {
+		if _, err := sqlDB.Exec(`ALTER TABLE config_sets ADD COLUMN shared_set_id integer REFERENCES workspace_config_sets (id) ON DELETE set null`); err != nil {
+			return err
+		}
+	}
+	if !hasVar {
+		if _, err := sqlDB.Exec(`ALTER TABLE env_vars ADD COLUMN shared_var_id integer REFERENCES workspace_env_vars (id) ON DELETE cascade`); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // addBlueprintSampleName upgrades a blueprints table created before the

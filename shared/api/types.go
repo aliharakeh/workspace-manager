@@ -97,7 +97,7 @@ type ServerInfo struct {
 
 // ClientInfo identifies a connecting client. Kind is "agent" or "gui"; the
 // server uses it to decide what the client may call and whether to hide
-// AI-excluded values.
+// private values.
 type ClientInfo struct {
 	Kind    string `json:"kind"`
 	Name    string `json:"name,omitempty"`

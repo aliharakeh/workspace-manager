@@ -77,7 +77,7 @@ function TemplateItem({
   const [saving, setSaving] = useState(false)
   const [reloading, setReloading] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [togglingAi, setTogglingAi] = useState(false)
+  const [togglingPrivate, setTogglingPrivate] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const dirty = content !== template.content
 
@@ -103,18 +103,18 @@ function TemplateItem({
     }
   }
 
-  async function handleAiToggle(next: boolean) {
-    if (next === template.include_in_ai) return
-    setTogglingAi(true)
+  async function handlePrivateToggle(next: boolean) {
+    if (next === template.private) return
+    setTogglingPrivate(true)
     try {
       const updated = await api.templates.update(template.id, {
-        include_in_ai: next,
+        private: next,
       })
       onUpdated(updated)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update")
     } finally {
-      setTogglingAi(false)
+      setTogglingPrivate(false)
     }
   }
 
@@ -159,9 +159,9 @@ function TemplateItem({
             {template.file_path}
           </span>
         </div>
-        {!template.include_in_ai ? (
+        {template.private ? (
           <span className="mr-2 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-            Hidden from AI
+            Private
           </span>
         ) : null}
         {dirty ? (
@@ -180,15 +180,15 @@ function TemplateItem({
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-1.5 text-sm">
               <Checkbox
-                checked={template.include_in_ai}
-                disabled={togglingAi || deleting}
+                checked={template.private}
+                disabled={togglingPrivate || deleting}
                 onCheckedChange={(checked) =>
-                  void handleAiToggle(checked === true)
+                  void handlePrivateToggle(checked === true)
                 }
-                aria-label="Include in AI"
-                title="Include this template in AI chat"
+                aria-label="Private"
+                title="Private: never shown to AI or agents"
               />
-              Include in AI
+              Private
             </label>
             <ToggleGroup
               value={[mode]}

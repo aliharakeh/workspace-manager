@@ -6,7 +6,7 @@ Uses Go 1.26+ and Wails v3.0.0-beta.34. Install the matching CLI with
 One Go module at the repo root with two programs: the Wails desktop app (the
 GUI, `main.go`) and the background daemon `wmd` (`cmd/wmd`). The daemon owns the
 database, the process runner and the blueprints. The GUI is its client; it also
-runs the AI, git, the file dialogs and the path from terminal output to the
+runs git, the file dialogs and the path from terminal output to the
 screen. The React frontend lives in `frontend/`.
 
 ## Layout
@@ -19,7 +19,6 @@ screen. The React frontend lives in `frontend/`.
 | `vscode` | The VS Code extension (JS, esbuild): config sets, env vars, templates and run buttons backed by the daemon, as a `gui` client over the TCP endpoint. See its README. |
 | `opencode` | OpenCode V2 Desktop GUI plugin (Solid, Vite): reuses `vscode/daemon.js` and `vscode/service.js` in Electron main, with schema-validated IPC to its session side panel. See its README. |
 | `gui` | The desktop app's Go side. `app.go` (the `App` struct, event relay), `link.go` (`Link`, the connection to `wmd`: dials, auto-starts it, resubscribes), `bind.go` (the Wails-bound surface; data, runner and blueprint methods proxy to the daemon, the rest runs here), `events.go`, `dialog.go` (Wails events and file pickers). |
-| `gui/ai` | AI connections and the two agents (app config, blueprint). |
 | `gui/git` | Git and worktrees: `git.go`, `worktreelinks.go` (the git plumbing) and `operations.go` (the Git panel's operations, reading what they need from the daemon through a `Backend`). |
 | `daemon` | Daemon lifecycle: data-folder lock, socket, idle exit, `hello`, method permissions. |
 | `daemon/handlers` | One handler per API method; applies the client-kind rules. |
@@ -37,7 +36,7 @@ screen. The React frontend lives in `frontend/`.
 | `wmd` (daemon) | GUI process only |
 |---|---|
 | Database, migrations, seed | File and folder pickers, `FsValidatePath`, `OpenExternal` |
-| Workspaces, apps, config sets, env vars, templates, run configs, package scripts, ready-URL patterns, ports | All AI: connections, app chat, applying a reviewed patch, `BlueprintsAIPropose` |
+| Workspaces, apps, config sets, env vars, templates, run configs, package scripts, ready-URL patterns, ports | — |
 | The runner: PTYs, sessions, terminal buffer, ready-URL and idle detection, template apply/restore, OS notifications | Git and worktrees (`gui/git`), reading the app from the daemon |
 | Settings (served to the GUI only) | Turning daemon events into Wails events; xterm rendering, resize and catch-up calls |
 | Blueprints: CRUD and the runner (the agent that drafts them is GUI-side) | |
@@ -60,9 +59,9 @@ screen. The React frontend lives in `frontend/`.
   `agent`; the rpc layer refuses every other call until it has. Methods marked
   `Agent: false` in `shared/api/methods.go` are refused to agent clients
   (settings, the worktree support methods, `configSets.applyChanges`, terminal
-  resizes), and env vars/templates with `include_in_ai=false` are blanked for
-  agents. Hidden env vars and templates allow value/content-only
-  replacements and deletion, but not renaming or unhiding. A client that omits its
+  resizes), and env vars/templates marked `private` are blanked for
+  agents. Private env vars and templates allow value/content-only
+  replacements and deletion, but not renaming or making public. A client that omits its
   kind is an agent, the least-privileged kind, never the GUI. Any new secret-like value needs the same
   treatment in `daemon/handlers`. `wm-mcp` is the agent client; the GUI is the other.
 - **Lifecycle.** The daemon takes a lock in the data folder, so there is one
@@ -73,9 +72,8 @@ screen. The React frontend lives in `frontend/`.
   while any run is active. `WM_DATA_DIR` moves both ends to another data folder,
   which is how tests and sandboxes stay isolated.
 - **Events.** The frontend's contract: `runnerEvent` carries `{appId, event}`,
-  `blueprintEvent` a `BlueprintLogEvent`, `appAIEvent` an `AppAIStreamEvent`
-  (emitted by the GUI itself), `dataChanged` an `api.DataChanged`. The daemon
-  pushes the first three as `api.Event`s and `App.relay` (`gui/app.go`) re-emits them
+  `blueprintEvent` a `BlueprintLogEvent`, `dataChanged` an `api.DataChanged`. The daemon
+  pushes the first two as `api.Event`s and `App.relay` (`gui/app.go`) re-emits them
   under those names; keep the names and payload shapes. After a reconnect the
   GUI asks the frontend to reload its lists.
 - **Writes announce themselves.** Every write goes through `ops`, which reports
@@ -91,10 +89,9 @@ screen. The React frontend lives in `frontend/`.
   ready-URL detection. The frontend feeds `runnerEvent` into xterm.js
   (`frontend/components/terminal.tsx`) and catches up on a late open with
   `RunnerOutput`.
-- **The AI** runs in the GUI (`gui/ai`). It reads an app and its config set
-  through `apps.get`/`configSets.detail`, stages its edits, and the user's review
-  applies them with one `configSets.applyChanges` call. Env vars and templates
-  with `include_in_ai=false` are never shown to it or changed by it.
+- **No AI in the GUI.** The desktop app has no AI features; external agents use
+  `wm-mcp`. `configSets.applyChanges` stays in the daemon (GUI-only) but nothing
+  in the GUI calls it now.
 
 ## Rules
 
@@ -113,7 +110,7 @@ screen. The React frontend lives in `frontend/`.
   `npm run manifest`. When an agent command or its arguments change, update the
   table in `vscode/README.md`. Env vars and new templates are written to the
   active config set, because the daemon's `envVars.*`/`templates.create` work on it.
-- Adding a GUI-only operation (git, dialogs, AI): put it in `gui/git` or
+- Adding a GUI-only operation (git, dialogs): put it in `gui/git` or
   `gui/bind.go`; it reaches data only through daemon calls, never the database.
 - The OpenCode Desktop plugin (`opencode/`) bundles the VS Code client/service;
   keep them free of host-specific imports. Its GUI-privileged connection belongs
@@ -137,8 +134,25 @@ screen. The React frontend lives in `frontend/`.
   `db.EnvStoreValue` so the three columns stay consistent (a value edit on a choice
   edits the selected option; the first option is selected by default). Option values
   are secret-like: `hideEnvVar` blanks them for agents and agents cannot change the
-  options or choice of a hidden variable. Copy-from and bundle export/import carry
+  options or choice of a private variable. Copy-from and bundle export/import carry
   them; `wm_env` takes `options` and `selected`.
+- Shared config: a workspace owns config sets of env vars (`workspace_config_sets`,
+  `workspace_env_vars`; `daemon/ops/shared.go`). An app config set links to one of
+  them by hand (`config_sets.shared_set_id`, `configSets.linkShared`, any set
+  whatever the names) and takes chosen variables as ordinary `env_vars` rows that
+  carry `shared_var_id`. Those rows are **live and read-only**: every write to a
+  workspace variable (`sharedVars.update`/`delete`, which go through `mergeEnvUpdate`
+  so option rules stay the same) rewrites or removes them in the same transaction,
+  so the runner, templates, compare, AI and export keep reading `env_vars.value`
+  unchanged. Never write a shared row through `envVars.*`, the AI patch, an env
+  import or `copyFrom` (they refuse or skip it); a new write path to `env_vars`
+  must check `SharedVarID`. A rename that collides with a variable in a linked
+  config set is refused, naming where. Private shared values follow the same rules
+  as app variables (`hideSharedVar` in `daemon/handlers/shared.go`). A bundle
+  records the shared sets and each config set's link and keys (version 2; an
+  export without shared config stays version 1). Shared writes announce
+  `sharedSet` (workspace id) plus `envVar` for the apps they touched; the UI
+  listens to `sharedSet` in `App.tsx`. `wm_shared` edits the shared config over MCP.
 - A config set holds four command lists of the same shape: **setup**, **dev**,
   **build** and **prod**, told apart by `run_configs.kind`. Existing `run`
   commands migrate to `dev`; `runner.run` remains a legacy alias for dev. An app
@@ -152,11 +166,9 @@ screen. The React frontend lives in `frontend/`.
   rewrites the order) and carry a `pinned` flag (`workspaces.setPinned`); clients show
   pinned first, then the saved order, and must not re-sort by name. Collapse state in
   the sidebar stays per-device (local storage).
-- Blueprints: the runner is in `daemon/services/blueprints.go` (daemon); the
-  agent that drafts them is `gui/ai/blueprintai.go` (GUI) and delivers only
-  through its `propose_blueprint` tool. When you change the runner or the
-  placeholder set (`{{app_name}}`, `{{folder_name}}`, `{{app_dir}}`), update the
-  agent's system prompt and `validateBlueprintProposal`, and the preview in
+- Blueprints: the runner is in `daemon/services/blueprints.go` (daemon). When
+  you change the runner or the placeholder set (`{{app_name}}`,
+  `{{folder_name}}`, `{{app_dir}}`), update the preview in
   `frontend/components/new-app-from-blueprint-dialog.tsx`.
 - Git and worktrees go through `gui/git` (`git.go`, `worktreelinks.go`,
   `operations.go`): the main

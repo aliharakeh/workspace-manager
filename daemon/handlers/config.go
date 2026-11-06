@@ -115,15 +115,15 @@ func (r *Registry) envVars() {
 			if err != nil {
 				return types.EnvVar{}, err
 			}
-			if !existing.IncludeInAI {
-				// Hidden variables allow value replacement, never renaming, unhiding
+			if existing.Private {
+				// Private variables allow value replacement, never renaming, making public
 				// or changing their options and choice.
 				if in.Body.Value == nil || in.Body.Options != nil || in.Body.Selected != nil ||
 					(in.Body.Key != nil && strings.TrimSpace(*in.Body.Key) != existing.Key) ||
-					(in.Body.IncludeInAI != nil && *in.Body.IncludeInAI) {
+					(in.Body.Private != nil && !*in.Body.Private) {
 					return types.EnvVar{}, errHidden()
 				}
-				in.Body.IncludeInAI = &existing.IncludeInAI
+				in.Body.Private = &existing.Private
 			}
 		}
 		v, err := o.EnvVarsUpdate(in.ID, in.Body)
@@ -135,7 +135,7 @@ func (r *Registry) envVars() {
 	r.handle(api.MethodEnvVarsDelete, kindTyped(func(kind string, in struct {
 		ID int64 `json:"id"`
 	}) (types.Ok, error) {
-		// Deleting reveals nothing, so agents may delete hidden variables.
+		// Deleting reveals nothing, so agents may delete private variables.
 		return o.EnvVarsDelete(in.ID)
 	}))
 	r.handle(api.MethodEnvVarsImport, kindTyped(func(kind string, in struct {
@@ -185,14 +185,14 @@ func (r *Registry) templates() {
 			if err != nil {
 				return types.Template{}, err
 			}
-			if !existing.IncludeInAI {
-				// Hidden templates allow content replacement, never renaming or unhiding.
+			if existing.Private {
+				// Private templates allow content replacement, never renaming or making public.
 				if in.Body.Content == nil ||
 					(in.Body.FilePath != nil && strings.TrimSpace(*in.Body.FilePath) != existing.FilePath) ||
-					(in.Body.IncludeInAI != nil && *in.Body.IncludeInAI) {
+					(in.Body.Private != nil && !*in.Body.Private) {
 					return types.Template{}, errHidden()
 				}
-				in.Body.IncludeInAI = &existing.IncludeInAI
+				in.Body.Private = &existing.Private
 			}
 		}
 		t, err := o.TemplatesUpdate(in.ID, in.Body)
@@ -204,7 +204,7 @@ func (r *Registry) templates() {
 	r.handle(api.MethodTemplatesDelete, kindTyped(func(kind string, in struct {
 		ID int64 `json:"id"`
 	}) (types.Ok, error) {
-		// Deleting reveals nothing, so agents may delete hidden templates.
+		// Deleting reveals nothing, so agents may delete private templates.
 		return o.TemplatesDelete(in.ID)
 	}))
 	r.handle(api.MethodTemplatesRender, typed(func(in types.TemplateRenderInput) (types.TemplateRenderResult, error) {
@@ -212,7 +212,7 @@ func (r *Registry) templates() {
 	}))
 }
 
-// maskDetail blanks AI-excluded values and contents for agent clients.
+// maskDetail blanks private values and contents for agent clients.
 func maskDetail(kind string, d types.ConfigSetDetail) types.ConfigSetDetail {
 	if kind != ClientAgent {
 		return d
@@ -222,7 +222,7 @@ func maskDetail(kind string, d types.ConfigSetDetail) types.ConfigSetDetail {
 	return d
 }
 
-// errHidden is what an agent client sees for an AI-excluded item: the same
+// errHidden is what an agent client sees for an private item: the same
 // "not found" a GUI user would get for a missing one, so an agent cannot
 // tell what exists.
 func errHidden() error {
@@ -238,7 +238,7 @@ func requireVisibleVarKey(kind string, o *ops.Ops, appID, setID int64, key strin
 		return err
 	}
 	for _, v := range vars {
-		if v.Key == key && !v.IncludeInAI {
+		if v.Key == key && v.Private {
 			return errHidden()
 		}
 	}
@@ -257,10 +257,10 @@ func hideEnvVars(kind string, vars []types.EnvVar) []types.EnvVar {
 	return out
 }
 
-// hideEnvVar blanks the value of a hidden variable for agents, and the value of
+// hideEnvVar blanks the value of a private variable for agents, and the value of
 // each of its options (the labels stay so the choice can still be described).
 func hideEnvVar(kind string, v types.EnvVar) types.EnvVar {
-	if kind == ClientAgent && !v.IncludeInAI {
+	if kind == ClientAgent && v.Private {
 		v.Value = ""
 		opts := make([]types.EnvVarOption, len(v.Options))
 		for i, o := range v.Options {
@@ -278,7 +278,7 @@ func hideTemplates(kind string, tpls []types.Template) []types.Template {
 	out := make([]types.Template, len(tpls))
 	copy(out, tpls)
 	for i := range out {
-		if !out[i].IncludeInAI {
+		if out[i].Private {
 			out[i].Content = ""
 		}
 	}
@@ -286,7 +286,7 @@ func hideTemplates(kind string, tpls []types.Template) []types.Template {
 }
 
 func hideTemplate(kind string, t types.Template) types.Template {
-	if kind == ClientAgent && !t.IncludeInAI {
+	if kind == ClientAgent && t.Private {
 		t.Content = ""
 	}
 	return t

@@ -398,3 +398,63 @@ func TestReorderAndPinWorkspaces(t *testing.T) {
 		t.Fatal("pinning a missing workspace should fail")
 	}
 }
+
+func TestApplySchemaAddsSharedLinkColumns(t *testing.T) {
+	sqlDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+	sqlDB.SetMaxOpenConns(1)
+	// Shape of config_sets and env_vars before workspaces had shared config.
+	if _, err := sqlDB.Exec(`
+		CREATE TABLE config_sets (
+		  id integer PRIMARY KEY AUTOINCREMENT NOT NULL, app_id integer NOT NULL, name text NOT NULL,
+		  created_at text DEFAULT (datetime('now')) NOT NULL, updated_at text DEFAULT (datetime('now')) NOT NULL);
+		CREATE TABLE env_vars (
+		  id integer PRIMARY KEY AUTOINCREMENT NOT NULL, config_set_id integer NOT NULL, key text NOT NULL,
+		  value text DEFAULT '' NOT NULL, include_in_ai integer DEFAULT true NOT NULL,
+		  options text DEFAULT '[]' NOT NULL, selected text DEFAULT '' NOT NULL,
+		  created_at text DEFAULT (datetime('now')) NOT NULL, updated_at text DEFAULT (datetime('now')) NOT NULL);
+		INSERT INTO config_sets (app_id, name) VALUES (1, 'Default');
+		INSERT INTO env_vars (config_set_id, key, value) VALUES (1, 'PORT', '3000');
+		INSERT INTO env_vars (config_set_id, key, value, include_in_ai) VALUES (1, 'SECRET', 'x', 0);`); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := applySchema(sqlDB); err != nil {
+			t.Fatalf("apply #%d: %v", i+1, err)
+		}
+	}
+	var port string
+	var shared *int64
+	if err := sqlDB.QueryRow(`SELECT value, shared_var_id FROM env_vars WHERE key = 'PORT'`).Scan(&port, &shared); err != nil {
+		t.Fatal(err)
+	}
+	if port != "3000" || shared != nil {
+		t.Fatalf("existing variable not preserved as a plain row: %q %v", port, shared)
+	}
+	// include_in_ai (true = visible) became private (true = hidden): inverted.
+	var portPrivate, secretPrivate int
+	if err := sqlDB.QueryRow(`SELECT private FROM env_vars WHERE key = 'PORT'`).Scan(&portPrivate); err != nil {
+		t.Fatal(err)
+	}
+	if err := sqlDB.QueryRow(`SELECT private FROM env_vars WHERE key = 'SECRET'`).Scan(&secretPrivate); err != nil {
+		t.Fatal(err)
+	}
+	if portPrivate != 0 || secretPrivate != 1 {
+		t.Fatalf("include_in_ai not inverted into private: PORT=%d SECRET=%d", portPrivate, secretPrivate)
+	}
+	if has, err := hasColumn(sqlDB, "env_vars", "include_in_ai"); err != nil || has {
+		t.Fatalf("include_in_ai column should be gone: %v %v", has, err)
+	}
+	var linked *int64
+	if err := sqlDB.QueryRow(`SELECT shared_set_id FROM config_sets WHERE id = 1`).Scan(&linked); err != nil || linked != nil {
+		t.Fatalf("existing config set should start unlinked: %v %v", linked, err)
+	}
+	for _, table := range []string{"workspace_config_sets", "workspace_env_vars"} {
+		if cols, err := tableColumns(sqlDB, table); err != nil || len(cols) == 0 {
+			t.Fatalf("%s missing after upgrade: %v", table, err)
+		}
+	}
+}

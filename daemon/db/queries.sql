@@ -107,19 +107,19 @@ SELECT * FROM env_vars WHERE id = ?;
 SELECT * FROM env_vars WHERE config_set_id = ? AND key = ?;
 
 -- name: CreateEnvVar :one
-INSERT INTO env_vars (config_set_id, key, value, include_in_ai, options, selected) VALUES (?, ?, ?, ?, ?, ?) RETURNING *;
+INSERT INTO env_vars (config_set_id, key, value, private, options, selected) VALUES (?, ?, ?, ?, ?, ?) RETURNING *;
 
 -- name: UpdateEnvVar :one
 UPDATE env_vars
-SET key = ?, value = ?, include_in_ai = ?, options = ?, selected = ?, updated_at = datetime('now')
+SET key = ?, value = ?, private = ?, options = ?, selected = ?, updated_at = datetime('now')
 WHERE id = ?
 RETURNING *;
 
 -- name: DeleteEnvVar :execrows
 DELETE FROM env_vars WHERE id = ?;
 
--- name: DeleteEnvVarsByConfigSet :exec
-DELETE FROM env_vars WHERE config_set_id = ?;
+-- name: DeleteOwnEnvVarsByConfigSet :exec
+DELETE FROM env_vars WHERE config_set_id = ? AND shared_var_id IS NULL;
 
 -- templates (db/templates.ts)
 -- name: ListTemplatesByConfigSet :many
@@ -132,11 +132,11 @@ SELECT * FROM templates WHERE id = ?;
 SELECT * FROM templates WHERE config_set_id = ? AND file_path = ?;
 
 -- name: CreateTemplate :one
-INSERT INTO templates (config_set_id, file_path, content, include_in_ai) VALUES (?, ?, ?, ?) RETURNING *;
+INSERT INTO templates (config_set_id, file_path, content, private) VALUES (?, ?, ?, ?) RETURNING *;
 
 -- name: UpdateTemplate :one
 UPDATE templates
-SET file_path = ?, content = ?, include_in_ai = ?, updated_at = datetime('now')
+SET file_path = ?, content = ?, private = ?, updated_at = datetime('now')
 WHERE id = ?
 RETURNING *;
 
@@ -252,3 +252,73 @@ DELETE FROM worktree_links WHERE app_id = ?;
 
 -- name: CreateWorktreeLink :exec
 INSERT INTO worktree_links (app_id, path, sort_order) VALUES (?, ?, ?);
+
+-- workspace shared config
+-- name: ListWorkspaceConfigSets :many
+SELECT * FROM workspace_config_sets WHERE workspace_id = ? ORDER BY name COLLATE NOCASE ASC;
+
+-- name: GetWorkspaceConfigSet :one
+SELECT * FROM workspace_config_sets WHERE id = ?;
+
+-- name: CreateWorkspaceConfigSet :one
+INSERT INTO workspace_config_sets (workspace_id, name) VALUES (?, ?) RETURNING *;
+
+-- name: UpdateWorkspaceConfigSet :one
+UPDATE workspace_config_sets SET name = ?, updated_at = datetime('now') WHERE id = ? RETURNING *;
+
+-- name: DeleteWorkspaceConfigSet :execrows
+DELETE FROM workspace_config_sets WHERE id = ?;
+
+-- name: ListWorkspaceEnvVars :many
+SELECT * FROM workspace_env_vars WHERE workspace_config_set_id = ? ORDER BY key COLLATE NOCASE ASC;
+
+-- name: GetWorkspaceEnvVar :one
+SELECT * FROM workspace_env_vars WHERE id = ?;
+
+-- name: CreateWorkspaceEnvVar :one
+INSERT INTO workspace_env_vars (workspace_config_set_id, key, value, private, options, selected) VALUES (?, ?, ?, ?, ?, ?) RETURNING *;
+
+-- name: UpdateWorkspaceEnvVar :one
+UPDATE workspace_env_vars
+SET key = ?, value = ?, private = ?, options = ?, selected = ?, updated_at = datetime('now')
+WHERE id = ?
+RETURNING *;
+
+-- name: DeleteWorkspaceEnvVar :execrows
+DELETE FROM workspace_env_vars WHERE id = ?;
+
+-- name: SetConfigSetSharedSet :exec
+UPDATE config_sets SET shared_set_id = ?, updated_at = datetime('now') WHERE id = ?;
+
+-- name: CreateSharedEnvVar :one
+INSERT INTO env_vars (config_set_id, key, value, private, options, selected, shared_var_id) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *;
+
+-- name: PropagateSharedEnvVar :exec
+UPDATE env_vars
+SET key = ?, value = ?, private = ?, options = ?, selected = ?, updated_at = datetime('now')
+WHERE shared_var_id = ?;
+
+-- name: DeleteSharedEnvVarsByConfigSet :exec
+DELETE FROM env_vars WHERE config_set_id = ? AND shared_var_id IS NOT NULL;
+
+-- name: DetachSharedEnvVarsByConfigSet :exec
+UPDATE env_vars SET shared_var_id = NULL WHERE config_set_id = ? AND shared_var_id IS NOT NULL;
+
+-- name: ListSharedUsageBySet :many
+SELECT ev.shared_var_id AS shared_var_id, cs.id AS config_set_id, cs.name AS config_set_name, a.id AS app_id, a.name AS app_name
+FROM env_vars ev
+JOIN config_sets cs ON cs.id = ev.config_set_id
+JOIN apps a ON a.id = cs.app_id
+WHERE ev.shared_var_id IN (SELECT id FROM workspace_env_vars WHERE workspace_config_set_id = ?)
+ORDER BY a.name COLLATE NOCASE ASC, cs.name COLLATE NOCASE ASC;
+
+-- name: ListAppsLinkedToSharedSet :many
+SELECT DISTINCT app_id FROM config_sets WHERE shared_set_id = ?;
+
+-- name: ListSharedRenameConflicts :many
+SELECT a.name AS app_name, cs.name AS config_set_name
+FROM env_vars lv
+JOIN config_sets cs ON cs.id = lv.config_set_id
+JOIN apps a ON a.id = cs.app_id
+WHERE lv.shared_var_id = ?
+  AND EXISTS (SELECT 1 FROM env_vars o WHERE o.config_set_id = lv.config_set_id AND o.key = ? AND o.id <> lv.id);

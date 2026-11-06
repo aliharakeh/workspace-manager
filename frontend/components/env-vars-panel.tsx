@@ -34,12 +34,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
+import { LinkSharedDialog } from "@/components/link-shared-dialog"
 import { api } from "@/lib/api"
-import type { EnvVar } from "@/lib/types"
+import type { ConfigSet, EnvVar } from "@/lib/types"
 import {
   FileUpIcon,
   KeyRoundIcon,
+  Link2Icon,
+  Link2OffIcon,
   ListChecksIcon,
+  LockIcon,
   PlusIcon,
   SaveIcon,
   SearchIcon,
@@ -47,10 +52,14 @@ import {
   XIcon,
 } from "lucide-react"
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
+import { SecretInput } from "@/components/secret-input"
 import { toast } from "sonner"
 
 type EnvVarsPanelProps = {
   appId: number
+  workspaceId: number
+  /** The config set whose variables are shown (null: none is active). */
+  activeConfigSetId: number | null
   /**
    * Bumped when a write to this app's data is reported (including this
    * window's own). The panel refreshes in place instead of remounting, so the
@@ -75,7 +84,7 @@ function EnvVarRow({
   const [key, setKey] = useState(item.key)
   const [value, setValue] = useState(item.value)
   const [saving, setSaving] = useState(false)
-  const [togglingAi, setTogglingAi] = useState(false)
+  const [togglingPrivate, setTogglingPrivate] = useState(false)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [confirmPlain, setConfirmPlain] = useState(false)
   const [switching, setSwitching] = useState(false)
@@ -112,18 +121,18 @@ function EnvVarRow({
     }
   }
 
-  async function handleAiToggle(next: boolean) {
-    if (next === item.include_in_ai) return
-    setTogglingAi(true)
+  async function handlePrivateToggle(next: boolean) {
+    if (next === item.private) return
+    setTogglingPrivate(true)
     try {
       const updated = await api.envVars.update(item.id, {
-        include_in_ai: next,
+        private: next,
       })
       onSaved(updated)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update")
     } finally {
-      setTogglingAi(false)
+      setTogglingPrivate(false)
     }
   }
 
@@ -152,14 +161,14 @@ function EnvVarRow({
     }
   }
 
-  const busy = saving || deleting || togglingAi || switching
+  const busy = saving || deleting || togglingPrivate || switching
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center">
       <Input
         className="font-mono sm:max-w-48"
         value={key}
-        disabled={saving || deleting || togglingAi}
+        disabled={saving || deleting || togglingPrivate}
         onChange={(e) => setKey(e.target.value)}
         aria-label="Variable key"
       />
@@ -189,7 +198,8 @@ function EnvVarRow({
               </SelectGroup>
             </SelectContent>
           </Select>
-          <Input
+          <SecretInput
+            secret={item.private}
             className="flex-1 font-mono"
             value={item.value}
             readOnly
@@ -199,7 +209,8 @@ function EnvVarRow({
           />
         </>
       ) : (
-        <Input
+        <SecretInput
+          secret={item.private}
           className="flex-1 font-mono"
           value={value}
           disabled={busy}
@@ -210,15 +221,15 @@ function EnvVarRow({
       <div className="flex items-center gap-1">
         <label className="flex items-center gap-1.5 pr-1 text-xs text-muted-foreground">
           <Checkbox
-            checked={item.include_in_ai}
-            disabled={togglingAi || saving || deleting}
+            checked={item.private}
+            disabled={togglingPrivate || saving || deleting}
             onCheckedChange={(checked) =>
-              void handleAiToggle(checked === true)
+              void handlePrivateToggle(checked === true)
             }
-            aria-label="Include in AI"
-            title="Include this variable in AI chat"
+            aria-label="Private"
+            title="Private: masked here, and never shown to AI or agents"
           />
-          AI
+          Private
         </label>
         <label className="flex items-center gap-1.5 pr-1 text-xs text-muted-foreground">
           <Checkbox
@@ -246,7 +257,7 @@ function EnvVarRow({
         <Button
           variant="ghost"
           size="icon"
-          disabled={!dirty || saving || deleting || togglingAi}
+          disabled={!dirty || saving || deleting || togglingPrivate}
           onClick={() => void handleSave()}
           aria-label={saving ? "Saving" : "Save"}
           title={saving ? "Saving…" : "Save"}
@@ -256,7 +267,7 @@ function EnvVarRow({
         <Button
           variant="ghost"
           size="icon"
-          disabled={deleting || saving || togglingAi}
+          disabled={deleting || saving || togglingPrivate}
           onClick={onRequestDelete}
           aria-label="Delete"
           title="Delete"
@@ -301,8 +312,56 @@ function EnvVarRow({
   )
 }
 
-export function EnvVarsPanel({ appId, dataEpoch }: EnvVarsPanelProps) {
+/** A variable taken from the workspace's shared config: shown, never edited here. */
+function SharedEnvVarRow({ item }: { item: EnvVar }) {
+  const isChoice = item.options.length > 0
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3 sm:flex-row sm:items-center">
+      <div className="flex items-center gap-2 sm:w-48">
+        <LockIcon
+          className="size-3.5 shrink-0 text-muted-foreground"
+          aria-label="Shared from the workspace"
+        />
+        <Input
+          className="font-mono"
+          value={item.key}
+          readOnly
+          aria-label="Variable key"
+        />
+      </div>
+      <SecretInput
+        secret={item.private}
+        className="flex-1 font-mono"
+        value={item.value}
+        readOnly
+        aria-label="Variable value"
+        title={
+          isChoice ? `Option “${item.selected}” of the shared variable` : undefined
+        }
+      />
+      <div className="flex items-center gap-2">
+        {isChoice ? <Badge variant="outline">{item.selected}</Badge> : null}
+        {item.private ? (
+          <Badge variant="outline" title="Never shown to the AI or to agents">
+            private
+          </Badge>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+export function EnvVarsPanel({
+  appId,
+  workspaceId,
+  activeConfigSetId,
+  dataEpoch,
+}: EnvVarsPanelProps) {
   const [vars, setVars] = useState<EnvVar[]>([])
+  const [configSet, setConfigSet] = useState<ConfigSet | null>(null)
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [unlinkOpen, setUnlinkOpen] = useState(false)
+  const [unlinking, setUnlinking] = useState(false)
   const [key, setKey] = useState("")
   const [value, setValue] = useState("")
   const [query, setQuery] = useState("")
@@ -310,24 +369,41 @@ export function EnvVarsPanel({ appId, dataEpoch }: EnvVarsPanelProps) {
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [importing, setImporting] = useState(false)
-  const [includeInAi, setIncludeInAi] = useState(true)
+  const [isPrivate, setIsPrivate] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<EnvVar | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  const filtered = useMemo(() => {
+  // Rows mirroring a workspace shared variable are read-only and shown apart
+  // from the app's own variables.
+  const sharedVars = useMemo(
+    () => vars.filter((v) => v.shared_var_id != null),
+    [vars]
+  )
+  const ownVars = useMemo(
+    () => vars.filter((v) => v.shared_var_id == null),
+    [vars]
+  )
+  const linked = configSet?.shared_set_id != null
+
+  const matchesQuery = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase()
-    if (!q) return vars
-    return vars.filter(
-      (v) =>
-        v.key.toLowerCase().includes(q) ||
-        v.value.toLowerCase().includes(q) ||
-        v.options.some(
-          (o) =>
-            o.label.toLowerCase().includes(q) ||
-            o.value.toLowerCase().includes(q)
-        )
-    )
-  }, [vars, deferredQuery])
+    return (v: EnvVar) =>
+      !q ||
+      v.key.toLowerCase().includes(q) ||
+      v.value.toLowerCase().includes(q) ||
+      v.options.some(
+        (o) =>
+          o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q)
+      )
+  }, [deferredQuery])
+  const filtered = useMemo(
+    () => ownVars.filter(matchesQuery),
+    [ownVars, matchesQuery]
+  )
+  const filteredShared = useMemo(
+    () => sharedVars.filter(matchesQuery),
+    [sharedVars, matchesQuery]
+  )
 
   // A silent load swaps the rows without the loading state, which would
   // replace the list and reset the scroll position.
@@ -336,8 +412,17 @@ export function EnvVarsPanel({ appId, dataEpoch }: EnvVarsPanelProps) {
     const seq = ++loadSeq.current
     if (!silent) setLoading(true)
     try {
-      const list = await api.envVars.list(appId)
-      if (seq === loadSeq.current) setVars(list)
+      const [list, sets] = await Promise.all([
+        api.envVars.list(appId),
+        api.configSets.list(appId),
+      ])
+      if (seq === loadSeq.current) {
+        setVars(list)
+        setConfigSet(
+          (sets as unknown as ConfigSet[]).find((s) => s.id === activeConfigSetId) ??
+            null
+        )
+      }
     } catch (err) {
       if (!silent)
         toast.error(
@@ -372,14 +457,14 @@ export function EnvVarsPanel({ appId, dataEpoch }: EnvVarsPanelProps) {
       const created = await api.envVars.create(appId, {
         key: key.trim(),
         value,
-        include_in_ai: includeInAi,
+        private: isPrivate,
       })
       setVars((prev) =>
         [...prev, created].sort((a, b) => a.key.localeCompare(b.key))
       )
       setKey("")
       setValue("")
-      setIncludeInAi(true)
+      setIsPrivate(false)
       toast.success("Env var added")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add")
@@ -400,6 +485,23 @@ export function EnvVarsPanel({ appId, dataEpoch }: EnvVarsPanelProps) {
       toast.error(err instanceof Error ? err.message : "Failed to delete")
     } finally {
       setDeleting(false)
+    }
+  }
+
+  async function handleUnlink(keep: boolean) {
+    if (!configSet) return
+    setUnlinking(true)
+    try {
+      await api.sharedSets.unlink(configSet.id, keep)
+      setUnlinkOpen(false)
+      await load(true)
+      toast.success(
+        keep ? "Unlinked; the variables are now this app's own" : "Unlinked"
+      )
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to unlink")
+    } finally {
+      setUnlinking(false)
     }
   }
 
@@ -448,8 +550,9 @@ export function EnvVarsPanel({ appId, dataEpoch }: EnvVarsPanelProps) {
           </Field>
           <Field className="flex-[2]">
             <FieldLabel htmlFor="env-value">Value</FieldLabel>
-            <Input
+            <SecretInput
               id="env-value"
+              secret={isPrivate}
               value={value}
               onChange={(e) => setValue(e.target.value)}
               placeholder="https://…"
@@ -460,14 +563,14 @@ export function EnvVarsPanel({ appId, dataEpoch }: EnvVarsPanelProps) {
             />
           </Field>
           <Field className="w-auto">
-            <FieldLabel htmlFor="env-include-ai">AI</FieldLabel>
+            <FieldLabel htmlFor="env-private">Private</FieldLabel>
             <div className="flex h-8 items-center">
               <Checkbox
-                id="env-include-ai"
-                checked={includeInAi}
-                onCheckedChange={(checked) => setIncludeInAi(checked === true)}
-                aria-label="Include in AI"
-                title="Include this variable in AI chat"
+                id="env-private"
+                checked={isPrivate}
+                onCheckedChange={(checked) => setIsPrivate(checked === true)}
+                aria-label="Private"
+                title="Private: masked here, and never shown to AI or agents"
               />
             </div>
           </Field>
@@ -485,6 +588,16 @@ export function EnvVarsPanel({ appId, dataEpoch }: EnvVarsPanelProps) {
               <FileUpIcon data-icon="inline-start" />
               {importing ? "Importing…" : "Import file"}
             </Button>
+            {!linked && configSet ? (
+              <Button
+                variant="outline"
+                onClick={() => setLinkOpen(true)}
+                title="Take variables from the workspace's shared config"
+              >
+                <Link2Icon data-icon="inline-start" />
+                Link shared variables
+              </Button>
+            ) : null}
           </div>
         </div>
       </FieldGroup>
@@ -503,7 +616,7 @@ export function EnvVarsPanel({ appId, dataEpoch }: EnvVarsPanelProps) {
           </EmptyHeader>
         </Empty>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <InputGroup className="max-w-sm flex-1">
               <InputGroupAddon align="inline-start">
@@ -528,34 +641,141 @@ export function EnvVarsPanel({ appId, dataEpoch }: EnvVarsPanelProps) {
               ) : null}
             </InputGroup>
             <span className="text-xs text-muted-foreground">
-              {filtered.length} of {vars.length}
+              {filtered.length + filteredShared.length} of {vars.length}
             </span>
           </div>
-          {filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No env vars match “{query.trim()}”.
-            </p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {filtered.map((item) => (
-                <EnvVarRow
-                  key={item.id}
-                  item={item}
-                  deleting={deleting && pendingDelete?.id === item.id}
-                  onSaved={(updated) =>
-                    setVars((prev) =>
-                      prev
-                        .map((v) => (v.id === updated.id ? updated : v))
-                        .sort((a, b) => a.key.localeCompare(b.key))
-                    )
-                  }
-                  onRequestDelete={() => setPendingDelete(item)}
-                />
-              ))}
-            </div>
-          )}
+
+          {linked && configSet ? (
+            <section className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-medium">
+                  Shared from workspace
+                  <span className="text-muted-foreground"> · </span>
+                  <span className="font-mono">{configSet.shared_set_name}</span>
+                </h3>
+                <div className="ml-auto flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLinkOpen(true)}
+                    title="Choose which variables to take, or link another set"
+                  >
+                    <Link2Icon data-icon="inline-start" />
+                    Edit selection
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setUnlinkOpen(true)}
+                  >
+                    <Link2OffIcon data-icon="inline-start" />
+                    Unlink
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Read-only here. Change them in the workspace&apos;s shared
+                config and every config set using them follows.
+              </p>
+              {filteredShared.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {sharedVars.length === 0
+                    ? "No shared variables taken yet."
+                    : `No shared variables match “${query.trim()}”.`}
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {filteredShared.map((item) => (
+                    <SharedEnvVarRow key={item.id} item={item} />
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : null}
+
+          <section className="flex flex-col gap-2">
+            {linked ? (
+              <h3 className="text-sm font-medium">App variables</h3>
+            ) : null}
+            {filtered.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {ownVars.length === 0
+                  ? "No app variables."
+                  : `No env vars match “${query.trim()}”.`}
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {filtered.map((item) => (
+                  <EnvVarRow
+                    key={item.id}
+                    item={item}
+                    deleting={deleting && pendingDelete?.id === item.id}
+                    onSaved={(updated) =>
+                      setVars((prev) =>
+                        prev
+                          .map((v) => (v.id === updated.id ? updated : v))
+                          .sort((a, b) => a.key.localeCompare(b.key))
+                      )
+                    }
+                    onRequestDelete={() => setPendingDelete(item)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       )}
+
+      {configSet ? (
+        <LinkSharedDialog
+          open={linkOpen}
+          onOpenChange={setLinkOpen}
+          workspaceId={workspaceId}
+          configSetId={configSet.id}
+          configSetName={configSet.name}
+          currentSetId={configSet.shared_set_id}
+          linkedVarIds={sharedVars.map((v) => v.shared_var_id as number)}
+          ownKeys={ownVars.map((v) => v.key)}
+          onLinked={() => void load(true)}
+        />
+      ) : null}
+
+      <AlertDialog
+        open={unlinkOpen}
+        onOpenChange={(next) => {
+          if (!unlinking) setUnlinkOpen(next)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unlink shared variables?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {sharedVars.length} variable{sharedVars.length === 1 ? "" : "s"}{" "}
+              from “{configSet?.shared_set_name}” stop following the workspace.
+              Keep them as this config set&apos;s own variables, or delete them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={unlinking}>Cancel</AlertDialogCancel>
+            <Button
+              variant="outline"
+              disabled={unlinking}
+              onClick={() => void handleUnlink(false)}
+            >
+              Delete them
+            </Button>
+            <AlertDialogAction
+              disabled={unlinking}
+              onClick={(e) => {
+                e.preventDefault()
+                void handleUnlink(true)
+              }}
+            >
+              Keep as app variables
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={!!pendingDelete}

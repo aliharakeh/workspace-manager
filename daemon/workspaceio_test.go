@@ -10,7 +10,7 @@ import (
 	"workspace-manager/shared/client"
 )
 
-// TestWorkspaceExportKeepsSecretsFromAgents checks that include_in_ai=false
+// TestWorkspaceExportKeepsSecretsFromAgents checks that private=true
 // values reach only the GUI, and only when it asks for "include".
 func TestWorkspaceExportKeepsSecretsFromAgents(t *testing.T) {
 	agent := startServer(t)
@@ -21,11 +21,11 @@ func TestWorkspaceExportKeepsSecretsFromAgents(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = gui.Close() })
 
-	hidden := false
+	hidden := true
 	val := "s3cret"
 	if err := gui.Call(api.MethodEnvVarsCreate, map[string]any{
 		"appID": app.ID,
-		"body":  types.EnvVarCreateInput{Key: "SECRET", Value: &val, IncludeInAI: &hidden},
+		"body":  types.EnvVarCreateInput{Key: "SECRET", Value: &val, Private: &hidden},
 	}, nil); err != nil {
 		t.Fatalf("create hidden var: %v", err)
 	}

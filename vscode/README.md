@@ -15,6 +15,7 @@ daemon does not track show an **Add** action (pick a workspace, or create one).
   from another set, choosing what to copy), rename, delete, copy parts into the active set.
 - **Environment variables** of the active set: add, edit, delete, import a `.env`/YAML
   file. They are injected into integrated terminals of the folder, and used by runs.
+  A variable the set takes from the workspace's shared config (linked in the desktop app) shows a lock and is read-only here; `agent.setEnv`/`agent.removeEnv` refuse it. It follows the workspace's changes on its own.
 - **Snapshot templates**: save any file as a template (Explorer or editor tab
   context menu, or the active editor), edit it in a normal editor tab (`wm-template:`;
   `Ctrl+S` saves to the daemon), use `{{KEY}}` placeholders, and preview it rendered

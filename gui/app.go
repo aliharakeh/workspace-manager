@@ -12,7 +12,7 @@ import (
 )
 
 // App is the Wails-bound API surface. The data, the runner and the blueprints
-// belong to the wmd daemon, reached through link; git, the AI, the file dialogs
+// belong to the wmd daemon, reached through link; git, the file dialogs
 // and the terminal events' path to the frontend are handled here.
 type App struct {
 	ctx  context.Context

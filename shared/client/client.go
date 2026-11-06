@@ -16,7 +16,7 @@ import (
 // Options configure a connection.
 type Options struct {
 	// Kind is "agent" or "gui". It decides what the server allows and whether
-	// AI-excluded values are shown. Empty means "agent".
+	// private values are shown. Empty means "agent".
 	Kind string
 	// Version is the client's build version, sent in hello.
 	Version string

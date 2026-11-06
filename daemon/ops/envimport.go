@@ -63,10 +63,10 @@ func (o *Ops) EnvVarsImport(appID, setID int64, path string) (types.ImportEnvRes
 	if err == nil {
 		existing, findErr := o.DB.GetTemplateByPath(o.Ctx(), db.GetTemplateByPathParams{ConfigSetID: set.ID, FilePath: rel})
 		if findErr == nil {
-			row, _ := o.DB.UpdateTemplate(o.Ctx(), db.UpdateTemplateParams{FilePath: existing.FilePath, Content: tplContent, IncludeInAi: existing.IncludeInAi, ID: existing.ID})
+			row, _ := o.DB.UpdateTemplate(o.Ctx(), db.UpdateTemplateParams{FilePath: existing.FilePath, Content: tplContent, Private: existing.Private, ID: existing.ID})
 			result.Template = &types.ImportTemplateResult{ID: row.ID, FilePath: rel, Created: false}
 		} else {
-			row, createErr := o.DB.CreateTemplate(o.Ctx(), db.CreateTemplateParams{ConfigSetID: set.ID, FilePath: rel, Content: tplContent, IncludeInAi: db.BoolInt(true)})
+			row, createErr := o.DB.CreateTemplate(o.Ctx(), db.CreateTemplateParams{ConfigSetID: set.ID, FilePath: rel, Content: tplContent, Private: db.BoolInt(false)})
 			if createErr == nil {
 				result.Template = &types.ImportTemplateResult{ID: row.ID, FilePath: rel, Created: true}
 			}

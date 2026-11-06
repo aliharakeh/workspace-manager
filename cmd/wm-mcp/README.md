@@ -6,7 +6,7 @@ blueprints. Git, worktrees, settings and the AI are GUI-only and not exposed to 
 
 It talks to the `wmd` daemon through `shared/client` and starts the daemon on
 demand, so there is nothing to run by hand. It identifies as an `agent` client:
-AI methods stay unavailable and values with `include_in_ai=false` stay hidden,
+AI methods stay unavailable and values with `private` stay private,
 exactly as for any external agent.
 
 `wm_env`, `wm_template` and `wm_config` (`get_commands`/`save_commands`) take an
@@ -17,15 +17,27 @@ A `wm_env` variable can be a choice: `set` it with `options` (`[{label, value}, 
 and optionally `selected` (a label); the first option is selected by default, and
 `value` always equals the selected option's. Passing `value` alone on a choice edits
 the selected option, `selected` alone switches it, and `options: []` makes it a plain
-value again. A hidden choice returns its labels but never its values, and its options
+value again. A private choice returns its labels but never its values, and its options
 and selection cannot be changed through MCP.
 
-`wm_env` can replace or delete a hidden variable, and `wm_template` can edit or
-delete a hidden template, without reading the previous value.
-Omit `hidden` when updating to preserve the existing flag, or pass `hidden: true`.
+`wm_env` can replace or delete a private variable, and `wm_template` can edit or
+delete a private template, without reading the previous value.
+Omit `private` when updating to preserve the existing flag, or pass `private: true`.
 The stored value stays blank in lists, config details and write responses.
-Hidden items cannot be renamed or made visible through MCP; use
-the GUI for those changes. New variables default to visible unless `hidden: true`.
+Private items cannot be renamed or made public through MCP; use
+the GUI for those changes. New variables default to public unless `private: true`.
+
+## Shared config
+
+A workspace can own shared config sets of env vars. `wm_shared` edits them
+(`set`, `delete`, `create_set`, ...) and links an app config set to one:
+`link` takes `keys` (omit for all) from any shared set, whatever the names, and
+`replace: true` lets a shared variable overwrite an own one of the same name;
+`unlink` stops (`keep: true` keeps the variables as the app's own). A linked
+variable is read-only through `wm_env`, which refuses to change or delete it, and
+a `wm_shared` edit reaches every config set using it at once. Private shared values
+follow the same rules as private app variables: never returned, replaceable, not
+renamable or made public.
 
 ## Build
 
@@ -63,6 +75,7 @@ Environment is inherited, so the server uses your normal data folder. Set
 | `wm_app` | list, get (app + config + status), create, update, delete, reorder |
 | `wm_config` | Config sets: list, detail, create, rename, activate, copy, delete; command lists: get/save, package scripts |
 | `wm_env` | Env vars: list, set (upsert, with `options` and `selected` for a choice variable), delete, import |
+| `wm_shared` | A workspace's shared config: list, get, create_set, rename_set, delete_set, set/delete a variable, and link/unlink an app config set to a shared set |
 | `wm_template` | File templates: list, add, edit, delete |
 | `wm_run` | run, build, setup, stop, reload, status, logs, startAll, stopAll (a whole workspace) |
 | `wm_blueprint` | Blueprints: list, show, create, update, delete, create_app (fails fast), resolve, cancel |

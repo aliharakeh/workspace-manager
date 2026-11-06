@@ -19,6 +19,11 @@ type EnvVarOptionsDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSaved: (item: EnvVar) => void
+  /** Saves the options; defaults to editing an app variable. A workspace shared variable passes its own. */
+  saveOptions?: (
+    id: number,
+    body: { options: EnvVarOption[]; selected: string }
+  ) => Promise<EnvVar>
 }
 
 type Draft = EnvVarOption & { key: number }
@@ -45,6 +50,7 @@ export function EnvVarOptionsDialog({
   open,
   onOpenChange,
   onSaved,
+  saveOptions = (id, body) => api.envVars.update(id, body),
 }: EnvVarOptionsDialogProps) {
   const [rows, setRows] = useState<Draft[]>([])
   const [selected, setSelected] = useState(0)
@@ -92,7 +98,7 @@ export function EnvVarOptionsDialog({
     }
     setSaving(true)
     try {
-      const updated = await api.envVars.update(item.id, {
+      const updated = await saveOptions(item.id, {
         options,
         selected: options[Math.min(selected, options.length - 1)].label,
       })

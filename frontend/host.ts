@@ -1,17 +1,17 @@
-import type { AppAIChatResult, AppAIPatch, AppAIStreamEvent } from '@/lib/app-ai'
 import type {
-    AIConfigInfo,
-    AIProviderConfig,
     ConfigSetDetail,
     RunConfig,
     App,
-    BlueprintAIInput,
     BlueprintInput,
     BlueprintLogEvent,
     BlueprintRunInput,
     CommandKind,
     CopyParts,
     DataChangedEvent,
+    SharedEnvVar,
+    SharedLinkInput,
+    SharedSet,
+    SharedSetDetail,
     GitInfo,
     GitPullResult,
     GitWorktreeAddInput,
@@ -148,8 +148,6 @@ export const api = {
         update: (id: number, body: BlueprintInput) =>
             call(() => Go.BlueprintsUpdate(id, types.BlueprintInput.createFrom(body))),
         delete: (id: number) => call(() => Go.BlueprintsDelete(id)),
-        aiPropose: (body: BlueprintAIInput) =>
-            call(() => Go.BlueprintsAIPropose(types.BlueprintAIInput.createFrom(body))),
         createApp: (body: BlueprintRunInput) => call(() => Go.BlueprintsCreateApp(body)),
         resolve: (runId: string, action: 'skip' | 'abort') =>
             call(() => Go.BlueprintsResolve(runId, action)),
@@ -181,11 +179,53 @@ export const api = {
             call(() => Go.ConfigSetsCopyFrom(id, sourceId, parts ?? {})),
     },
 
+    /** Workspace shared config: sets a workspace owns that app config sets link to. */
+    sharedSets: {
+        list: (workspaceId: number) =>
+            call(() => Go.SharedSetsList(workspaceId) as unknown as Promise<SharedSet[]>),
+        get: (id: number) =>
+            call(() => Go.SharedSetsGet(id) as unknown as Promise<SharedSetDetail>),
+        create: (workspaceId: number, name: string) =>
+            call(() => Go.SharedSetsCreate(workspaceId, name) as unknown as Promise<SharedSet>),
+        rename: (id: number, name: string) =>
+            call(() => Go.SharedSetsRename(id, name) as unknown as Promise<SharedSet>),
+        delete: (id: number) => call(() => Go.SharedSetsDelete(id)),
+        createVar: (
+            setId: number,
+            body: { key: string; value?: string; private?: boolean; options?: types.EnvVarOption[]; selected?: string },
+        ) =>
+            call(
+                () =>
+                    Go.SharedVarsCreate(
+                        setId,
+                        types.EnvVarCreateInput.createFrom(body),
+                    ) as unknown as Promise<SharedEnvVar>,
+            ),
+        updateVar: (
+            id: number,
+            body: { key?: string; value?: string; private?: boolean; options?: types.EnvVarOption[]; selected?: string },
+        ) =>
+            call(
+                () =>
+                    Go.SharedVarsUpdate(
+                        id,
+                        types.EnvVarUpdateInput.createFrom(body),
+                    ) as unknown as Promise<SharedEnvVar>,
+            ),
+        deleteVar: (id: number) => call(() => Go.SharedVarsDelete(id)),
+        /** Links an app config set to a shared set, taking the chosen variables (also edits the selection). */
+        link: (configSetId: number, body: SharedLinkInput) =>
+            call(() => Go.ConfigSetsLinkShared(configSetId, types.SharedLinkInput.createFrom(body))),
+        /** Stops sharing; with `keep` the shared variables stay as the app's own. */
+        unlink: (configSetId: number, keep: boolean) =>
+            call(() => Go.ConfigSetsUnlinkShared(configSetId, keep)),
+    },
+
     envVars: {
         list: (appId: number) => call(() => Go.EnvVarsList(appId)),
-        create: (appId: number, body: { key: string; value?: string; include_in_ai?: boolean; options?: types.EnvVarOption[]; selected?: string }) =>
+        create: (appId: number, body: { key: string; value?: string; private?: boolean; options?: types.EnvVarOption[]; selected?: string }) =>
             call(() => Go.EnvVarsCreate(appId, types.EnvVarCreateInput.createFrom(body))),
-        update: (id: number, body: { key?: string; value?: string; include_in_ai?: boolean; options?: types.EnvVarOption[]; selected?: string }) =>
+        update: (id: number, body: { key?: string; value?: string; private?: boolean; options?: types.EnvVarOption[]; selected?: string }) =>
             call(() => Go.EnvVarsUpdate(id, types.EnvVarUpdateInput.createFrom(body))),
         delete: (id: number) => call(() => Go.EnvVarsDelete(id)),
         importEnv: (appId: number) => call(() => Go.EnvVarsImport(appId)),
@@ -195,11 +235,11 @@ export const api = {
         list: (appId: number) => call(() => Go.TemplatesList(appId)),
         create: (
             appId: number,
-            body: { file_path: string; content?: string; include_in_ai?: boolean },
+            body: { file_path: string; content?: string; private?: boolean },
         ) => call(() => Go.TemplatesCreate(appId, types.TemplateCreateInput.createFrom(body))),
         update: (
             id: number,
-            body: { file_path?: string; content?: string; include_in_ai?: boolean },
+            body: { file_path?: string; content?: string; private?: boolean },
         ) => call(() => Go.TemplatesUpdate(id, types.TemplateUpdateInput.createFrom(body))),
         delete: (id: number) => call(() => Go.TemplatesDelete(id)),
     },
@@ -317,50 +357,6 @@ export const api = {
     settings: {
         get: () => call(() => Go.SettingsGet() as Promise<Record<string, string>>),
         set: (key: string, value: string) => call(() => Go.SettingsSet(key, value)),
-    },
-
-    ai: {
-        getConfig: () => call(() => Go.AIConfigGet() as Promise<AIConfigInfo>),
-        saveConfig: (body: AIProviderConfig) =>
-            call(
-                () =>
-                    Go.AIConfigSave(
-                        types.AIProviderConfigInput.createFrom(body),
-                    ) as Promise<AIConfigInfo>,
-            ),
-        deleteConfig: (name: string) =>
-            call(() => Go.AIConfigDelete(name) as Promise<AIConfigInfo>),
-        activate: (name: string) =>
-            call(() => Go.AIConfigActivate({ name }) as Promise<AIConfigInfo>),
-        chat: (body: { system?: string; prompt: string }) => call(() => Go.AIChat(body)),
-        appChat: async (
-            body: {
-                appId: number
-                configSetId: number
-                history?: {
-                    role: 'user' | 'assistant'
-                    text: string
-                    tools?: { name: string; input: unknown; output: unknown }[]
-                }[]
-                instruction: string
-            },
-            onEvent?: (ev: AppAIStreamEvent) => void,
-        ): Promise<AppAIChatResult> => {
-            const off = onEvent
-                ? Events.On('appAIEvent', ({ data }: { data: AppAIStreamEvent }) => onEvent(data))
-                : undefined
-            try {
-                return (await call(() =>
-                    Go.AIAppChat(types.AppAIChatInput.createFrom(body)),
-                )) as AppAIChatResult
-            } finally {
-                off?.()
-            }
-        },
-        test: (body: AIProviderConfig) => call(() => Go.AITest(body)),
-        /** Write a staged agent patch in one server call. */
-        applyPatch: (body: { appId: number; configSetId: number; patch: AppAIPatch }) =>
-            call(() => Go.AIApplyPatch(types.AIApplyPatchInput.createFrom(body))),
     },
 
     fs: {

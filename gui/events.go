@@ -11,10 +11,6 @@ func EventsEmitRunner(app *application.App, appID int64, event any) {
 	})
 }
 
-func EventsEmitAppAI(app *application.App, event any) {
-	app.Event.Emit("appAIEvent", event)
-}
-
 func EventsEmitBlueprint(app *application.App, event any) {
 	app.Event.Emit("blueprintEvent", event)
 }

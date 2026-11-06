@@ -138,15 +138,19 @@ export function View(props: { dir: string; ctx: Context }) {
       <section><h3>Environment</h3>
         <For each={snapshot().detail?.env_vars}>{(env) => <div class="wm-row">
           <code>{env.key}</code><span aria-label="Value hidden">••••••</span>
-          <ui.Button size="small" onClick={() => {
-            const id = data()?.detail?.id;
-            edit(`Edit ${env.key}`, [{ key: 'key', label: 'Key', value: env.key }, { key: 'value', label: 'Value', value: env.value }],
-              (v) => perform('updateEnv', [env.key, v.key, v.value], id));
-          }}>Edit</ui.Button>
-          <ui.Button size="small" variant="danger" onClick={() => {
-            const id = data()?.detail?.id;
-            confirm(`Delete ${env.key}?`, () => perform('removeEnv', [[env.key]], id));
-          }}>Delete</ui.Button>
+          <Show when={env.shared_var_id == null} fallback={
+            <span title="Shared from the workspace's config: change it in Workspace Manager" aria-label="Shared from the workspace, read-only">shared · read-only</span>
+          }>
+            <ui.Button size="small" onClick={() => {
+              const id = data()?.detail?.id;
+              edit(`Edit ${env.key}`, [{ key: 'key', label: 'Key', value: env.key }, { key: 'value', label: 'Value', value: env.value }],
+                (v) => perform('updateEnv', [env.key, v.key, v.value], id));
+            }}>Edit</ui.Button>
+            <ui.Button size="small" variant="danger" onClick={() => {
+              const id = data()?.detail?.id;
+              confirm(`Delete ${env.key}?`, () => perform('removeEnv', [[env.key]], id));
+            }}>Delete</ui.Button>
+          </Show>
         </div>}</For>
         <div class="wm-actions">
           <ui.Button size="small" onClick={() => {

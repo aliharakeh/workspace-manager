@@ -8,7 +8,7 @@ import (
 
 // ConfigSetsCompare diffs two config sets of the same app (the rule copyFrom
 // has, so a part can then be copied across). With redact, env vars and
-// templates that either side marks include_in_ai=false are compared here but
+// templates that either side marks private=false are compared here but
 // returned as a status only, never with their values.
 func (o *Ops) ConfigSetsCompare(leftID, rightID int64, redact bool) (types.ConfigSetCompare, error) {
 	left, err := o.DB.GetConfigSetT(o.Ctx(), leftID)
@@ -51,12 +51,13 @@ func CompareDetails(l, r types.ConfigSetDetail, redact bool) types.ConfigSetComp
 	seen := map[string]bool{}
 	for _, lv := range l.EnvVars {
 		seen[lv.Key] = true
-		d := types.ConfigSetEnvDiff{Key: lv.Key, Left: strp(lv.Value)}
-		hidden := !lv.IncludeInAI
+		d := types.ConfigSetEnvDiff{Key: lv.Key, Left: strp(lv.Value), LeftShared: lv.SharedVarID != nil}
+		hidden := lv.Private
 		if rv, ok := rEnv[lv.Key]; ok {
 			d.Right = strp(rv.Value)
-			hidden = hidden || !rv.IncludeInAI
-			if lv.Value == rv.Value && lv.IncludeInAI == rv.IncludeInAI {
+			d.RightShared = rv.SharedVarID != nil
+			hidden = hidden || rv.Private
+			if lv.Value == rv.Value && lv.Private == rv.Private {
 				d.Status = types.DiffSame
 			} else {
 				d.Status = types.DiffDifferent
@@ -73,8 +74,8 @@ func CompareDetails(l, r types.ConfigSetDetail, redact bool) types.ConfigSetComp
 		if seen[rv.Key] {
 			continue
 		}
-		d := types.ConfigSetEnvDiff{Key: rv.Key, Status: types.DiffOnlyRight, Right: strp(rv.Value)}
-		if redact && !rv.IncludeInAI {
+		d := types.ConfigSetEnvDiff{Key: rv.Key, Status: types.DiffOnlyRight, Right: strp(rv.Value), RightShared: rv.SharedVarID != nil}
+		if redact && rv.Private {
 			d.Right, d.Redacted = nil, true
 		}
 		out.Env = append(out.Env, d)
@@ -89,11 +90,11 @@ func CompareDetails(l, r types.ConfigSetDetail, redact bool) types.ConfigSetComp
 	for _, lt := range l.Templates {
 		seen[lt.FilePath] = true
 		d := types.ConfigSetTemplateDiff{FilePath: lt.FilePath, Left: strp(lt.Content)}
-		hidden := !lt.IncludeInAI
+		hidden := lt.Private
 		if rt, ok := rTpl[lt.FilePath]; ok {
 			d.Right = strp(rt.Content)
-			hidden = hidden || !rt.IncludeInAI
-			if lt.Content == rt.Content && lt.IncludeInAI == rt.IncludeInAI {
+			hidden = hidden || rt.Private
+			if lt.Content == rt.Content && lt.Private == rt.Private {
 				d.Status = types.DiffSame
 			} else {
 				d.Status = types.DiffDifferent
@@ -111,7 +112,7 @@ func CompareDetails(l, r types.ConfigSetDetail, redact bool) types.ConfigSetComp
 			continue
 		}
 		d := types.ConfigSetTemplateDiff{FilePath: rt.FilePath, Status: types.DiffOnlyRight, Right: strp(rt.Content)}
-		if redact && !rt.IncludeInAI {
+		if redact && rt.Private {
 			d.Right, d.Redacted = nil, true
 		}
 		out.Templates = append(out.Templates, d)

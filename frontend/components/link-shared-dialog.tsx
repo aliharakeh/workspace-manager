@@ -1,0 +1,306 @@
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { api } from "@/lib/api"
+import type { SharedSet, SharedSetDetail } from "@/lib/types"
+import { useEffect, useMemo, useState } from "react"
+import { toast } from "sonner"
+
+type LinkSharedDialogProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  workspaceId: number
+  /** The app config set that takes the variables. */
+  configSetId: number
+  configSetName: string
+  /** The shared set it is linked to now (null: not linked yet). */
+  currentSetId: number | null
+  /** Shared variable ids it takes now. */
+  linkedVarIds: number[]
+  /** Keys of the config set's own (not shared) variables. */
+  ownKeys: string[]
+  onLinked: () => void
+}
+
+/**
+ * Links an app config set to a shared set of its workspace and picks which of
+ * the set's variables it takes. Any shared set can be chosen, whatever the
+ * names. The chosen variables are read-only in the app and follow the
+ * workspace's changes.
+ */
+export function LinkSharedDialog({
+  open,
+  onOpenChange,
+  workspaceId,
+  configSetId,
+  configSetName,
+  currentSetId,
+  linkedVarIds,
+  ownKeys,
+  onLinked,
+}: LinkSharedDialogProps) {
+  const [sets, setSets] = useState<SharedSet[] | null>(null)
+  const [setId, setSetId] = useState<number | null>(null)
+  const [detail, setDetail] = useState<SharedSetDetail | null>(null)
+  const [picked, setPicked] = useState<Set<number>>(new Set())
+  const [replace, setReplace] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    setSets(null)
+    setDetail(null)
+    setReplace(false)
+    api.sharedSets
+      .list(workspaceId)
+      .then((list) => {
+        if (cancelled) return
+        setSets(list)
+        setSetId(
+          list.some((s) => s.id === currentSetId)
+            ? currentSetId
+            : (list[0]?.id ?? null)
+        )
+      })
+      .catch((err) =>
+        toast.error(err instanceof Error ? err.message : "Failed to load shared config")
+      )
+    return () => {
+      cancelled = true
+    }
+  }, [open, workspaceId, currentSetId])
+
+  useEffect(() => {
+    if (!open || setId == null) return
+    let cancelled = false
+    setDetail(null)
+    api.sharedSets
+      .get(setId)
+      .then((d) => {
+        if (cancelled) return
+        setDetail(d)
+        // Keep the current selection when looking at the set already linked.
+        setPicked(
+          new Set(
+            setId === currentSetId
+              ? d.vars.filter((v) => linkedVarIds.includes(v.id)).map((v) => v.id)
+              : []
+          )
+        )
+      })
+      .catch((err) =>
+        toast.error(err instanceof Error ? err.message : "Failed to load variables")
+      )
+    return () => {
+      cancelled = true
+    }
+  }, [open, setId, currentSetId, linkedVarIds])
+
+  const clashes = useMemo(
+    () =>
+      (detail?.vars ?? []).filter(
+        (v) =>
+          picked.has(v.id) &&
+          !linkedVarIds.includes(v.id) &&
+          ownKeys.includes(v.key)
+      ),
+    [detail, picked, linkedVarIds, ownKeys]
+  )
+
+  function toggle(id: number, on: boolean) {
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
+  async function handleSave() {
+    if (setId == null || picked.size === 0) return
+    setSaving(true)
+    try {
+      await api.sharedSets.link(configSetId, {
+        shared_set_id: setId,
+        var_ids: [...picked],
+        replace,
+      })
+      toast.success(
+        currentSetId == null ? "Shared variables linked" : "Selection saved"
+      )
+      onLinked()
+      onOpenChange(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to link")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const vars = detail?.vars ?? []
+  const switching = currentSetId != null && setId !== currentSetId
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => !saving && onOpenChange(next)}>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>
+            Shared variables for <span className="font-mono">{configSetName}</span>
+          </DialogTitle>
+          <DialogDescription>
+            Pick a workspace config set and the variables this config set takes.
+            They are read-only here and change whenever the workspace changes
+            them. The set&apos;s name does not have to match.
+          </DialogDescription>
+        </DialogHeader>
+
+        {sets === null ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : sets.length === 0 ? (
+          <p className="rounded-lg border p-4 text-sm text-muted-foreground">
+            This workspace has no shared config yet. Open the workspace and use
+            “Shared config” to create a set and add variables.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <Select
+              items={sets.map((s) => ({ value: String(s.id), label: s.name }))}
+              value={setId == null ? "" : String(setId)}
+              onValueChange={(next) => {
+                if (next !== null) setSetId(Number(next))
+              }}
+              disabled={saving}
+            >
+              <SelectTrigger aria-label="Workspace config set">
+                <SelectValue placeholder="Workspace config set" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {sets.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+
+            {switching ? (
+              <p className="text-xs text-muted-foreground">
+                Switching sets replaces the variables taken from the current one.
+              </p>
+            ) : null}
+
+            {detail === null ? (
+              <p className="text-sm text-muted-foreground">Loading variables…</p>
+            ) : vars.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                This set has no variables yet.
+              </p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>
+                    {picked.size} of {vars.length} selected
+                  </span>
+                  <span className="flex gap-2">
+                    <button
+                      type="button"
+                      className="underline"
+                      onClick={() => setPicked(new Set(vars.map((v) => v.id)))}
+                    >
+                      All
+                    </button>
+                    <button
+                      type="button"
+                      className="underline"
+                      onClick={() => setPicked(new Set())}
+                    >
+                      None
+                    </button>
+                  </span>
+                </div>
+                <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+                  {vars.map((v) => {
+                    const clash =
+                      ownKeys.includes(v.key) && !linkedVarIds.includes(v.id)
+                    return (
+                      <label
+                        key={v.id}
+                        className="flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2"
+                      >
+                        <Checkbox
+                          checked={picked.has(v.id)}
+                          disabled={saving}
+                          onCheckedChange={(checked) => toggle(v.id, checked === true)}
+                        />
+                        <span className="font-mono text-sm">{v.key}</span>
+                        <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+                          {v.private ? "••••••" : v.value}
+                        </span>
+                        {clash ? (
+                          <Badge variant="outline">already defined here</Badge>
+                        ) : null}
+                      </label>
+                    )
+                  })}
+                </div>
+                {clashes.length > 0 ? (
+                  <label className="flex items-start gap-2 rounded-md border border-amber-500/50 p-3 text-sm">
+                    <Checkbox
+                      checked={replace}
+                      disabled={saving}
+                      onCheckedChange={(checked) => setReplace(checked === true)}
+                    />
+                    <span>
+                      Replace this config set&apos;s own{" "}
+                      <span className="font-mono">
+                        {clashes.map((v) => v.key).join(", ")}
+                      </span>{" "}
+                      with the shared value
+                      {clashes.length === 1 ? "" : "s"}.
+                    </span>
+                  </label>
+                ) : null}
+              </>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            disabled={
+              saving ||
+              setId == null ||
+              picked.size === 0 ||
+              (clashes.length > 0 && !replace)
+            }
+            onClick={() => void handleSave()}
+          >
+            {saving ? "Saving…" : currentSetId == null ? "Link" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}

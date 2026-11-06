@@ -11,6 +11,16 @@ export const KINDS = ['setup', 'dev', 'build', 'prod'];
 const RUN_METHOD = { setup: 'runner.setup', dev: 'runner.dev', build: 'runner.build', prod: 'runner.prod' };
 
 /** Compares folders the way the OS does: slashes, trailing slash, and case on Windows/macOS. */
+/**
+ * A variable a config set takes from the workspace's shared config is read-only
+ * here (the daemon refuses writes to it too); say where to change it.
+ */
+function refuseShared(variable) {
+  if (variable && variable.shared_var_id != null) {
+    throw new Error(`Environment variable "${variable.key}" is shared from the workspace and read-only here. Change it in Workspace Manager's shared config.`);
+  }
+}
+
 export function normalizeDir(dir) {
   let p = path.resolve(String(dir ?? '')).replace(/\\/g, '/');
   if (p.length > 1 && p.endsWith('/') && !/^[A-Za-z]:\/$/.test(p)) p = p.replace(/\/+$/, '');
@@ -185,6 +195,7 @@ export class Service {
       if (!key) throw new Error('Environment variable key cannot be empty.');
       const value = String(rawValue ?? '');
       const found = existing.find((v) => v.key === key);
+      refuseShared(found);
       if (found) await this.call('envVars.update', { id: found.id, body: { value } });
       else await this.call('envVars.create', { appID: app.id, body: { key, value } });
     }
@@ -196,6 +207,7 @@ export class Service {
     const app = await this.requireApp(dir);
     const found = (await this.call('envVars.list', { appID: app.id })).find((v) => v.key === oldKey);
     if (!found) throw new Error(`Environment variable "${oldKey}" not found.`);
+    refuseShared(found);
     const body = { value: String(value ?? '') };
     if (newKey && newKey !== oldKey) body.key = String(newKey).trim();
     await this.call('envVars.update', { id: found.id, body });
@@ -210,6 +222,7 @@ export class Service {
     for (const raw of list) {
       const found = existing.find((v) => v.key === String(raw).trim());
       if (found) {
+        refuseShared(found);
         await this.call('envVars.delete', { id: found.id });
         removed.push(found.key);
       }

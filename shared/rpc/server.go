@@ -288,7 +288,7 @@ func (c *serverConn) dispatch(ctx context.Context, msg Message) {
 		return
 	}
 	// The client kind travels in the context so a handler can tell an agent
-	// caller from the GUI, which decides whether AI-excluded values are shown.
+	// caller from the GUI, which decides whether private values are shown.
 	ctx = context.WithValue(ctx, ClientKindContextKey{}, c.Kind())
 	res, err := h(ctx, msg.Params)
 	reply(res, err)

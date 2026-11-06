@@ -20,6 +20,7 @@ import {
   AppWindowIcon,
   ExternalLinkIcon,
   GripVerticalIcon,
+  Link2Icon,
   LayoutTemplateIcon,
   PlusIcon,
 } from "lucide-react"
@@ -31,6 +32,7 @@ import { AppRunControls } from "@/components/app-run-controls"
 import { ConfigSetPicker } from "@/components/config-set-picker"
 import { OpenEditorButton } from "@/components/open-editor-button"
 import { OpenFolderButton } from "@/components/open-folder-button"
+import { SharedConfigDialog } from "@/components/shared-config-dialog"
 import { WorkspaceColorPicker } from "@/components/workspace-color-picker"
 import { WorkspaceRunControls } from "@/components/workspace-run-controls"
 import { Badge } from "@/components/ui/badge"
@@ -63,6 +65,8 @@ type WorkspaceDetailProps = {
   onWorkspaceChange: (workspace: Workspace) => void
   /** Called with every app id in the new order after a drag. */
   onReorderApps: (orderedIds: number[]) => void
+  /** Bumped when the workspace's shared config changes (by anyone). */
+  sharedEpoch: number
 }
 
 export function WorkspaceDetail({
@@ -76,8 +80,10 @@ export function WorkspaceDetail({
   onAppChange,
   onWorkspaceChange,
   onReorderApps,
+  sharedEpoch,
 }: WorkspaceDetailProps) {
   const [savingColor, setSavingColor] = useState(false)
+  const [sharedOpen, setSharedOpen] = useState(false)
 
   async function handleColorChange(color: string | null) {
     if (color === workspace.color) return
@@ -99,6 +105,26 @@ export function WorkspaceDetail({
       onChange={(color) => void handleColorChange(color)}
       disabled={savingColor}
       compact={compact}
+    />
+  )
+
+  const sharedButton = (
+    <Button
+      variant="outline"
+      onClick={() => setSharedOpen(true)}
+      title="Variables every app in this workspace can link to"
+    >
+      <Link2Icon data-icon="inline-start" />
+      Shared config
+    </Button>
+  )
+  const sharedDialog = (
+    <SharedConfigDialog
+      workspaceId={workspace.id}
+      workspaceName={workspace.name}
+      open={sharedOpen}
+      onOpenChange={setSharedOpen}
+      epoch={sharedEpoch}
     />
   )
 
@@ -153,7 +179,9 @@ export function WorkspaceDetail({
               From blueprint
             </Button>
           </EmptyContent>
+          {sharedButton}
           {colorPicker(false)}
+          {sharedDialog}
         </Empty>
       </div>
     )
@@ -192,6 +220,7 @@ export function WorkspaceDetail({
             statusByAppId={statusByAppId}
             onAppChange={onAppChange}
           />
+          {sharedButton}
           {colorPicker(true)}
         </div>
       </div>
@@ -219,6 +248,7 @@ export function WorkspaceDetail({
           </ul>
         </SortableContext>
       </DndContext>
+      {sharedDialog}
     </div>
   )
 }

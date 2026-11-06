@@ -88,6 +88,8 @@ function AppContent() {
     // Bumped when another client writes the open app's data, so its panels
     // remount and refetch.
     const [appDataEpoch, setAppDataEpoch] = useState(0)
+    // Bumped on a shared config write (ids are workspace ids), for the open workspace's dialog.
+    const [sharedEpoch, setSharedEpoch] = useState(0)
 
     const [workspaceDialogOpen, setWorkspaceDialogOpen] = useState(false)
     const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null)
@@ -103,7 +105,7 @@ function AppContent() {
     const [blueprintWorkspaceId, setBlueprintWorkspaceId] = useState<number | null>(null)
     const [blueprintDialogOpen, setBlueprintDialogOpen] = useState(false)
     const [settingsOpen, setSettingsOpen] = useState(false)
-    const [settingsTab, setSettingsTab] = useState<SettingsTab>('ai')
+    const [settingsTab, setSettingsTab] = useState<SettingsTab>('ports')
     // Set when Settings was opened from the blueprint dialog, to return there.
     const [returnToBlueprintDialog, setReturnToBlueprintDialog] = useState(false)
 
@@ -172,6 +174,10 @@ function AppContent() {
         (event: DataChangedEvent) => {
             if (event.entity === 'workspace' || event.entity === 'app') {
                 void reloadLists()
+                return
+            }
+            if (event.entity === 'sharedSet') {
+                setSharedEpoch(epoch => epoch + 1)
                 return
             }
             if (selectedAppId == null || !APP_DATA_ENTITIES.has(event.entity)) return
@@ -571,7 +577,7 @@ function AppContent() {
                         setBlueprintDialogOpen(true)
                     }}
                     onOpenSettings={() => {
-                        setSettingsTab('ai')
+                        setSettingsTab('ports')
                         setSettingsOpen(true)
                     }}
                     onStatus={handleStatus}
@@ -694,6 +700,7 @@ function AppContent() {
                             }}
                             onStatus={handleStatus}
                             onAppChange={handleAppChange}
+                            sharedEpoch={sharedEpoch}
                             onReorderApps={ids => void handleReorderApps(selectedWorkspace.id, ids)}
                         />
                     ) : (

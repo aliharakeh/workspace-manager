@@ -40,7 +40,7 @@ func appFromList(row ListAppsByWorkspaceRow) types.App {
 
 func configSetFrom(row ConfigSet) types.ConfigSet {
 	return types.ConfigSet{
-		ID: row.ID, AppID: row.AppID, Name: row.Name,
+		ID: row.ID, AppID: row.AppID, Name: row.Name, SharedSetID: row.SharedSetID,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
 }
@@ -48,8 +48,9 @@ func configSetFrom(row ConfigSet) types.ConfigSet {
 func EnvVarFrom(row EnvVar) types.EnvVar {
 	return types.EnvVar{
 		ID: row.ID, ConfigSetID: row.ConfigSetID, Key: row.Key, Value: row.Value,
-		IncludeInAI: row.IncludeInAi != 0,
+		Private: row.Private != 0,
 		Options:     decodeEnvOptions(row.Options), Selected: row.Selected,
+		SharedVarID: row.SharedVarID,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
 }
@@ -117,7 +118,7 @@ func EnvStoreValue(v types.EnvVar, value string) (string, string, string) {
 func templateFrom(row Template) types.Template {
 	return types.Template{
 		ID: row.ID, ConfigSetID: row.ConfigSetID, FilePath: row.FilePath, Content: row.Content,
-		IncludeInAI: row.IncludeInAi != 0,
+		Private: row.Private != 0,
 		CreatedAt:   row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
 }
@@ -347,7 +348,7 @@ func (d *DB) GetConfigSetT(ctx context.Context, id int64) (types.ConfigSet, erro
 		}
 		return types.ConfigSet{}, err
 	}
-	return configSetFrom(row), nil
+	return d.namedConfigSet(ctx, row), nil
 }
 
 func (d *DB) ListConfigSetsByAppT(ctx context.Context, appID int64) ([]types.ConfigSet, error) {
@@ -357,7 +358,7 @@ func (d *DB) ListConfigSetsByAppT(ctx context.Context, appID int64) ([]types.Con
 	}
 	out := make([]types.ConfigSet, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, configSetFrom(r))
+		out = append(out, d.namedConfigSet(ctx, r))
 	}
 	return out, nil
 }
@@ -383,7 +384,7 @@ func (d *DB) UpdateConfigSetT(ctx context.Context, id int64, name string) (types
 		}
 		return types.ConfigSet{}, UniqueErr(err, "A config set with this name already exists")
 	}
-	return configSetFrom(row), nil
+	return d.namedConfigSet(ctx, row), nil
 }
 
 func (d *DB) ResolveActive(ctx context.Context, appID int64) (types.ConfigSet, error) {
@@ -555,12 +556,15 @@ func BoolInt(v bool) int64 {
 	return 0
 }
 
-func (d *DB) UpsertEnvVarByKey(ctx context.Context, configSetID int64, key, value string, includeInAI bool) (types.EnvVar, error) {
+func (d *DB) UpsertEnvVarByKey(ctx context.Context, configSetID int64, key, value string, private bool) (types.EnvVar, error) {
 	existing, err := d.GetEnvVarByKey(ctx, GetEnvVarByKeyParams{ConfigSetID: configSetID, Key: key})
 	if err == nil {
+		if existing.SharedVarID != nil {
+			return EnvVarFrom(existing), nil // shared rows belong to the workspace
+		}
 		val, opts, sel := EnvStoreValue(EnvVarFrom(existing), value)
 		row, err := d.UpdateEnvVar(ctx, UpdateEnvVarParams{
-			Key: existing.Key, Value: val, IncludeInAi: BoolInt(includeInAI), Options: opts, Selected: sel, ID: existing.ID,
+			Key: existing.Key, Value: val, Private: BoolInt(private), Options: opts, Selected: sel, ID: existing.ID,
 		})
 		if err != nil {
 			return types.EnvVar{}, err
@@ -571,7 +575,7 @@ func (d *DB) UpsertEnvVarByKey(ctx context.Context, configSetID int64, key, valu
 		return types.EnvVar{}, err
 	}
 	row, err := d.CreateEnvVar(ctx, CreateEnvVarParams{
-		ConfigSetID: configSetID, Key: key, Value: value, IncludeInAi: BoolInt(includeInAI), Options: "[]",
+		ConfigSetID: configSetID, Key: key, Value: value, Private: BoolInt(private), Options: "[]",
 	})
 	if err != nil {
 		return types.EnvVar{}, err
@@ -732,14 +736,26 @@ func (d *DB) CopyFrom(ctx context.Context, sourceID, targetID int64, parts *type
 		if err != nil {
 			return err
 		}
-		if err := d.DeleteEnvVarsByConfigSet(ctx, targetID); err != nil {
+		if err := d.DeleteOwnEnvVarsByConfigSet(ctx, targetID); err != nil {
 			return err
+		}
+		// Shared rows of the target stay, so a copied key that one already uses is skipped.
+		shared := map[string]bool{}
+		if kept, err := d.ListEnvVarsT(ctx, targetID); err == nil {
+			for _, k := range kept {
+				if k.SharedVarID != nil {
+					shared[k.Key] = true
+				}
+			}
 		}
 		for _, v := range sourceEnv {
 			if envAll || containsStr(envItems, v.Key) {
+				if shared[v.Key] {
+					continue
+				}
 				val, opts, sel := EnvStore(v.Value, v.Options, v.Selected)
 				if _, err := d.CreateEnvVar(ctx, CreateEnvVarParams{
-					ConfigSetID: targetID, Key: v.Key, Value: val, IncludeInAi: BoolInt(v.IncludeInAI), Options: opts, Selected: sel,
+					ConfigSetID: targetID, Key: v.Key, Value: val, Private: BoolInt(v.Private), Options: opts, Selected: sel,
 				}); err != nil {
 					return err
 				}
@@ -756,7 +772,7 @@ func (d *DB) CopyFrom(ctx context.Context, sourceID, targetID int64, parts *type
 		}
 		for _, t := range sourceTpl {
 			if tplAll || containsStr(tplItems, t.FilePath) {
-				if _, err := d.CreateTemplate(ctx, CreateTemplateParams{ConfigSetID: targetID, FilePath: t.FilePath, Content: t.Content, IncludeInAi: BoolInt(t.IncludeInAI)}); err != nil {
+				if _, err := d.CreateTemplate(ctx, CreateTemplateParams{ConfigSetID: targetID, FilePath: t.FilePath, Content: t.Content, Private: BoolInt(t.Private)}); err != nil {
 					return err
 				}
 			}
@@ -900,4 +916,16 @@ func (d *DB) SetWorkspacePinnedT(ctx context.Context, id int64, pinned bool) (ty
 		return types.Workspace{}, fmt.Errorf("Workspace not found")
 	}
 	return d.GetWorkspaceT(ctx, id)
+}
+
+// namedConfigSet converts a config set row and adds the name of the shared set
+// it is linked to.
+func (d *DB) namedConfigSet(ctx context.Context, row ConfigSet) types.ConfigSet {
+	out := configSetFrom(row)
+	if row.SharedSetID != nil {
+		if s, err := d.GetWorkspaceConfigSet(ctx, *row.SharedSetID); err == nil {
+			out.SharedSetName = &s.Name
+		}
+	}
+	return out
 }

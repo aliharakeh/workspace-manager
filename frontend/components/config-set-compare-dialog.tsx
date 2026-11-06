@@ -84,18 +84,29 @@ function Row({
   left,
   right,
   redacted,
+  shared,
 }: {
   title: string
   status: CompareStatus
   left: string | null
   right: string | null
   redacted?: boolean
+  /** Which sides take this variable from the workspace's shared config. */
+  shared?: { left?: boolean; right?: boolean }
 }) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-3 gap-y-1 border-b py-2">
       <div className="col-span-2 flex items-center gap-2">
         <span className="truncate font-mono text-xs font-medium">{title}</span>
         <StatusTag status={status} />
+        {shared?.left || shared?.right ? (
+          <span
+            className="text-xs text-muted-foreground"
+            title="Taken from the workspace's shared config"
+          >
+            shared{shared.left && shared.right ? "" : shared.left ? " (left)" : " (right)"}
+          </span>
+        ) : null}
       </div>
       <Side value={left} redacted={redacted} />
       <Side value={right} redacted={redacted} />
@@ -293,6 +304,7 @@ export function ConfigSetCompareDialog({
                   left={e.left}
                   right={e.right}
                   redacted={e.redacted}
+                  shared={{ left: e.left_shared, right: e.right_shared }}
                 />
               ))}
               {result.env.filter((e) => show(e.status)).length === 0 ? (

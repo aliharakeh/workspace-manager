@@ -2,7 +2,7 @@
 //
 // It speaks MCP over stdio (newline-delimited JSON-RPC) and drives the wmd
 // daemon through shared/client, starting the daemon on demand. It identifies as
-// an "agent" client, so AI methods stay refused and AI-excluded values stay
+// an "agent" client, so AI methods stay refused and private values stay
 // hidden.
 //
 // Configure any MCP client with:

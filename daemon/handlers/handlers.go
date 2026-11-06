@@ -15,7 +15,7 @@ import (
 )
 
 // Client kinds known to the server. An "agent" client (the MCP server) is not
-// the GUI: GUI-only methods are refused and AI-excluded values are hidden.
+// the GUI: GUI-only methods are refused and private values are hidden.
 const (
 	ClientAgent = "agent"
 	ClientGUI   = "gui"
@@ -39,6 +39,7 @@ func (r *Registry) RegisterAll(srv rpc.Registerer) *Registry {
 	r.configSets()
 	r.configSetCompare()
 	r.envVars()
+	r.sharedConfig()
 	r.templates()
 	r.scripts()
 	r.runner()
@@ -134,7 +135,7 @@ func typedCtx[In any, Out any](fn func(context.Context, In) (Out, error)) rpc.Ha
 }
 
 // withKind wraps a handler that needs to know whether the caller is an agent
-// client or the GUI, which decides whether AI-excluded values are shown.
+// client or the GUI, which decides whether private values are shown.
 func withKind(fn func(kind string, raw Params) (any, error)) rpc.Handler {
 	return func(ctx context.Context, raw Params) (any, error) {
 		return fn(clientKind(ctx), raw)

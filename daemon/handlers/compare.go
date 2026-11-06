@@ -6,7 +6,7 @@ import (
 )
 
 // configSetCompare registers configSets.compare. For an agent client the op
-// returns AI-excluded env vars and templates as a status only (no values).
+// returns private env vars and templates as a status only (no values).
 // The GUI gets the values, as it does from configSets.detail.
 func (r *Registry) configSetCompare() {
 	o := r.Ops

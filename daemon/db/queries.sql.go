@@ -78,7 +78,7 @@ func (q *Queries) CreateBlueprint(ctx context.Context, arg CreateBlueprintParams
 }
 
 const createConfigSet = `-- name: CreateConfigSet :one
-INSERT INTO config_sets (app_id, name) VALUES (?, ?) RETURNING id, app_id, name, created_at, updated_at
+INSERT INTO config_sets (app_id, name) VALUES (?, ?) RETURNING id, app_id, name, shared_set_id, created_at, updated_at
 `
 
 type CreateConfigSetParams struct {
@@ -93,6 +93,7 @@ func (q *Queries) CreateConfigSet(ctx context.Context, arg CreateConfigSetParams
 		&i.ID,
 		&i.AppID,
 		&i.Name,
+		&i.SharedSetID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -100,14 +101,14 @@ func (q *Queries) CreateConfigSet(ctx context.Context, arg CreateConfigSetParams
 }
 
 const createEnvVar = `-- name: CreateEnvVar :one
-INSERT INTO env_vars (config_set_id, key, value, include_in_ai, options, selected) VALUES (?, ?, ?, ?, ?, ?) RETURNING id, config_set_id, "key", value, include_in_ai, options, selected, created_at, updated_at
+INSERT INTO env_vars (config_set_id, key, value, private, options, selected) VALUES (?, ?, ?, ?, ?, ?) RETURNING id, config_set_id, "key", value, private, options, selected, shared_var_id, created_at, updated_at
 `
 
 type CreateEnvVarParams struct {
 	ConfigSetID int64  `json:"config_set_id"`
 	Key         string `json:"key"`
 	Value       string `json:"value"`
-	IncludeInAi int64  `json:"include_in_ai"`
+	Private     int64  `json:"private"`
 	Options     string `json:"options"`
 	Selected    string `json:"selected"`
 }
@@ -117,7 +118,7 @@ func (q *Queries) CreateEnvVar(ctx context.Context, arg CreateEnvVarParams) (Env
 		arg.ConfigSetID,
 		arg.Key,
 		arg.Value,
-		arg.IncludeInAi,
+		arg.Private,
 		arg.Options,
 		arg.Selected,
 	)
@@ -127,9 +128,10 @@ func (q *Queries) CreateEnvVar(ctx context.Context, arg CreateEnvVarParams) (Env
 		&i.ConfigSetID,
 		&i.Key,
 		&i.Value,
-		&i.IncludeInAi,
+		&i.Private,
 		&i.Options,
 		&i.Selected,
+		&i.SharedVarID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -229,15 +231,55 @@ func (q *Queries) CreateRunConfig(ctx context.Context, arg CreateRunConfigParams
 	return i, err
 }
 
+const createSharedEnvVar = `-- name: CreateSharedEnvVar :one
+INSERT INTO env_vars (config_set_id, key, value, private, options, selected, shared_var_id) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id, config_set_id, "key", value, private, options, selected, shared_var_id, created_at, updated_at
+`
+
+type CreateSharedEnvVarParams struct {
+	ConfigSetID int64  `json:"config_set_id"`
+	Key         string `json:"key"`
+	Value       string `json:"value"`
+	Private     int64  `json:"private"`
+	Options     string `json:"options"`
+	Selected    string `json:"selected"`
+	SharedVarID *int64 `json:"shared_var_id"`
+}
+
+func (q *Queries) CreateSharedEnvVar(ctx context.Context, arg CreateSharedEnvVarParams) (EnvVar, error) {
+	row := q.db.QueryRowContext(ctx, createSharedEnvVar,
+		arg.ConfigSetID,
+		arg.Key,
+		arg.Value,
+		arg.Private,
+		arg.Options,
+		arg.Selected,
+		arg.SharedVarID,
+	)
+	var i EnvVar
+	err := row.Scan(
+		&i.ID,
+		&i.ConfigSetID,
+		&i.Key,
+		&i.Value,
+		&i.Private,
+		&i.Options,
+		&i.Selected,
+		&i.SharedVarID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createTemplate = `-- name: CreateTemplate :one
-INSERT INTO templates (config_set_id, file_path, content, include_in_ai) VALUES (?, ?, ?, ?) RETURNING id, config_set_id, file_path, content, include_in_ai, created_at, updated_at
+INSERT INTO templates (config_set_id, file_path, content, private) VALUES (?, ?, ?, ?) RETURNING id, config_set_id, file_path, content, private, created_at, updated_at
 `
 
 type CreateTemplateParams struct {
 	ConfigSetID int64  `json:"config_set_id"`
 	FilePath    string `json:"file_path"`
 	Content     string `json:"content"`
-	IncludeInAi int64  `json:"include_in_ai"`
+	Private     int64  `json:"private"`
 }
 
 func (q *Queries) CreateTemplate(ctx context.Context, arg CreateTemplateParams) (Template, error) {
@@ -245,7 +287,7 @@ func (q *Queries) CreateTemplate(ctx context.Context, arg CreateTemplateParams) 
 		arg.ConfigSetID,
 		arg.FilePath,
 		arg.Content,
-		arg.IncludeInAi,
+		arg.Private,
 	)
 	var i Template
 	err := row.Scan(
@@ -253,7 +295,7 @@ func (q *Queries) CreateTemplate(ctx context.Context, arg CreateTemplateParams) 
 		&i.ConfigSetID,
 		&i.FilePath,
 		&i.Content,
-		&i.IncludeInAi,
+		&i.Private,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -285,6 +327,65 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 		&i.Color,
 		&i.SortOrder,
 		&i.Pinned,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createWorkspaceConfigSet = `-- name: CreateWorkspaceConfigSet :one
+INSERT INTO workspace_config_sets (workspace_id, name) VALUES (?, ?) RETURNING id, workspace_id, name, created_at, updated_at
+`
+
+type CreateWorkspaceConfigSetParams struct {
+	WorkspaceID int64  `json:"workspace_id"`
+	Name        string `json:"name"`
+}
+
+func (q *Queries) CreateWorkspaceConfigSet(ctx context.Context, arg CreateWorkspaceConfigSetParams) (WorkspaceConfigSet, error) {
+	row := q.db.QueryRowContext(ctx, createWorkspaceConfigSet, arg.WorkspaceID, arg.Name)
+	var i WorkspaceConfigSet
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createWorkspaceEnvVar = `-- name: CreateWorkspaceEnvVar :one
+INSERT INTO workspace_env_vars (workspace_config_set_id, key, value, private, options, selected) VALUES (?, ?, ?, ?, ?, ?) RETURNING id, workspace_config_set_id, "key", value, private, options, selected, created_at, updated_at
+`
+
+type CreateWorkspaceEnvVarParams struct {
+	WorkspaceConfigSetID int64  `json:"workspace_config_set_id"`
+	Key                  string `json:"key"`
+	Value                string `json:"value"`
+	Private              int64  `json:"private"`
+	Options              string `json:"options"`
+	Selected             string `json:"selected"`
+}
+
+func (q *Queries) CreateWorkspaceEnvVar(ctx context.Context, arg CreateWorkspaceEnvVarParams) (WorkspaceEnvVar, error) {
+	row := q.db.QueryRowContext(ctx, createWorkspaceEnvVar,
+		arg.WorkspaceConfigSetID,
+		arg.Key,
+		arg.Value,
+		arg.Private,
+		arg.Options,
+		arg.Selected,
+	)
+	var i WorkspaceEnvVar
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceConfigSetID,
+		&i.Key,
+		&i.Value,
+		&i.Private,
+		&i.Options,
+		&i.Selected,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -354,12 +455,12 @@ func (q *Queries) DeleteEnvVar(ctx context.Context, id int64) (int64, error) {
 	return result.RowsAffected()
 }
 
-const deleteEnvVarsByConfigSet = `-- name: DeleteEnvVarsByConfigSet :exec
-DELETE FROM env_vars WHERE config_set_id = ?
+const deleteOwnEnvVarsByConfigSet = `-- name: DeleteOwnEnvVarsByConfigSet :exec
+DELETE FROM env_vars WHERE config_set_id = ? AND shared_var_id IS NULL
 `
 
-func (q *Queries) DeleteEnvVarsByConfigSet(ctx context.Context, configSetID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteEnvVarsByConfigSet, configSetID)
+func (q *Queries) DeleteOwnEnvVarsByConfigSet(ctx context.Context, configSetID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteOwnEnvVarsByConfigSet, configSetID)
 	return err
 }
 
@@ -390,6 +491,15 @@ DELETE FROM app_settings WHERE key = ?
 
 func (q *Queries) DeleteSetting(ctx context.Context, key string) error {
 	_, err := q.db.ExecContext(ctx, deleteSetting, key)
+	return err
+}
+
+const deleteSharedEnvVarsByConfigSet = `-- name: DeleteSharedEnvVarsByConfigSet :exec
+DELETE FROM env_vars WHERE config_set_id = ? AND shared_var_id IS NOT NULL
+`
+
+func (q *Queries) DeleteSharedEnvVarsByConfigSet(ctx context.Context, configSetID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteSharedEnvVarsByConfigSet, configSetID)
 	return err
 }
 
@@ -426,12 +536,45 @@ func (q *Queries) DeleteWorkspace(ctx context.Context, id int64) (int64, error) 
 	return result.RowsAffected()
 }
 
+const deleteWorkspaceConfigSet = `-- name: DeleteWorkspaceConfigSet :execrows
+DELETE FROM workspace_config_sets WHERE id = ?
+`
+
+func (q *Queries) DeleteWorkspaceConfigSet(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteWorkspaceConfigSet, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const deleteWorkspaceEnvVar = `-- name: DeleteWorkspaceEnvVar :execrows
+DELETE FROM workspace_env_vars WHERE id = ?
+`
+
+func (q *Queries) DeleteWorkspaceEnvVar(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteWorkspaceEnvVar, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteWorktreeLinks = `-- name: DeleteWorktreeLinks :exec
 DELETE FROM worktree_links WHERE app_id = ?
 `
 
 func (q *Queries) DeleteWorktreeLinks(ctx context.Context, appID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteWorktreeLinks, appID)
+	return err
+}
+
+const detachSharedEnvVarsByConfigSet = `-- name: DetachSharedEnvVarsByConfigSet :exec
+UPDATE env_vars SET shared_var_id = NULL WHERE config_set_id = ? AND shared_var_id IS NOT NULL
+`
+
+func (q *Queries) DetachSharedEnvVarsByConfigSet(ctx context.Context, configSetID int64) error {
+	_, err := q.db.ExecContext(ctx, detachSharedEnvVarsByConfigSet, configSetID)
 	return err
 }
 
@@ -495,7 +638,7 @@ func (q *Queries) GetBlueprint(ctx context.Context, id int64) (Blueprint, error)
 }
 
 const getConfigSet = `-- name: GetConfigSet :one
-SELECT id, app_id, name, created_at, updated_at FROM config_sets WHERE id = ?
+SELECT id, app_id, name, shared_set_id, created_at, updated_at FROM config_sets WHERE id = ?
 `
 
 func (q *Queries) GetConfigSet(ctx context.Context, id int64) (ConfigSet, error) {
@@ -505,6 +648,7 @@ func (q *Queries) GetConfigSet(ctx context.Context, id int64) (ConfigSet, error)
 		&i.ID,
 		&i.AppID,
 		&i.Name,
+		&i.SharedSetID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -512,7 +656,7 @@ func (q *Queries) GetConfigSet(ctx context.Context, id int64) (ConfigSet, error)
 }
 
 const getEnvVar = `-- name: GetEnvVar :one
-SELECT id, config_set_id, "key", value, include_in_ai, options, selected, created_at, updated_at FROM env_vars WHERE id = ?
+SELECT id, config_set_id, "key", value, private, options, selected, shared_var_id, created_at, updated_at FROM env_vars WHERE id = ?
 `
 
 func (q *Queries) GetEnvVar(ctx context.Context, id int64) (EnvVar, error) {
@@ -523,9 +667,10 @@ func (q *Queries) GetEnvVar(ctx context.Context, id int64) (EnvVar, error) {
 		&i.ConfigSetID,
 		&i.Key,
 		&i.Value,
-		&i.IncludeInAi,
+		&i.Private,
 		&i.Options,
 		&i.Selected,
+		&i.SharedVarID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -533,7 +678,7 @@ func (q *Queries) GetEnvVar(ctx context.Context, id int64) (EnvVar, error) {
 }
 
 const getEnvVarByKey = `-- name: GetEnvVarByKey :one
-SELECT id, config_set_id, "key", value, include_in_ai, options, selected, created_at, updated_at FROM env_vars WHERE config_set_id = ? AND key = ?
+SELECT id, config_set_id, "key", value, private, options, selected, shared_var_id, created_at, updated_at FROM env_vars WHERE config_set_id = ? AND key = ?
 `
 
 type GetEnvVarByKeyParams struct {
@@ -549,9 +694,10 @@ func (q *Queries) GetEnvVarByKey(ctx context.Context, arg GetEnvVarByKeyParams) 
 		&i.ConfigSetID,
 		&i.Key,
 		&i.Value,
-		&i.IncludeInAi,
+		&i.Private,
 		&i.Options,
 		&i.Selected,
+		&i.SharedVarID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -614,7 +760,7 @@ func (q *Queries) GetSetting(ctx context.Context, key string) (AppSetting, error
 }
 
 const getTemplate = `-- name: GetTemplate :one
-SELECT id, config_set_id, file_path, content, include_in_ai, created_at, updated_at FROM templates WHERE id = ?
+SELECT id, config_set_id, file_path, content, private, created_at, updated_at FROM templates WHERE id = ?
 `
 
 func (q *Queries) GetTemplate(ctx context.Context, id int64) (Template, error) {
@@ -625,7 +771,7 @@ func (q *Queries) GetTemplate(ctx context.Context, id int64) (Template, error) {
 		&i.ConfigSetID,
 		&i.FilePath,
 		&i.Content,
-		&i.IncludeInAi,
+		&i.Private,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -633,7 +779,7 @@ func (q *Queries) GetTemplate(ctx context.Context, id int64) (Template, error) {
 }
 
 const getTemplateByPath = `-- name: GetTemplateByPath :one
-SELECT id, config_set_id, file_path, content, include_in_ai, created_at, updated_at FROM templates WHERE config_set_id = ? AND file_path = ?
+SELECT id, config_set_id, file_path, content, private, created_at, updated_at FROM templates WHERE config_set_id = ? AND file_path = ?
 `
 
 type GetTemplateByPathParams struct {
@@ -649,7 +795,7 @@ func (q *Queries) GetTemplateByPath(ctx context.Context, arg GetTemplateByPathPa
 		&i.ConfigSetID,
 		&i.FilePath,
 		&i.Content,
-		&i.IncludeInAi,
+		&i.Private,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -670,6 +816,44 @@ func (q *Queries) GetWorkspace(ctx context.Context, id int64) (Workspace, error)
 		&i.Color,
 		&i.SortOrder,
 		&i.Pinned,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getWorkspaceConfigSet = `-- name: GetWorkspaceConfigSet :one
+SELECT id, workspace_id, name, created_at, updated_at FROM workspace_config_sets WHERE id = ?
+`
+
+func (q *Queries) GetWorkspaceConfigSet(ctx context.Context, id int64) (WorkspaceConfigSet, error) {
+	row := q.db.QueryRowContext(ctx, getWorkspaceConfigSet, id)
+	var i WorkspaceConfigSet
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getWorkspaceEnvVar = `-- name: GetWorkspaceEnvVar :one
+SELECT id, workspace_config_set_id, "key", value, private, options, selected, created_at, updated_at FROM workspace_env_vars WHERE id = ?
+`
+
+func (q *Queries) GetWorkspaceEnvVar(ctx context.Context, id int64) (WorkspaceEnvVar, error) {
+	row := q.db.QueryRowContext(ctx, getWorkspaceEnvVar, id)
+	var i WorkspaceEnvVar
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceConfigSetID,
+		&i.Key,
+		&i.Value,
+		&i.Private,
+		&i.Options,
+		&i.Selected,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -733,6 +917,33 @@ func (q *Queries) ListAppsByWorkspace(ctx context.Context, workspaceID int64) ([
 	return items, nil
 }
 
+const listAppsLinkedToSharedSet = `-- name: ListAppsLinkedToSharedSet :many
+SELECT DISTINCT app_id FROM config_sets WHERE shared_set_id = ?
+`
+
+func (q *Queries) ListAppsLinkedToSharedSet(ctx context.Context, sharedSetID *int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listAppsLinkedToSharedSet, sharedSetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var app_id int64
+		if err := rows.Scan(&app_id); err != nil {
+			return nil, err
+		}
+		items = append(items, app_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBlueprints = `-- name: ListBlueprints :many
 SELECT id, name, description, create_folder, commands, created_at, updated_at, sample_name FROM blueprints ORDER BY name COLLATE NOCASE ASC
 `
@@ -771,7 +982,7 @@ func (q *Queries) ListBlueprints(ctx context.Context) ([]Blueprint, error) {
 }
 
 const listConfigSetsByApp = `-- name: ListConfigSetsByApp :many
-SELECT id, app_id, name, created_at, updated_at FROM config_sets WHERE app_id = ? ORDER BY name COLLATE NOCASE ASC
+SELECT id, app_id, name, shared_set_id, created_at, updated_at FROM config_sets WHERE app_id = ? ORDER BY name COLLATE NOCASE ASC
 `
 
 // config_sets (db/config-sets.ts)
@@ -788,6 +999,7 @@ func (q *Queries) ListConfigSetsByApp(ctx context.Context, appID int64) ([]Confi
 			&i.ID,
 			&i.AppID,
 			&i.Name,
+			&i.SharedSetID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -805,7 +1017,7 @@ func (q *Queries) ListConfigSetsByApp(ctx context.Context, appID int64) ([]Confi
 }
 
 const listEnvVarsByConfigSet = `-- name: ListEnvVarsByConfigSet :many
-SELECT id, config_set_id, "key", value, include_in_ai, options, selected, created_at, updated_at FROM env_vars WHERE config_set_id = ? ORDER BY key COLLATE NOCASE ASC
+SELECT id, config_set_id, "key", value, private, options, selected, shared_var_id, created_at, updated_at FROM env_vars WHERE config_set_id = ? ORDER BY key COLLATE NOCASE ASC
 `
 
 // env_vars (db/env-vars.ts)
@@ -823,9 +1035,10 @@ func (q *Queries) ListEnvVarsByConfigSet(ctx context.Context, configSetID int64)
 			&i.ConfigSetID,
 			&i.Key,
 			&i.Value,
-			&i.IncludeInAi,
+			&i.Private,
 			&i.Options,
 			&i.Selected,
+			&i.SharedVarID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -944,8 +1157,96 @@ func (q *Queries) ListSettings(ctx context.Context) ([]AppSetting, error) {
 	return items, nil
 }
 
+const listSharedRenameConflicts = `-- name: ListSharedRenameConflicts :many
+SELECT a.name AS app_name, cs.name AS config_set_name
+FROM env_vars lv
+JOIN config_sets cs ON cs.id = lv.config_set_id
+JOIN apps a ON a.id = cs.app_id
+WHERE lv.shared_var_id = ?
+  AND EXISTS (SELECT 1 FROM env_vars o WHERE o.config_set_id = lv.config_set_id AND o.key = ? AND o.id <> lv.id)
+`
+
+type ListSharedRenameConflictsParams struct {
+	SharedVarID *int64 `json:"shared_var_id"`
+	Key         string `json:"key"`
+}
+
+type ListSharedRenameConflictsRow struct {
+	AppName       string `json:"app_name"`
+	ConfigSetName string `json:"config_set_name"`
+}
+
+func (q *Queries) ListSharedRenameConflicts(ctx context.Context, arg ListSharedRenameConflictsParams) ([]ListSharedRenameConflictsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSharedRenameConflicts, arg.SharedVarID, arg.Key)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSharedRenameConflictsRow{}
+	for rows.Next() {
+		var i ListSharedRenameConflictsRow
+		if err := rows.Scan(&i.AppName, &i.ConfigSetName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSharedUsageBySet = `-- name: ListSharedUsageBySet :many
+SELECT ev.shared_var_id AS shared_var_id, cs.id AS config_set_id, cs.name AS config_set_name, a.id AS app_id, a.name AS app_name
+FROM env_vars ev
+JOIN config_sets cs ON cs.id = ev.config_set_id
+JOIN apps a ON a.id = cs.app_id
+WHERE ev.shared_var_id IN (SELECT id FROM workspace_env_vars WHERE workspace_config_set_id = ?)
+ORDER BY a.name COLLATE NOCASE ASC, cs.name COLLATE NOCASE ASC
+`
+
+type ListSharedUsageBySetRow struct {
+	SharedVarID   *int64 `json:"shared_var_id"`
+	ConfigSetID   int64  `json:"config_set_id"`
+	ConfigSetName string `json:"config_set_name"`
+	AppID         int64  `json:"app_id"`
+	AppName       string `json:"app_name"`
+}
+
+func (q *Queries) ListSharedUsageBySet(ctx context.Context, workspaceConfigSetID int64) ([]ListSharedUsageBySetRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSharedUsageBySet, workspaceConfigSetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSharedUsageBySetRow{}
+	for rows.Next() {
+		var i ListSharedUsageBySetRow
+		if err := rows.Scan(
+			&i.SharedVarID,
+			&i.ConfigSetID,
+			&i.ConfigSetName,
+			&i.AppID,
+			&i.AppName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTemplatesByConfigSet = `-- name: ListTemplatesByConfigSet :many
-SELECT id, config_set_id, file_path, content, include_in_ai, created_at, updated_at FROM templates WHERE config_set_id = ? ORDER BY file_path COLLATE NOCASE ASC
+SELECT id, config_set_id, file_path, content, private, created_at, updated_at FROM templates WHERE config_set_id = ? ORDER BY file_path COLLATE NOCASE ASC
 `
 
 // templates (db/templates.ts)
@@ -963,7 +1264,78 @@ func (q *Queries) ListTemplatesByConfigSet(ctx context.Context, configSetID int6
 			&i.ConfigSetID,
 			&i.FilePath,
 			&i.Content,
-			&i.IncludeInAi,
+			&i.Private,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaceConfigSets = `-- name: ListWorkspaceConfigSets :many
+SELECT id, workspace_id, name, created_at, updated_at FROM workspace_config_sets WHERE workspace_id = ? ORDER BY name COLLATE NOCASE ASC
+`
+
+// workspace shared config
+func (q *Queries) ListWorkspaceConfigSets(ctx context.Context, workspaceID int64) ([]WorkspaceConfigSet, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkspaceConfigSets, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WorkspaceConfigSet{}
+	for rows.Next() {
+		var i WorkspaceConfigSet
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaceEnvVars = `-- name: ListWorkspaceEnvVars :many
+SELECT id, workspace_config_set_id, "key", value, private, options, selected, created_at, updated_at FROM workspace_env_vars WHERE workspace_config_set_id = ? ORDER BY key COLLATE NOCASE ASC
+`
+
+func (q *Queries) ListWorkspaceEnvVars(ctx context.Context, workspaceConfigSetID int64) ([]WorkspaceEnvVar, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkspaceEnvVars, workspaceConfigSetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WorkspaceEnvVar{}
+	for rows.Next() {
+		var i WorkspaceEnvVar
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceConfigSetID,
+			&i.Key,
+			&i.Value,
+			&i.Private,
+			&i.Options,
+			&i.Selected,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -1056,6 +1428,33 @@ func (q *Queries) MaxReadyUrlSortOrder(ctx context.Context) (interface{}, error)
 	return max_order, err
 }
 
+const propagateSharedEnvVar = `-- name: PropagateSharedEnvVar :exec
+UPDATE env_vars
+SET key = ?, value = ?, private = ?, options = ?, selected = ?, updated_at = datetime('now')
+WHERE shared_var_id = ?
+`
+
+type PropagateSharedEnvVarParams struct {
+	Key         string `json:"key"`
+	Value       string `json:"value"`
+	Private     int64  `json:"private"`
+	Options     string `json:"options"`
+	Selected    string `json:"selected"`
+	SharedVarID *int64 `json:"shared_var_id"`
+}
+
+func (q *Queries) PropagateSharedEnvVar(ctx context.Context, arg PropagateSharedEnvVarParams) error {
+	_, err := q.db.ExecContext(ctx, propagateSharedEnvVar,
+		arg.Key,
+		arg.Value,
+		arg.Private,
+		arg.Options,
+		arg.Selected,
+		arg.SharedVarID,
+	)
+	return err
+}
+
 const setActiveConfigSet = `-- name: SetActiveConfigSet :one
 UPDATE apps
 SET active_config_set_id = ?, updated_at = datetime('now')
@@ -1111,6 +1510,20 @@ type SetAppSortOrderParams struct {
 
 func (q *Queries) SetAppSortOrder(ctx context.Context, arg SetAppSortOrderParams) error {
 	_, err := q.db.ExecContext(ctx, setAppSortOrder, arg.SortOrder, arg.ID, arg.WorkspaceID)
+	return err
+}
+
+const setConfigSetSharedSet = `-- name: SetConfigSetSharedSet :exec
+UPDATE config_sets SET shared_set_id = ?, updated_at = datetime('now') WHERE id = ?
+`
+
+type SetConfigSetSharedSetParams struct {
+	SharedSetID *int64 `json:"shared_set_id"`
+	ID          int64  `json:"id"`
+}
+
+func (q *Queries) SetConfigSetSharedSet(ctx context.Context, arg SetConfigSetSharedSetParams) error {
+	_, err := q.db.ExecContext(ctx, setConfigSetSharedSet, arg.SharedSetID, arg.ID)
 	return err
 }
 
@@ -1239,7 +1652,7 @@ const updateConfigSet = `-- name: UpdateConfigSet :one
 UPDATE config_sets
 SET name = ?, updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, app_id, name, created_at, updated_at
+RETURNING id, app_id, name, shared_set_id, created_at, updated_at
 `
 
 type UpdateConfigSetParams struct {
@@ -1254,6 +1667,7 @@ func (q *Queries) UpdateConfigSet(ctx context.Context, arg UpdateConfigSetParams
 		&i.ID,
 		&i.AppID,
 		&i.Name,
+		&i.SharedSetID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -1262,25 +1676,25 @@ func (q *Queries) UpdateConfigSet(ctx context.Context, arg UpdateConfigSetParams
 
 const updateEnvVar = `-- name: UpdateEnvVar :one
 UPDATE env_vars
-SET key = ?, value = ?, include_in_ai = ?, options = ?, selected = ?, updated_at = datetime('now')
+SET key = ?, value = ?, private = ?, options = ?, selected = ?, updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, config_set_id, "key", value, include_in_ai, options, selected, created_at, updated_at
+RETURNING id, config_set_id, "key", value, private, options, selected, shared_var_id, created_at, updated_at
 `
 
 type UpdateEnvVarParams struct {
-	Key         string `json:"key"`
-	Value       string `json:"value"`
-	IncludeInAi int64  `json:"include_in_ai"`
-	Options     string `json:"options"`
-	Selected    string `json:"selected"`
-	ID          int64  `json:"id"`
+	Key      string `json:"key"`
+	Value    string `json:"value"`
+	Private  int64  `json:"private"`
+	Options  string `json:"options"`
+	Selected string `json:"selected"`
+	ID       int64  `json:"id"`
 }
 
 func (q *Queries) UpdateEnvVar(ctx context.Context, arg UpdateEnvVarParams) (EnvVar, error) {
 	row := q.db.QueryRowContext(ctx, updateEnvVar,
 		arg.Key,
 		arg.Value,
-		arg.IncludeInAi,
+		arg.Private,
 		arg.Options,
 		arg.Selected,
 		arg.ID,
@@ -1291,9 +1705,10 @@ func (q *Queries) UpdateEnvVar(ctx context.Context, arg UpdateEnvVarParams) (Env
 		&i.ConfigSetID,
 		&i.Key,
 		&i.Value,
-		&i.IncludeInAi,
+		&i.Private,
 		&i.Options,
 		&i.Selected,
+		&i.SharedVarID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -1388,23 +1803,23 @@ func (q *Queries) UpdateRunConfigMode(ctx context.Context, arg UpdateRunConfigMo
 
 const updateTemplate = `-- name: UpdateTemplate :one
 UPDATE templates
-SET file_path = ?, content = ?, include_in_ai = ?, updated_at = datetime('now')
+SET file_path = ?, content = ?, private = ?, updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, config_set_id, file_path, content, include_in_ai, created_at, updated_at
+RETURNING id, config_set_id, file_path, content, private, created_at, updated_at
 `
 
 type UpdateTemplateParams struct {
-	FilePath    string `json:"file_path"`
-	Content     string `json:"content"`
-	IncludeInAi int64  `json:"include_in_ai"`
-	ID          int64  `json:"id"`
+	FilePath string `json:"file_path"`
+	Content  string `json:"content"`
+	Private  int64  `json:"private"`
+	ID       int64  `json:"id"`
 }
 
 func (q *Queries) UpdateTemplate(ctx context.Context, arg UpdateTemplateParams) (Template, error) {
 	row := q.db.QueryRowContext(ctx, updateTemplate,
 		arg.FilePath,
 		arg.Content,
-		arg.IncludeInAi,
+		arg.Private,
 		arg.ID,
 	)
 	var i Template
@@ -1413,7 +1828,7 @@ func (q *Queries) UpdateTemplate(ctx context.Context, arg UpdateTemplateParams) 
 		&i.ConfigSetID,
 		&i.FilePath,
 		&i.Content,
-		&i.IncludeInAi,
+		&i.Private,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -1449,6 +1864,68 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 		&i.Color,
 		&i.SortOrder,
 		&i.Pinned,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateWorkspaceConfigSet = `-- name: UpdateWorkspaceConfigSet :one
+UPDATE workspace_config_sets SET name = ?, updated_at = datetime('now') WHERE id = ? RETURNING id, workspace_id, name, created_at, updated_at
+`
+
+type UpdateWorkspaceConfigSetParams struct {
+	Name string `json:"name"`
+	ID   int64  `json:"id"`
+}
+
+func (q *Queries) UpdateWorkspaceConfigSet(ctx context.Context, arg UpdateWorkspaceConfigSetParams) (WorkspaceConfigSet, error) {
+	row := q.db.QueryRowContext(ctx, updateWorkspaceConfigSet, arg.Name, arg.ID)
+	var i WorkspaceConfigSet
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateWorkspaceEnvVar = `-- name: UpdateWorkspaceEnvVar :one
+UPDATE workspace_env_vars
+SET key = ?, value = ?, private = ?, options = ?, selected = ?, updated_at = datetime('now')
+WHERE id = ?
+RETURNING id, workspace_config_set_id, "key", value, private, options, selected, created_at, updated_at
+`
+
+type UpdateWorkspaceEnvVarParams struct {
+	Key      string `json:"key"`
+	Value    string `json:"value"`
+	Private  int64  `json:"private"`
+	Options  string `json:"options"`
+	Selected string `json:"selected"`
+	ID       int64  `json:"id"`
+}
+
+func (q *Queries) UpdateWorkspaceEnvVar(ctx context.Context, arg UpdateWorkspaceEnvVarParams) (WorkspaceEnvVar, error) {
+	row := q.db.QueryRowContext(ctx, updateWorkspaceEnvVar,
+		arg.Key,
+		arg.Value,
+		arg.Private,
+		arg.Options,
+		arg.Selected,
+		arg.ID,
+	)
+	var i WorkspaceEnvVar
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceConfigSetID,
+		&i.Key,
+		&i.Value,
+		&i.Private,
+		&i.Options,
+		&i.Selected,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

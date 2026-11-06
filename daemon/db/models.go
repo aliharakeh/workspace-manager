@@ -34,11 +34,12 @@ type Blueprint struct {
 }
 
 type ConfigSet struct {
-	ID        int64  `json:"id"`
-	AppID     int64  `json:"app_id"`
-	Name      string `json:"name"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID          int64  `json:"id"`
+	AppID       int64  `json:"app_id"`
+	Name        string `json:"name"`
+	SharedSetID *int64 `json:"shared_set_id"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
 }
 
 type EnvVar struct {
@@ -46,9 +47,10 @@ type EnvVar struct {
 	ConfigSetID int64  `json:"config_set_id"`
 	Key         string `json:"key"`
 	Value       string `json:"value"`
-	IncludeInAi int64  `json:"include_in_ai"`
+	Private     int64  `json:"private"`
 	Options     string `json:"options"`
 	Selected    string `json:"selected"`
+	SharedVarID *int64 `json:"shared_var_id"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }
@@ -88,7 +90,7 @@ type Template struct {
 	ConfigSetID int64  `json:"config_set_id"`
 	FilePath    string `json:"file_path"`
 	Content     string `json:"content"`
-	IncludeInAi int64  `json:"include_in_ai"`
+	Private     int64  `json:"private"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }
@@ -102,6 +104,26 @@ type Workspace struct {
 	Pinned    int64   `json:"pinned"`
 	CreatedAt string  `json:"created_at"`
 	UpdatedAt string  `json:"updated_at"`
+}
+
+type WorkspaceConfigSet struct {
+	ID          int64  `json:"id"`
+	WorkspaceID int64  `json:"workspace_id"`
+	Name        string `json:"name"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
+type WorkspaceEnvVar struct {
+	ID                   int64  `json:"id"`
+	WorkspaceConfigSetID int64  `json:"workspace_config_set_id"`
+	Key                  string `json:"key"`
+	Value                string `json:"value"`
+	Private              int64  `json:"private"`
+	Options              string `json:"options"`
+	Selected             string `json:"selected"`
+	CreatedAt            string `json:"created_at"`
+	UpdatedAt            string `json:"updated_at"`
 }
 
 type WorktreeLink struct {

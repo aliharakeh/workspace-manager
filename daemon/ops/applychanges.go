@@ -34,8 +34,8 @@ func (o *Ops) ConfigSetsApplyChanges(appID, configSetID int64, patch types.AppAI
 	if patch.Env != nil {
 		for _, key := range patch.Env.Delete {
 			v, ok := byKey[key]
-			if !ok || !v.IncludeInAI {
-				continue
+			if !ok || v.Private || v.SharedVarID != nil {
+				continue // shared variables are edited in the workspace, never here
 			}
 			if _, err := o.DB.DeleteEnvVar(ctx, v.ID); err != nil {
 				return err
@@ -45,7 +45,7 @@ func (o *Ops) ConfigSetsApplyChanges(appID, configSetID int64, patch types.AppAI
 		}
 		for _, up := range patch.Env.Upsert {
 			v, ok := byKey[up.Key]
-			if ok && !v.IncludeInAI {
+			if ok && (v.Private || v.SharedVarID != nil) {
 				continue
 			}
 			if ok {
@@ -54,7 +54,7 @@ func (o *Ops) ConfigSetsApplyChanges(appID, configSetID int64, patch types.AppAI
 				}
 				val, opts, sel := db.EnvStoreValue(v, up.Value)
 				if _, err := o.DB.UpdateEnvVar(ctx, db.UpdateEnvVarParams{
-					Key: v.Key, Value: val, IncludeInAi: db.BoolInt(v.IncludeInAI), Options: opts, Selected: sel, ID: v.ID,
+					Key: v.Key, Value: val, Private: db.BoolInt(v.Private), Options: opts, Selected: sel, ID: v.ID,
 				}); err != nil {
 					return err
 				}
@@ -62,7 +62,7 @@ func (o *Ops) ConfigSetsApplyChanges(appID, configSetID int64, patch types.AppAI
 				continue
 			}
 			if _, err := o.DB.CreateEnvVar(ctx, db.CreateEnvVarParams{
-				ConfigSetID: configSetID, Key: up.Key, Value: up.Value, IncludeInAi: db.BoolInt(true), Options: "[]",
+				ConfigSetID: configSetID, Key: up.Key, Value: up.Value, Private: db.BoolInt(false), Options: "[]",
 			}); err != nil {
 				return err
 			}
@@ -80,11 +80,11 @@ func (o *Ops) ConfigSetsApplyChanges(appID, configSetID int64, patch types.AppAI
 	}
 	for _, tp := range patch.Templates {
 		existing, ok := byPath[strings.ReplaceAll(tp.FilePath, "\\", "/")]
-		if !ok || !existing.IncludeInAI || existing.Content == tp.Content {
+		if !ok || existing.Private || existing.Content == tp.Content {
 			continue
 		}
 		if _, err := o.DB.UpdateTemplate(ctx, db.UpdateTemplateParams{
-			FilePath: existing.FilePath, Content: tp.Content, IncludeInAi: db.BoolInt(true), ID: existing.ID,
+			FilePath: existing.FilePath, Content: tp.Content, Private: db.BoolInt(false), ID: existing.ID,
 		}); err != nil {
 			return err
 		}

@@ -92,7 +92,7 @@ authenticates over loopback TCP, and holds the `gui` connection. Tokens are not
 sent to renderer windows. A schema-validated IPC bridge exposes the panel's
 operations, not arbitrary daemon calls. No GUI-privileged connection or private
 env/template contents are exposed as model tools. As in VS Code, the human GUI
-can see values marked private to AI.
+can see private values.
 
 ## Development
 

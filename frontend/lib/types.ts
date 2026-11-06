@@ -31,6 +31,9 @@ export type ConfigSet = {
     id: number
     app_id: number
     name: string
+    /** The workspace shared set this config set takes variables from, when linked. */
+    shared_set_id: number | null
+    shared_set_name: string | null
     created_at: string
     updated_at: string
 }
@@ -65,9 +68,11 @@ export type EnvVar = {
     config_set_id: number
     key: string
     value: string
-    include_in_ai: boolean
+    private: boolean
     options: EnvVarOption[]
     selected: string
+    /** Set on a row that mirrors a workspace shared variable; such a row is read-only. */
+    shared_var_id: number | null
     created_at: string
     updated_at: string
 }
@@ -77,7 +82,7 @@ export type Template = {
     config_set_id: number
     file_path: string
     content: string
-    include_in_ai: boolean
+    private: boolean
     created_at: string
     updated_at: string
 }
@@ -271,38 +276,6 @@ export type ReadyUrlPattern = {
 
 export type RunnerEvent = LogEvent | (StatusEvent & { type: 'status' })
 
-/** One saved AI connection (save payload). Each connection has a user-chosen
- * name (its key) plus the provider it talks to, so several connections can
- * share one provider. The API key is write-only: the UI never reads it back.
- * Empty apiKey keeps the stored key; clearApiKey removes it. */
-export type AIProviderConfig = {
-    name?: string
-    provider: string
-    baseURL?: string
-    apiKey?: string
-    model?: string
-    temperature?: number
-    opencodeSession?: boolean
-    clearApiKey?: boolean
-}
-
-/** A saved connection as the UI sees it: no secret, plus hasApiKey. */
-export type AIConnectionInfo = {
-    name: string
-    provider: string
-    baseURL?: string
-    model?: string
-    hasApiKey: boolean
-    temperature?: number
-    opencodeSession?: boolean
-}
-
-/** All saved connections plus which name is the active default for chat. */
-export type AIConfigInfo = {
-    providers: AIConnectionInfo[]
-    active: string
-}
-
 export type BlueprintCommand = {
     label?: string | null
     command: string
@@ -326,18 +299,6 @@ export type BlueprintInput = {
     sample_name: string
     create_folder: boolean
     commands: BlueprintCommand[]
-}
-
-export type BlueprintAIInput = {
-    instruction: string
-    /** What the editor holds now, so the AI changes it instead of starting over. */
-    draft: BlueprintInput | null
-}
-
-export type BlueprintAIResult = {
-    blueprint: BlueprintInput
-    /** The AI's short notes: assumptions and tools that must be installed. */
-    message: string
 }
 
 export type BlueprintRunInput = {
@@ -386,6 +347,9 @@ export type ConfigSetEnvDiff = {
     left: string | null
     right: string | null
     redacted: boolean
+    /** A side whose variable is taken from the workspace's shared config. */
+    left_shared?: boolean
+    right_shared?: boolean
 }
 
 export type ConfigSetTemplateDiff = {
@@ -427,7 +391,7 @@ export type WorkspaceExportOptions = { secrets: SecretsMode }
 export type BundleEnvVar = {
     key: string
     value: string
-    include_in_ai: boolean
+    private: boolean
     options?: EnvVarOption[]
     selected?: string
     redacted?: boolean
@@ -436,7 +400,7 @@ export type BundleEnvVar = {
 export type BundleTemplate = {
     file_path: string
     content: string
-    include_in_ai: boolean
+    private: boolean
     redacted?: boolean
 }
 
@@ -450,6 +414,9 @@ export type BundleConfigSet = {
     env_vars: BundleEnvVar[]
     templates: BundleTemplate[]
     commands: Record<string, BundleCommandList>
+    /** The workspace shared set this config set links to, and the variables it takes. */
+    shared_set?: string
+    shared_keys?: string[]
 }
 
 export type BundleApp = {
@@ -469,7 +436,12 @@ export type WorkspaceBundle = {
     exported_at: string
     secrets: SecretsMode
     source_root: string
-    workspace: { name: string; icon: string | null; color: string | null }
+    workspace: {
+        name: string
+        icon: string | null
+        color: string | null
+        shared_sets?: { name: string; vars: BundleEnvVar[] }[]
+    }
     apps: BundleApp[]
 }
 
@@ -526,4 +498,45 @@ export type WorkspaceRunAppResult = {
 export type WorkspaceRunResult = {
     workspaceId: number
     results: WorkspaceRunAppResult[]
+}
+
+/** A config set a workspace owns; app config sets link to one for shared variables. */
+export type SharedSet = {
+    id: number
+    workspace_id: number
+    name: string
+    created_at: string
+    updated_at: string
+}
+
+/** One app config set that uses a shared variable. */
+export type SharedUsage = {
+    app_id: number
+    app_name: string
+    config_set_id: number
+    config_set_name: string
+}
+
+export type SharedEnvVar = {
+    id: number
+    set_id: number
+    key: string
+    value: string
+    private: boolean
+    options: EnvVarOption[]
+    selected: string
+    used_by: SharedUsage[]
+    created_at: string
+    updated_at: string
+}
+
+export type SharedSetDetail = SharedSet & {
+    vars: SharedEnvVar[]
+}
+
+export type SharedLinkInput = {
+    shared_set_id: number
+    var_ids: number[]
+    /** Let a chosen variable overwrite an own variable with the same key. */
+    replace: boolean
 }

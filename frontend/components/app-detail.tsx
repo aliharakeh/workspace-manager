@@ -13,7 +13,6 @@ import { OpenEditorButton } from "@/components/open-editor-button"
 import { OpenFolderButton } from "@/components/open-folder-button"
 import { appStateLabel } from "@/lib/app-state"
 import { ConfigSetSwitcher } from "@/components/config-set-switcher"
-import { AppAIPanel } from "@/components/app-ai-panel"
 import { EnvVarsPanel } from "@/components/env-vars-panel"
 import { TemplatesPanel } from "@/components/templates-panel"
 import { CommandConfigPanel } from "@/components/command-config-panel"
@@ -225,12 +224,6 @@ export function AppDetail({
             Git
           </TabsTrigger>
           <TabsTrigger
-            value="ai"
-            className={TAB_TRIGGER}
-          >
-            AI
-          </TabsTrigger>
-          <TabsTrigger
             value="logs"
             className={TAB_TRIGGER}
           >
@@ -238,7 +231,13 @@ export function AppDetail({
           </TabsTrigger>
         </TabsList>
         <TabsContent value="env" className="mt-4 min-h-0 overflow-y-auto">
-          <EnvVarsPanel key={envKey} appId={app.id} dataEpoch={dataEpoch} />
+          <EnvVarsPanel
+            key={envKey}
+            appId={app.id}
+            workspaceId={app.workspace_id}
+            activeConfigSetId={app.active_config_set_id ?? null}
+            dataEpoch={dataEpoch}
+          />
         </TabsContent>
         <TabsContent value="templates" className="mt-4 min-h-0 overflow-y-auto">
           <TemplatesPanel key={panelKey} appId={app.id} />
@@ -267,12 +266,6 @@ export function AppDetail({
             activeConfigSetId={app.active_config_set_id ?? null}
             status={status}
             onStatus={handleStatus}
-          />
-        </TabsContent>
-        <TabsContent value="ai"className="flex min-h-0 flex-1 flex-col overflow-hidden pt-4" keepMounted>
-          <AppAIPanel
-            app={app}
-            onApplied={() => setPanelEpoch((n) => n + 1)}
           />
         </TabsContent>
         <TabsContent value="logs" className="mt-4 min-h-0 overflow-y-auto">

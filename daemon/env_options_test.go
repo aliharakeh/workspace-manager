@@ -95,11 +95,11 @@ func TestHiddenEnvOptionsStayHidden(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer gui.Close()
-	hidden := false
+	hidden := true
 	opts := []types.EnvVarOption{{Label: "a", Value: "secret-a"}, {Label: "b", Value: "secret-b"}}
 	var v types.EnvVar
 	if err := gui.Call(api.MethodEnvVarsCreate, map[string]any{
-		"appID": app.ID, "body": types.EnvVarCreateInput{Key: "SECRET", Options: &opts, IncludeInAI: &hidden},
+		"appID": app.ID, "body": types.EnvVarCreateInput{Key: "SECRET", Options: &opts, Private: &hidden},
 	}, &v); err != nil {
 		t.Fatal(err)
 	}

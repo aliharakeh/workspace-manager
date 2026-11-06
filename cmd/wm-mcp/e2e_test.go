@@ -92,26 +92,60 @@ func TestStartsDaemonAndServesTools(t *testing.T) {
 	var app types.App
 	call("wm_app", map[string]any{"action": "create", "name": "demo", "workspace": "mcp-ws", "path": t.TempDir()}, &app)
 	var secret types.EnvVar
-	call("wm_env", map[string]any{"action": "set", "key": "SECRET", "value": "original-secret", "hidden": true}, &secret)
-	if secret.Value != "" || secret.IncludeInAI {
+	call("wm_env", map[string]any{"action": "set", "key": "SECRET", "value": "original-secret", "private": true}, &secret)
+	if secret.Value != "" || !secret.Private {
 		t.Fatal("creating a hidden variable exposed its value")
 	}
 	// Omitting hidden must preserve the flag rather than making the variable visible.
 	call("wm_env", map[string]any{"action": "set", "key": "SECRET", "value": "replacement-secret"}, &secret)
-	if secret.Value != "" || secret.IncludeInAI {
+	if secret.Value != "" || !secret.Private {
 		t.Fatal("updating a hidden variable exposed its value")
 	}
 	var vars []types.EnvVar
 	call("wm_env", map[string]any{"action": "list"}, &vars)
-	if len(vars) != 1 || vars[0].Value != "" || vars[0].IncludeInAI {
+	if len(vars) != 1 || vars[0].Value != "" || !vars[0].Private {
 		t.Fatal("listing a hidden variable exposed its value")
 	}
 	refused := send(stdin, out, 11, "tools/call", map[string]any{
-		"name": "wm_env", "arguments": map[string]any{"action": "set", "key": "SECRET", "hidden": false},
+		"name": "wm_env", "arguments": map[string]any{"action": "set", "key": "SECRET", "private": false},
 	})
 	if !strings.Contains(toJSON(refused), `"isError":true`) {
 		t.Fatal("MCP could make a hidden variable visible")
 	}
+	// Shared config: an app config set links to a workspace set, the linked
+	// variable is read-only through wm_env and follows edits made with wm_shared.
+	call("wm_shared", map[string]any{"action": "create_set", "workspace": "mcp-ws", "name": "dev"}, nil)
+	call("wm_shared", map[string]any{"action": "set", "workspace": "mcp-ws", "shared": "dev", "key": "DATABASE_URL", "value": "postgres://one"}, nil)
+	call("wm_shared", map[string]any{"action": "link", "app": "demo", "shared": "dev"}, nil)
+	call("wm_env", map[string]any{"action": "list"}, &vars)
+	linkedValue := func() (string, bool) {
+		for _, v := range vars {
+			if v.Key == "DATABASE_URL" {
+				return v.Value, v.SharedVarID != nil
+			}
+		}
+		return "", false
+	}
+	if value, shared := linkedValue(); value != "postgres://one" || !shared {
+		t.Fatalf("link did not add the shared variable: %+v", vars)
+	}
+	editShared := send(stdin, out, 12, "tools/call", map[string]any{
+		"name": "wm_env", "arguments": map[string]any{"action": "set", "key": "DATABASE_URL", "value": "mine"},
+	})
+	if !strings.Contains(toJSON(editShared), `"isError":true`) {
+		t.Fatal("wm_env edited a shared variable")
+	}
+	call("wm_shared", map[string]any{"action": "set", "workspace": "mcp-ws", "shared": "dev", "key": "DATABASE_URL", "value": "postgres://two"}, nil)
+	call("wm_env", map[string]any{"action": "list"}, &vars)
+	if value, _ := linkedValue(); value != "postgres://two" {
+		t.Fatalf("a workspace edit did not reach the linked config set: %+v", vars)
+	}
+	call("wm_shared", map[string]any{"action": "unlink", "app": "demo"}, nil)
+	call("wm_env", map[string]any{"action": "list"}, &vars)
+	if _, shared := linkedValue(); shared || len(vars) != 1 {
+		t.Fatalf("unlink did not remove the shared variable: %+v", vars)
+	}
+
 	var active types.ConfigSet
 	call("wm_config", map[string]any{"action": "create", "name": "selected"}, &active)
 	for _, kind := range []string{"dev", "prod", "build", "setup"} {

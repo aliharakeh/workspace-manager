@@ -20,7 +20,7 @@ var bundleKinds = []string{types.KindSetup, types.KindDev, types.KindBuild, type
 
 // WorkspacesExport bundles a workspace. trusted says whether the caller may
 // receive secrets (the GUI): for any other client, a request for "include" is
-// exported as "placeholder", so include_in_ai=false values never reach an
+// exported as "placeholder", so private=false values never reach an
 // agent.
 func (o *Ops) WorkspacesExport(id int64, opts types.WorkspaceExportOptions, trusted bool) (types.WorkspaceBundle, error) {
 	mode := opts.Secrets
@@ -48,12 +48,32 @@ func (o *Ops) WorkspacesExport(id int64, opts types.WorkspaceExportOptions, trus
 	}
 	root := commonRoot(paths)
 	bundle := types.WorkspaceBundle{
-		Format: types.WorkspaceBundleFormat, Version: types.WorkspaceBundleVersion,
+		Format: types.WorkspaceBundleFormat, Version: types.WorkspaceBundleBaseVersion,
 		ExportedAt: time.Now().UTC().Format(time.RFC3339),
 		Secrets:    mode,
 		SourceRoot: filepath.ToSlash(root),
 		Workspace:  types.BundleWorkspace{Name: ws.Name, Icon: ws.Icon, Color: ws.Color},
 		Apps:       []types.BundleApp{},
+	}
+	sharedSets, err := o.DB.ListWorkspaceConfigSets(o.Ctx(), id)
+	if err != nil {
+		return types.WorkspaceBundle{}, err
+	}
+	for _, s := range sharedSets {
+		rows, err := o.DB.ListWorkspaceEnvVars(o.Ctx(), s.ID)
+		if err != nil {
+			return types.WorkspaceBundle{}, err
+		}
+		bs := types.BundleSharedSet{Name: s.Name, Vars: []types.BundleEnvVar{}}
+		for _, r := range rows {
+			if bv, ok := bundleEnvVar(sharedVarAsEnv(r), mode); ok {
+				bs.Vars = append(bs.Vars, bv)
+			}
+		}
+		bundle.Workspace.SharedSets = append(bundle.Workspace.SharedSets, bs)
+	}
+	if len(bundle.Workspace.SharedSets) > 0 {
+		bundle.Version = types.WorkspaceBundleVersion
 	}
 	used := map[string]bool{}
 	for _, a := range apps {
@@ -93,31 +113,50 @@ func (o *Ops) WorkspacesExport(id int64, opts types.WorkspaceExportOptions, trus
 	return bundle, nil
 }
 
+// bundleEnvVar is a variable as a bundle writes it under a secrets mode; false
+// means it is left out.
+func bundleEnvVar(v types.EnvVar, mode string) (types.BundleEnvVar, bool) {
+	secret := v.Private
+	switch {
+	case secret && mode == types.SecretsExclude:
+		return types.BundleEnvVar{}, false
+	case secret && mode == types.SecretsPlaceholder:
+		return types.BundleEnvVar{Key: v.Key, Value: types.SecretPlaceholder, Redacted: true}, true
+	}
+	return types.BundleEnvVar{Key: v.Key, Value: v.Value, Private: v.Private, Options: v.Options, Selected: v.Selected}, true
+}
+
 func bundleConfigSet(d types.ConfigSetDetail, mode string) types.BundleConfigSet {
 	out := types.BundleConfigSet{
 		Name: d.Name, EnvVars: []types.BundleEnvVar{}, Templates: []types.BundleTemplate{},
 		Commands: map[string]types.BundleCommandList{},
 	}
 	for _, v := range d.EnvVars {
-		secret := !v.IncludeInAI
-		switch {
-		case secret && mode == types.SecretsExclude:
+		bv, ok := bundleEnvVar(v, mode)
+		if !ok {
 			continue
-		case secret && mode == types.SecretsPlaceholder:
-			out.EnvVars = append(out.EnvVars, types.BundleEnvVar{Key: v.Key, Value: types.SecretPlaceholder, Redacted: true})
-		default:
-			out.EnvVars = append(out.EnvVars, types.BundleEnvVar{Key: v.Key, Value: v.Value, IncludeInAI: v.IncludeInAI, Options: v.Options, Selected: v.Selected})
 		}
+		if v.SharedVarID != nil {
+			// A shared row is recorded as a link, not copied: the workspace owns it.
+			out.SharedKeys = append(out.SharedKeys, v.Key)
+			continue
+		}
+		out.EnvVars = append(out.EnvVars, bv)
+	}
+	if len(out.SharedKeys) > 0 && d.SharedSetName != nil {
+		out.SharedSet = *d.SharedSetName
+	} else {
+		out.SharedKeys = nil
 	}
 	for _, t := range d.Templates {
-		secret := !t.IncludeInAI
+		secret := t.Private
 		switch {
 		case secret && mode == types.SecretsExclude:
 			continue
 		case secret && mode == types.SecretsPlaceholder:
 			out.Templates = append(out.Templates, types.BundleTemplate{FilePath: t.FilePath, Content: types.SecretPlaceholder, Redacted: true})
 		default:
-			out.Templates = append(out.Templates, types.BundleTemplate{FilePath: t.FilePath, Content: t.Content, IncludeInAI: t.IncludeInAI})
+			out.Templates = append(out.Templates, types.BundleTemplate{FilePath: t.FilePath, Content: t.Content, Private: t.Private})
 		}
 	}
 	cfgs := map[string]*types.RunConfig{
@@ -162,6 +201,10 @@ func (o *Ops) WorkspacesImport(bundle types.WorkspaceBundle, opts types.Workspac
 		base = filepath.FromSlash(bundle.SourceRoot)
 	}
 
+	if err := validateBundleShared(bundle.Workspace.SharedSets, bundle.Apps); err != nil {
+		return types.WorkspaceImportResult{}, api.Errf(api.KindInvalid, "%v", err)
+	}
+
 	type plannedApp struct {
 		src    types.BundleApp
 		folder string
@@ -195,6 +238,7 @@ func (o *Ops) WorkspacesImport(bundle types.WorkspaceBundle, opts types.Workspac
 		}
 		for _, cs := range a.ConfigSets {
 			info.EnvVars += len(cs.EnvVars)
+			info.EnvVars += len(cs.SharedKeys)
 			info.Templates += len(cs.Templates)
 			for _, v := range cs.EnvVars {
 				if v.Redacted {
@@ -227,6 +271,10 @@ func (o *Ops) WorkspacesImport(bundle types.WorkspaceBundle, opts types.Workspac
 	if err != nil {
 		return result, err
 	}
+	shared, err := importSharedSets(ctx, q, ws.ID, bundle.Workspace.SharedSets)
+	if err != nil {
+		return result, err
+	}
 	for _, p := range planned {
 		app, err := q.CreateApp(ctx, db.CreateAppParams{WorkspaceID: ws.ID, Name: p.src.Name, ProjectPath: p.folder})
 		if err != nil {
@@ -254,6 +302,9 @@ func (o *Ops) WorkspacesImport(bundle types.WorkspaceBundle, opts types.Workspac
 			if err := importConfigSet(ctx, q, set.ID, cs); err != nil {
 				return result, err
 			}
+			if err := linkImportedShared(ctx, q, set.ID, cs, shared); err != nil {
+				return result, err
+			}
 		}
 		if _, err := q.SetActiveConfigSet(ctx, db.SetActiveConfigSetParams{ActiveConfigSetID: &activeID, ID: app.ID}); err != nil {
 			return result, err
@@ -276,21 +327,21 @@ func (o *Ops) WorkspacesImport(bundle types.WorkspaceBundle, opts types.Workspac
 
 func importConfigSet(ctx context.Context, q *db.Queries, setID int64, cs types.BundleConfigSet) error {
 	for _, v := range cs.EnvVars {
-		value, include, opts := v.Value, v.IncludeInAI, v.Options
+		value, private, opts := v.Value, v.Private, v.Options
 		if v.Redacted {
-			value, include, opts = "", false, nil
+			value, private, opts = "", true, nil
 		}
 		value, optsJSON, selected := db.EnvStore(value, opts, v.Selected)
-		if _, err := q.CreateEnvVar(ctx, db.CreateEnvVarParams{ConfigSetID: setID, Key: v.Key, Value: value, IncludeInAi: db.BoolInt(include), Options: optsJSON, Selected: selected}); err != nil {
+		if _, err := q.CreateEnvVar(ctx, db.CreateEnvVarParams{ConfigSetID: setID, Key: v.Key, Value: value, Private: db.BoolInt(private), Options: optsJSON, Selected: selected}); err != nil {
 			return err
 		}
 	}
 	for _, t := range cs.Templates {
-		content, include := t.Content, t.IncludeInAI
+		content, private := t.Content, t.Private
 		if t.Redacted {
-			content, include = "", false
+			content, private = "", true
 		}
-		if _, err := q.CreateTemplate(ctx, db.CreateTemplateParams{ConfigSetID: setID, FilePath: t.FilePath, Content: content, IncludeInAi: db.BoolInt(include)}); err != nil {
+		if _, err := q.CreateTemplate(ctx, db.CreateTemplateParams{ConfigSetID: setID, FilePath: t.FilePath, Content: content, Private: db.BoolInt(private)}); err != nil {
 			return err
 		}
 	}
@@ -462,4 +513,117 @@ func uniqueKey(k string, used map[string]bool) string {
 	}
 	used[key] = true
 	return key
+}
+
+// importedShared is a shared set created by an import: its id and variables by key.
+type importedShared struct {
+	id   int64
+	vars map[string]db.WorkspaceEnvVar
+}
+
+// validateBundleShared checks the shared sets of a bundle and every link to
+// them, since a bundle is untrusted input. A link must name a set of the
+// bundle and keys it holds, and a key cannot also be an own variable.
+func validateBundleShared(sets []types.BundleSharedSet, apps []types.BundleApp) error {
+	byName := map[string]map[string]bool{}
+	for i, s := range sets {
+		name := strings.TrimSpace(s.Name)
+		if name == "" {
+			return fmt.Errorf("shared set %d has no name", i+1)
+		}
+		if _, dup := byName[name]; dup {
+			return fmt.Errorf("shared set %q is used twice", name)
+		}
+		keys := map[string]bool{}
+		for _, v := range s.Vars {
+			if strings.TrimSpace(v.Key) == "" {
+				return fmt.Errorf("shared set %q has a variable without a key", name)
+			}
+			if keys[v.Key] {
+				return fmt.Errorf("shared set %q has %s twice", name, v.Key)
+			}
+			keys[v.Key] = true
+		}
+		byName[name] = keys
+	}
+	for _, a := range apps {
+		for _, cs := range a.ConfigSets {
+			if cs.SharedSet == "" {
+				if len(cs.SharedKeys) > 0 {
+					return fmt.Errorf("%s / %s lists shared variables but no shared set", a.Name, cs.Name)
+				}
+				continue
+			}
+			keys, ok := byName[cs.SharedSet]
+			if !ok {
+				return fmt.Errorf("%s / %s links to shared set %q, which the bundle does not have", a.Name, cs.Name, cs.SharedSet)
+			}
+			own := map[string]bool{}
+			for _, v := range cs.EnvVars {
+				own[v.Key] = true
+			}
+			seen := map[string]bool{}
+			for _, k := range cs.SharedKeys {
+				if !keys[k] {
+					return fmt.Errorf("%s / %s takes %s, which shared set %q does not have", a.Name, cs.Name, k, cs.SharedSet)
+				}
+				if own[k] || seen[k] {
+					return fmt.Errorf("%s / %s has %s twice", a.Name, cs.Name, k)
+				}
+				seen[k] = true
+			}
+		}
+	}
+	return nil
+}
+
+// importSharedSets creates a bundle's shared sets for a new workspace.
+func importSharedSets(ctx context.Context, q *db.Queries, workspaceID int64, sets []types.BundleSharedSet) (map[string]importedShared, error) {
+	out := map[string]importedShared{}
+	for _, s := range sets {
+		name := strings.TrimSpace(s.Name)
+		row, err := q.CreateWorkspaceConfigSet(ctx, db.CreateWorkspaceConfigSetParams{WorkspaceID: workspaceID, Name: name})
+		if err != nil {
+			return nil, err
+		}
+		is := importedShared{id: row.ID, vars: map[string]db.WorkspaceEnvVar{}}
+		for _, v := range s.Vars {
+			value, private, opts := v.Value, v.Private, v.Options
+			if v.Redacted {
+				value, private, opts = "", true, nil
+			}
+			value, optsJSON, selected := db.EnvStore(value, opts, v.Selected)
+			vr, err := q.CreateWorkspaceEnvVar(ctx, db.CreateWorkspaceEnvVarParams{
+				WorkspaceConfigSetID: row.ID, Key: strings.TrimSpace(v.Key), Value: value, Private: db.BoolInt(private), Options: optsJSON, Selected: selected,
+			})
+			if err != nil {
+				return nil, err
+			}
+			is.vars[vr.Key] = vr
+		}
+		out[name] = is
+	}
+	return out, nil
+}
+
+// linkImportedShared links an imported config set to its shared set and takes
+// the variables its bundle lists.
+func linkImportedShared(ctx context.Context, q *db.Queries, setID int64, cs types.BundleConfigSet, shared map[string]importedShared) error {
+	if cs.SharedSet == "" {
+		return nil
+	}
+	is := shared[strings.TrimSpace(cs.SharedSet)]
+	if err := q.SetConfigSetSharedSet(ctx, db.SetConfigSetSharedSetParams{SharedSetID: &is.id, ID: setID}); err != nil {
+		return err
+	}
+	for _, key := range cs.SharedKeys {
+		v := is.vars[key]
+		vid := v.ID
+		if _, err := q.CreateSharedEnvVar(ctx, db.CreateSharedEnvVarParams{
+			ConfigSetID: setID, Key: v.Key, Value: v.Value, Private: v.Private, Options: v.Options, Selected: v.Selected, SharedVarID: &vid,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

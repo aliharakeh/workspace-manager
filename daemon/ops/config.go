@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"workspace-manager/daemon/db"
-
+	"workspace-manager/shared/api"
 	"workspace-manager/shared/api/types"
 )
 
@@ -177,9 +177,9 @@ func (o *Ops) EnvVarsCreate(appID, setID int64, body types.EnvVarCreateInput) (t
 	if body.Value != nil {
 		value = *body.Value
 	}
-	include := true
-	if body.IncludeInAI != nil {
-		include = *body.IncludeInAI
+	private := false
+	if body.Private != nil {
+		private = *body.Private
 	}
 	var opts []types.EnvVarOption
 	if body.Options != nil {
@@ -196,7 +196,7 @@ func (o *Ops) EnvVarsCreate(appID, setID int64, body types.EnvVarCreateInput) (t
 	}
 	value, optsJSON, selected := db.EnvStore(value, opts, selected)
 	row, err := o.DB.CreateEnvVar(o.Ctx(), db.CreateEnvVarParams{
-		ConfigSetID: set.ID, Key: key, Value: value, IncludeInAi: db.BoolInt(include), Options: optsJSON, Selected: selected,
+		ConfigSetID: set.ID, Key: key, Value: value, Private: db.BoolInt(private), Options: optsJSON, Selected: selected,
 	})
 	if err != nil {
 		return types.EnvVar{}, db.UniqueErr(err, "Env var key already exists for this config set")
@@ -210,44 +210,15 @@ func (o *Ops) EnvVarsUpdate(id int64, body types.EnvVarUpdateInput) (types.EnvVa
 	if err != nil {
 		return types.EnvVar{}, fmt.Errorf("Env var not found")
 	}
-	cur := db.EnvVarFrom(existing)
-	key, value, include := existing.Key, existing.Value, existing.IncludeInAi != 0
-	opts, selected := cur.Options, cur.Selected
-	if body.Key != nil {
-		key = strings.TrimSpace(*body.Key)
-		if key == "" {
-			return types.EnvVar{}, fmt.Errorf("key cannot be empty")
-		}
+	if existing.SharedVarID != nil {
+		return types.EnvVar{}, api.Errf(api.KindInvalid, "%s is shared from the workspace: edit it in the workspace's shared config", existing.Key)
 	}
-	if body.Value != nil {
-		value = *body.Value
+	f, err := mergeEnvUpdate(db.EnvVarFrom(existing), body)
+	if err != nil {
+		return types.EnvVar{}, err
 	}
-	if body.IncludeInAI != nil {
-		include = *body.IncludeInAI
-	}
-	if body.Value != nil && body.Options == nil && len(opts) > 0 {
-		// A value edit on a choice lands on the selected option.
-		_, optsJSON, _ := db.EnvStoreValue(cur, value)
-		opts = db.EnvVarFrom(db.EnvVar{Options: optsJSON}).Options
-	}
-	if body.Options != nil {
-		var err error
-		if opts, err = db.NormalizeEnvOptions(*body.Options); err != nil {
-			return types.EnvVar{}, err
-		}
-		if body.Selected == nil && !hasOptionLabel(opts, selected) {
-			selected = "" // the old choice is gone: fall back to the first option
-		}
-	}
-	if body.Selected != nil {
-		selected = *body.Selected
-		if selected != "" && !hasOptionLabel(opts, selected) {
-			return types.EnvVar{}, fmt.Errorf("selected %q is not one of the options", selected)
-		}
-	}
-	value, optsJSON, selected := db.EnvStore(value, opts, selected)
 	row, err := o.DB.UpdateEnvVar(o.Ctx(), db.UpdateEnvVarParams{
-		Key: key, Value: value, IncludeInAi: db.BoolInt(include), Options: optsJSON, Selected: selected, ID: id,
+		Key: f.key, Value: f.value, Private: db.BoolInt(f.private), Options: f.options, Selected: f.selected, ID: id,
 	})
 	if err != nil {
 		return types.EnvVar{}, db.UniqueErr(err, "Env var key already exists for this config set")
@@ -260,6 +231,9 @@ func (o *Ops) EnvVarsDelete(id int64) (types.Ok, error) {
 	existing, err := o.DB.GetEnvVar(o.Ctx(), id)
 	if err != nil {
 		return types.Ok{}, fmt.Errorf("Env var not found")
+	}
+	if existing.SharedVarID != nil {
+		return types.Ok{}, api.Errf(api.KindInvalid, "%s is shared from the workspace: unlink the config set or edit it in the workspace's shared config", existing.Key)
 	}
 	if _, err := o.DB.DeleteEnvVar(o.Ctx(), id); err != nil {
 		return types.Ok{}, err
@@ -295,11 +269,11 @@ func (o *Ops) TemplatesCreate(appID, setID int64, body types.TemplateCreateInput
 	if body.Content != nil {
 		content = *body.Content
 	}
-	include := true
-	if body.IncludeInAI != nil {
-		include = *body.IncludeInAI
+	private := false
+	if body.Private != nil {
+		private = *body.Private
 	}
-	row, err := o.DB.CreateTemplate(o.Ctx(), db.CreateTemplateParams{ConfigSetID: set.ID, FilePath: path, Content: content, IncludeInAi: db.BoolInt(include)})
+	row, err := o.DB.CreateTemplate(o.Ctx(), db.CreateTemplateParams{ConfigSetID: set.ID, FilePath: path, Content: content, Private: db.BoolInt(private)})
 	if err != nil {
 		return types.Template{}, db.UniqueErr(err, "Template for this file already exists")
 	}
@@ -308,7 +282,7 @@ func (o *Ops) TemplatesCreate(appID, setID int64, body types.TemplateCreateInput
 }
 
 func templateResult(row db.Template) types.Template {
-	return types.Template{ID: row.ID, ConfigSetID: row.ConfigSetID, FilePath: row.FilePath, Content: row.Content, IncludeInAI: row.IncludeInAi != 0, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+	return types.Template{ID: row.ID, ConfigSetID: row.ConfigSetID, FilePath: row.FilePath, Content: row.Content, Private: row.Private != 0, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
 }
 
 func hasOptionLabel(opts []types.EnvVarOption, label string) bool {
@@ -329,7 +303,7 @@ func (o *Ops) TemplatesUpdate(id int64, body types.TemplateUpdateInput) (types.T
 	if err != nil {
 		return types.Template{}, fmt.Errorf("Template not found")
 	}
-	path, content, include := existing.FilePath, existing.Content, existing.IncludeInAi != 0
+	path, content, private := existing.FilePath, existing.Content, existing.Private != 0
 	if body.FilePath != nil {
 		path = strings.ReplaceAll(strings.TrimSpace(*body.FilePath), "\\", "/")
 		if path == "" {
@@ -339,10 +313,10 @@ func (o *Ops) TemplatesUpdate(id int64, body types.TemplateUpdateInput) (types.T
 	if body.Content != nil {
 		content = *body.Content
 	}
-	if body.IncludeInAI != nil {
-		include = *body.IncludeInAI
+	if body.Private != nil {
+		private = *body.Private
 	}
-	row, err := o.DB.UpdateTemplate(o.Ctx(), db.UpdateTemplateParams{FilePath: path, Content: content, IncludeInAi: db.BoolInt(include), ID: id})
+	row, err := o.DB.UpdateTemplate(o.Ctx(), db.UpdateTemplateParams{FilePath: path, Content: content, Private: db.BoolInt(private), ID: id})
 	if err != nil {
 		return types.Template{}, db.UniqueErr(err, "Template for this file already exists")
 	}

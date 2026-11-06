@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { CheckIcon, ChevronsUpDownIcon } from "lucide-react"
+import { Link2Icon, CheckIcon, ChevronsUpDownIcon } from "lucide-react"
 import { api } from "@/lib/api"
 import type { App, ConfigSet } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -98,6 +98,12 @@ export function ConfigSetPicker({
               onClick={() => void activate(set.id)}
             >
               <span className="truncate">{set.name}</span>
+              {set.shared_set_id != null ? (
+                <Link2Icon
+                  className="size-3.5 shrink-0 text-muted-foreground"
+                  aria-label={`Shares variables from `}
+                />
+              ) : null}
               {set.id === app.active_config_set_id ? (
                 <CheckIcon className="ml-auto" />
               ) : null}

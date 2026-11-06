@@ -51,6 +51,7 @@ func allTools() []mcpTool {
 		appTool(),
 		configTool(),
 		envTool(),
+		sharedTool(),
 		templateTool(),
 		runTool(),
 		blueprintTool(),
@@ -487,7 +488,7 @@ func splitComma(s string) []string {
 func envTool() mcpTool {
 	return mcpTool{
 		Name:        "wm_env",
-		Description: "Manage an app's environment variables on any config set (the active one by default). A variable can be a choice: give it options (label/value pairs) and the one in use is selected, the first by default; its value is always the selected option's. Hidden values can be replaced, but are never returned or made visible by this MCP server.",
+		Description: "Manage an app's environment variables on any config set (the active one by default). A variable can be a choice: give it options (label/value pairs) and the one in use is selected, the first by default; its value is always the selected option's. Private values can be replaced, but are never returned or made public by this MCP server.",
 		Schema: schema("Environment variables", map[string]any{
 			"action":    map[string]any{"type": "string", "description": "list, set (create or update), delete, import", "enum": []string{"list", "set", "delete", "import"}},
 			"app":       strProp(appRefDesc),
@@ -497,7 +498,7 @@ func envTool() mcpTool {
 			"value":     strProp("variable value (set; omit to keep the stored value on update)"),
 			"options":   map[string]any{"type": "array", "description": "make the variable a choice: its options in order, replacing any existing ones; [] turns it back into a plain value (set)", "items": map[string]any{"type": "object", "properties": map[string]any{"label": map[string]any{"type": "string"}, "value": map[string]any{"type": "string"}}, "required": []string{"label"}}},
 			"selected":  strProp("label of the option in use; omit to keep the current one (the first for new options) (set; needs options)"),
-			"hidden":    boolProp("hide the value from AI clients, i.e. include_in_ai=false (set); omit to preserve visibility on update; hidden variables cannot be unhidden here"),
+			"private":   boolProp("make the value private: agents never see it (set); omit to keep the current flag; a private variable cannot be made public here"),
 			"file":      strProp(".env or YAML file to import (import)"),
 		}, "action"),
 		Handler: func(args map[string]any) (any, error) {
@@ -518,7 +519,7 @@ func envTool() mcpTool {
 				if err != nil {
 					return nil, err
 				}
-				include := !argBool(args, "hidden", false)
+				private := argBool(args, "private", false)
 				vars, err := daoCall(api.MethodEnvVarsList, map[string]any{"appID": appID, "configSetID": setID})
 				if err != nil {
 					return nil, err
@@ -540,10 +541,13 @@ func envTool() mcpTool {
 				}
 				for _, v := range list {
 					if v["key"] == key {
+						if err := refuseShared(v); err != nil {
+							return nil, err
+						}
 						id, _ := v["id"].(float64)
 						body := map[string]any{"key": key}
-						if _, specified := args["hidden"]; specified {
-							body["include_in_ai"] = include
+						if _, specified := args["private"]; specified {
+							body["private"] = private
 						}
 						if hasValue {
 							body["value"] = value
@@ -552,7 +556,7 @@ func envTool() mcpTool {
 						return daoCall(api.MethodEnvVarsUpdate, map[string]any{"id": int64(id), "body": body})
 					}
 				}
-				body := map[string]any{"key": key, "include_in_ai": include}
+				body := map[string]any{"key": key, "private": private}
 				if hasValue {
 					body["value"] = value
 				}
@@ -572,6 +576,9 @@ func envTool() mcpTool {
 				_ = json.Unmarshal(raw, &list)
 				for _, v := range list {
 					if v["key"] == key {
+						if err := refuseShared(v); err != nil {
+							return nil, err
+						}
 						id, _ := v["id"].(float64)
 						return daoCall(api.MethodEnvVarsDelete, map[string]any{"id": int64(id)})
 					}
@@ -607,7 +614,7 @@ func templateTool() mcpTool {
 			"set":     strProp(setRefDesc + " (all actions work on any set without activating it)"),
 			"file":    strProp("project-relative file path, e.g. .env.local (add/edit/delete)"),
 			"content": strProp("template content, with {{placeholders}} (add/edit)"),
-			"hidden":  boolProp("hide the content from AI clients (add/edit)"),
+			"private": boolProp("make the content private: agents never see it (add/edit)"),
 		}, "action"),
 		Handler: func(args map[string]any) (any, error) {
 			app, err := resolveApp(argStr(args, "app"))
@@ -646,8 +653,8 @@ func templateTool() mcpTool {
 				if content, ok := args["content"].(string); ok {
 					body["content"] = content
 				}
-				if _, changed := args["hidden"]; changed {
-					body["include_in_ai"] = !argBool(args, "hidden", false)
+				if _, changed := args["private"]; changed {
+					body["private"] = argBool(args, "private", false)
 				}
 				return daoCall(api.MethodTemplatesCreate, map[string]any{"appID": appID, "configSetID": setID, "body": body})
 			case "edit":
@@ -664,11 +671,11 @@ func templateTool() mcpTool {
 				if content, ok := args["content"].(string); ok {
 					body["content"] = content
 				}
-				if _, changed := args["hidden"]; changed {
-					body["include_in_ai"] = !argBool(args, "hidden", false)
+				if _, changed := args["private"]; changed {
+					body["private"] = argBool(args, "private", false)
 				}
 				if len(body) == 0 {
-					return nil, fmt.Errorf("nothing to change: pass \"content\" and/or \"hidden\"")
+					return nil, fmt.Errorf("nothing to change: pass \"content\" and/or \"private\"")
 				}
 				return daoCall(api.MethodTemplatesUpdate, map[string]any{"id": int64(id), "body": body})
 			case "delete":

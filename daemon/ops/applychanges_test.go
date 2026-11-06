@@ -51,11 +51,11 @@ func TestWritesAreAnnounced(t *testing.T) {
 
 func TestApplyChangesWritesAndSkipsExcludedValues(t *testing.T) {
 	o, rec, appID := setup(t)
-	visible, hidden := true, false
+	visible, hidden := false, true
 	one, secret := "1", "secret"
 	for _, v := range []types.EnvVarCreateInput{
-		{Key: "PORT", Value: &one, IncludeInAI: &visible},
-		{Key: "SECRET", Value: &secret, IncludeInAI: &hidden},
+		{Key: "PORT", Value: &one, Private: &visible},
+		{Key: "SECRET", Value: &secret, Private: &hidden},
 	} {
 		if _, err := o.EnvVarsCreate(appID, 0, v); err != nil {
 			t.Fatalf("create %s: %v", v.Key, err)

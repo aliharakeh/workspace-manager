@@ -1,20 +1,17 @@
 package gui
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 
-	"workspace-manager/gui/ai"
 	"workspace-manager/shared/api"
 	"workspace-manager/shared/api/lib"
 	"workspace-manager/shared/api/types"
 )
 
 // Every method below is a proxy to the wmd daemon, which owns the database, the
-// runner and the blueprints, except: git (the git package), the AI methods,
+// runner and the blueprints, except: git (the git package), 
 // the file dialogs and OpenExternal, which run in this process.
 
 // m is a daemon call's parameters.
@@ -115,6 +112,50 @@ func (a *App) ConfigSetsActivate(id int64) (types.ConfigSetActivateResult, error
 // ConfigSetsCompare diffs two config sets of the same app.
 func (a *App) ConfigSetsCompare(leftID, rightID int64) (types.ConfigSetCompare, error) {
 	return call[types.ConfigSetCompare](a.link, api.MethodConfigSetsCompare, m{"leftID": leftID, "rightID": rightID})
+}
+
+// ConfigSetsLinkShared links an app config set to a workspace shared set and
+// takes the chosen variables from it; calling it again changes the selection.
+func (a *App) ConfigSetsLinkShared(id int64, body types.SharedLinkInput) (types.ConfigSet, error) {
+	return call[types.ConfigSet](a.link, api.MethodConfigSetsLinkShared, m{"id": id, "body": body})
+}
+
+// ConfigSetsUnlinkShared stops a config set sharing; with keep, the shared
+// variables stay as the app's own.
+func (a *App) ConfigSetsUnlinkShared(id int64, keep bool) (types.ConfigSet, error) {
+	return call[types.ConfigSet](a.link, api.MethodConfigSetsUnlinkShared, m{"id": id, "keep": keep})
+}
+
+func (a *App) SharedSetsList(workspaceID int64) ([]types.SharedSet, error) {
+	return call[[]types.SharedSet](a.link, api.MethodSharedSetsList, m{"workspaceID": workspaceID})
+}
+
+func (a *App) SharedSetsGet(id int64) (types.SharedSetDetail, error) {
+	return call[types.SharedSetDetail](a.link, api.MethodSharedSetsGet, m{"id": id})
+}
+
+func (a *App) SharedSetsCreate(workspaceID int64, name string) (types.SharedSet, error) {
+	return call[types.SharedSet](a.link, api.MethodSharedSetsCreate, m{"workspaceID": workspaceID, "name": name})
+}
+
+func (a *App) SharedSetsRename(id int64, name string) (types.SharedSet, error) {
+	return call[types.SharedSet](a.link, api.MethodSharedSetsRename, m{"id": id, "name": name})
+}
+
+func (a *App) SharedSetsDelete(id int64) (types.Ok, error) {
+	return call[types.Ok](a.link, api.MethodSharedSetsDelete, m{"id": id})
+}
+
+func (a *App) SharedVarsCreate(setID int64, body types.EnvVarCreateInput) (types.SharedEnvVar, error) {
+	return call[types.SharedEnvVar](a.link, api.MethodSharedVarsCreate, m{"setID": setID, "body": body})
+}
+
+func (a *App) SharedVarsUpdate(id int64, body types.EnvVarUpdateInput) (types.SharedEnvVar, error) {
+	return call[types.SharedEnvVar](a.link, api.MethodSharedVarsUpdate, m{"id": id, "body": body})
+}
+
+func (a *App) SharedVarsDelete(id int64) (types.Ok, error) {
+	return call[types.Ok](a.link, api.MethodSharedVarsDelete, m{"id": id})
 }
 
 func (a *App) ConfigSetsCopyFrom(id, sourceID int64, parts *types.CopyParts) (types.ConfigSet, error) {
@@ -385,176 +426,6 @@ func (a *App) SettingsSet(key string, value string) (map[string]string, error) {
 	return call[map[string]string](a.link, api.MethodSettingsSet, types.SettingsSetInput{Key: key, Value: value})
 }
 
-// aiConnectionInfo maps a stored connection to what the UI sees (no API key).
-func aiConnectionInfo(name string, cfg ai.AIProviderConfig) types.AIConnectionInfo {
-	return types.AIConnectionInfo{
-		Name:        name,
-		Provider:    cfg.Provider,
-		BaseURL:     cfg.BaseURL,
-		Model:       cfg.Model,
-		HasAPIKey:   cfg.APIKey != "",
-		Temperature: cfg.Temperature,
-
-		OpenCodeSession: cfg.OpenCodeSession,
-	}
-}
-
-func aiConfigInfo(store ai.AIStore) types.AIConfigInfo {
-	info := types.AIConfigInfo{
-		Providers: make([]types.AIConnectionInfo, 0, len(store.Providers)),
-		Active:    store.Active,
-	}
-	names := make([]string, 0, len(store.Providers))
-	for name := range store.Providers {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		info.Providers = append(info.Providers, aiConnectionInfo(name, store.Providers[name]))
-	}
-	return info
-}
-
-// The AI methods run in this process (package gui/ai). They read the app and
-// its config set from the server and write through it; the daemon has no AI.
-
-func (a *App) AIConfigGet() (types.AIConfigInfo, error) {
-	store, err := ai.LoadAIStore()
-	if err != nil {
-		return types.AIConfigInfo{}, err
-	}
-	return aiConfigInfo(store), nil
-}
-
-// AIConfigSave upserts one connection keyed by its normalized name.
-func (a *App) AIConfigSave(body types.AIProviderConfigInput) (types.AIConfigInfo, error) {
-	store, err := ai.LoadAIStore()
-	if err != nil {
-		return types.AIConfigInfo{}, err
-	}
-	if err := store.UpsertAIConnection(body.Name, body.Provider, ai.AIProviderConfig{
-		BaseURL:     body.BaseURL,
-		APIKey:      body.APIKey,
-		Model:       body.Model,
-		Temperature: body.Temperature,
-
-		OpenCodeSession: body.OpenCodeSession,
-	}, body.ClearAPIKey); err != nil {
-		return types.AIConfigInfo{}, err
-	}
-	if err := ai.SaveAIStore(store); err != nil {
-		return types.AIConfigInfo{}, err
-	}
-	return aiConfigInfo(store), nil
-}
-
-func (a *App) AIConfigDelete(name string) (types.AIConfigInfo, error) {
-	store, err := ai.LoadAIStore()
-	if err != nil {
-		return types.AIConfigInfo{}, err
-	}
-	if !store.DeleteAIConnection(name) {
-		return types.AIConfigInfo{}, fmt.Errorf("Connection not found")
-	}
-	if err := ai.SaveAIStore(store); err != nil {
-		return types.AIConfigInfo{}, err
-	}
-	return aiConfigInfo(store), nil
-}
-
-func (a *App) AIConfigActivate(body types.AIActivateInput) (types.AIConfigInfo, error) {
-	store, err := ai.LoadAIStore()
-	if err != nil {
-		return types.AIConfigInfo{}, err
-	}
-	if err := store.ActivateAIConnection(body.Name); err != nil {
-		return types.AIConfigInfo{}, err
-	}
-	if err := ai.SaveAIStore(store); err != nil {
-		return types.AIConfigInfo{}, err
-	}
-	return aiConfigInfo(store), nil
-}
-
-func (a *App) AIChat(body types.AIChatInput) (types.AIChatResult, error) {
-	ctx := a.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	text, err := ai.ChatAI(ctx, body.System, body.Prompt)
-	if err != nil {
-		return types.AIChatResult{}, err
-	}
-	return types.AIChatResult{Text: text}, nil
-}
-
-func (a *App) AIAppChat(body types.AppAIChatInput) (types.AppAIChatResult, error) {
-	ctx := a.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	app, err := a.appByID(body.AppID)
-	if err != nil {
-		return types.AppAIChatResult{}, err
-	}
-	detail, err := a.ConfigSetsGetDetail(body.ConfigSetID)
-	if err != nil {
-		return types.AppAIChatResult{}, err
-	}
-	if detail.AppID != app.ID {
-		return types.AppAIChatResult{}, fmt.Errorf("Config set not found")
-	}
-	return ai.AppChatAI(ctx, app.Name, app.ProjectPath, detail, body.History, body.Instruction, func(ev types.AppAIStreamEvent) {
-		if a.ctx == nil {
-			return
-		}
-		payload := map[string]any{"type": ev.Type}
-		if ev.Text != "" {
-			payload["text"] = ev.Text
-		}
-		if ev.Call != nil {
-			payload["call"] = map[string]any{
-				"name":   ev.Call.Name,
-				"input":  ev.Call.Input,
-				"output": ev.Call.Output,
-			}
-		}
-		EventsEmitAppAI(a.app, payload)
-	})
-}
-
-// AITest runs one minimal generation against an unsaved connection payload so
-// the UI can verify credentials before saving. Nothing is persisted.
-func (a *App) AITest(body types.AITestInput) (types.AITestResult, error) {
-	ctx := a.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	slug := ai.NormalizeProvider(body.Provider)
-	text, err := ai.TestAI(ctx, slug, ai.AIProviderConfig{
-		BaseURL:     body.BaseURL,
-		APIKey:      body.APIKey,
-		Model:       body.Model,
-		Temperature: body.Temperature,
-
-		OpenCodeSession: body.OpenCodeSession,
-	})
-	if err != nil {
-		return types.AITestResult{}, err
-	}
-	return types.AITestResult{Ok: true, Text: text}, nil
-}
-
-// AIApplyPatch writes a staged AI patch in one call, so it cannot half-apply:
-// the config set's env vars, templates and command lists. Values excluded from
-// AI are never touched.
-func (a *App) AIApplyPatch(body types.AIApplyPatchInput) (types.Ok, error) {
-	if _, err := call[types.Ok](a.link, api.MethodConfigSetsApplyChanges, m{"appID": body.AppID, "configSetID": body.ConfigSetID, "patch": body.Patch}); err != nil {
-		return types.Ok{}, err
-	}
-	return types.Ok{Ok: true}, nil
-}
-
 // appByID reads one app. The file dialogs and the env import need its project
 // path.
 func (a *App) appByID(id int64) (types.App, error) {
@@ -680,12 +551,6 @@ func (a *App) BlueprintsUpdate(id int64, body types.BlueprintInput) (types.Bluep
 
 func (a *App) BlueprintsDelete(id int64) (types.Ok, error) {
 	return call[types.Ok](a.link, api.MethodBlueprintsDelete, m{"id": id})
-}
-
-// BlueprintsAIPropose asks the AI for a blueprint, or for a change to the one
-// in body.Draft. It saves nothing: the UI loads the result into the editor.
-func (a *App) BlueprintsAIPropose(body types.BlueprintAIInput) (types.BlueprintAIResult, error) {
-	return ai.ProposeBlueprintAI(ctxOrBackground(a.ctx), body.Instruction, body.Draft)
 }
 
 // BlueprintsCreateApp runs a blueprint to completion (logs stream on the

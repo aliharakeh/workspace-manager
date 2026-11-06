@@ -5,6 +5,7 @@ import {
   ChevronsUpDownIcon,
   CopyIcon,
   GitCompareIcon,
+  Link2Icon,
   PencilIcon,
   PlusIcon,
   SearchIcon,
@@ -578,6 +579,12 @@ export function ConfigSetSwitcher({
               }
             >
               <span className="truncate">{active?.name ?? "—"}</span>
+              {active?.shared_set_id != null ? (
+                <Link2Icon
+                  className="size-3.5 shrink-0 text-muted-foreground"
+                  aria-label={`Shares variables from `}
+                />
+              ) : null}
               <ChevronsUpDownIcon data-icon="inline-end" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-48">
@@ -589,6 +596,12 @@ export function ConfigSetSwitcher({
                     onClick={() => void activate(set.id)}
                   >
                     <span className="truncate">{set.name}</span>
+                    {set.shared_set_id != null ? (
+                      <Link2Icon
+                        className="size-3.5 shrink-0 text-muted-foreground"
+                        aria-label={`Shares variables from `}
+                      />
+                    ) : null}
                     {set.id === app.active_config_set_id ? (
                       <CheckIcon className="ml-auto" />
                     ) : null}

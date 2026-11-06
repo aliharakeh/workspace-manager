@@ -41,6 +41,19 @@ const (
 	MethodConfigSetsCopyFrom     = "configSets.copyFrom"
 	MethodConfigSetsApplyChanges = "configSets.applyChanges"
 	MethodConfigSetsCompare      = "configSets.compare"
+	MethodConfigSetsLinkShared   = "configSets.linkShared"
+	MethodConfigSetsUnlinkShared = "configSets.unlinkShared"
+
+	// Workspace shared config: config sets a workspace owns, which app config
+	// sets link to and take read-only live variables from.
+	MethodSharedSetsList   = "sharedSets.list"
+	MethodSharedSetsGet    = "sharedSets.get"
+	MethodSharedSetsCreate = "sharedSets.create"
+	MethodSharedSetsRename = "sharedSets.rename"
+	MethodSharedSetsDelete = "sharedSets.delete"
+	MethodSharedVarsCreate = "sharedVars.create"
+	MethodSharedVarsUpdate = "sharedVars.update"
+	MethodSharedVarsDelete = "sharedVars.delete"
 
 	// Env vars.
 	MethodEnvVarsList   = "envVars.list"
@@ -140,7 +153,7 @@ var Methods = []Method{
 	{Name: MethodWorkspacesUpdate, Agent: true},
 	{Name: MethodWorkspacesDelete, Agent: true},
 
-	// Export hides AI-excluded values from agents and refuses them "include".
+	// Export hides private values from agents and refuses them "include".
 	{Name: MethodWorkspacesExport, Agent: true},
 	{Name: MethodWorkspacesImport, Agent: true},
 	{Name: MethodWorkspacesReorder, Agent: true},
@@ -166,6 +179,18 @@ var Methods = []Method{
 	// Applies changes the GUI reviewed (the app AI's staged edits) in one call.
 	{Name: MethodConfigSetsApplyChanges, Agent: false},
 	{Name: MethodConfigSetsCompare, Agent: true},
+	{Name: MethodConfigSetsLinkShared, Agent: true},
+	{Name: MethodConfigSetsUnlinkShared, Agent: true},
+
+	// Private shared values are blanked for agents, like app variables.
+	{Name: MethodSharedSetsList, Agent: true},
+	{Name: MethodSharedSetsGet, Agent: true},
+	{Name: MethodSharedSetsCreate, Agent: true},
+	{Name: MethodSharedSetsRename, Agent: true},
+	{Name: MethodSharedSetsDelete, Agent: true},
+	{Name: MethodSharedVarsCreate, Agent: true},
+	{Name: MethodSharedVarsUpdate, Agent: true},
+	{Name: MethodSharedVarsDelete, Agent: true},
 
 	{Name: MethodEnvVarsList, Agent: true},
 	{Name: MethodEnvVarsCreate, Agent: true},
@@ -177,7 +202,7 @@ var Methods = []Method{
 	{Name: MethodTemplatesCreate, Agent: true},
 	{Name: MethodTemplatesUpdate, Agent: true},
 	{Name: MethodTemplatesDelete, Agent: true},
-	// Rendering shows hidden env values, so it is for the GUI and editor clients.
+	// Rendering shows private env values, so it is for the GUI and editor clients.
 	{Name: MethodTemplatesRender, Agent: false},
 
 	{Name: MethodPackageScriptsList, Agent: true},

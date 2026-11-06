@@ -1,18 +1,23 @@
 package types
 
+import "encoding/json"
+
 // Workspace export and import. A bundle is plain JSON describing a workspace
 // and its apps, for moving to another machine or sharing with a teammate.
 
 const (
 	// WorkspaceBundleFormat identifies a workspace bundle file.
 	WorkspaceBundleFormat = "workspace-manager/workspace"
-	// WorkspaceBundleVersion is the bundle layout this build writes and the
-	// newest it reads.
-	WorkspaceBundleVersion = 1
+	// WorkspaceBundleVersion is the newest bundle layout this build reads. Version 2
+	// added shared config; an export without any is still written as version 1 so
+	// older builds keep reading it.
+	WorkspaceBundleVersion = 2
+	// WorkspaceBundleBaseVersion is the layout without shared config.
+	WorkspaceBundleBaseVersion = 1
 )
 
 // How secrets are handled on export. "Secret" means an env var or template
-// whose include_in_ai is false.
+// whose private is false.
 const (
 	// SecretsExclude drops secret env vars and templates altogether.
 	SecretsExclude = "exclude"
@@ -52,6 +57,14 @@ type BundleWorkspace struct {
 	Name  string  `json:"name"`
 	Icon  *string `json:"icon"`
 	Color *string `json:"color"`
+	// SharedSets are the workspace's shared config sets (bundle version 2).
+	SharedSets []BundleSharedSet `json:"shared_sets,omitempty"`
+}
+
+// BundleSharedSet is a workspace shared config set with its variables.
+type BundleSharedSet struct {
+	Name string         `json:"name"`
+	Vars []BundleEnvVar `json:"vars"`
 }
 
 type BundleApp struct {
@@ -77,12 +90,16 @@ type BundleConfigSet struct {
 	Templates []BundleTemplate `json:"templates"`
 	// Commands holds the setup, dev, build and prod lists, by kind.
 	Commands map[string]BundleCommandList `json:"commands"`
+	// SharedSet names the workspace shared set this config set is linked to, and
+	// SharedKeys the variables it takes from it. They are not repeated in EnvVars.
+	SharedSet  string   `json:"shared_set,omitempty"`
+	SharedKeys []string `json:"shared_keys,omitempty"`
 }
 
 type BundleEnvVar struct {
-	Key         string `json:"key"`
-	Value       string `json:"value"`
-	IncludeInAI bool   `json:"include_in_ai"`
+	Key     string `json:"key"`
+	Value   string `json:"value"`
+	Private bool   `json:"private"`
 	// Options and Selected carry a choice variable; Value is the selected one.
 	Options  []EnvVarOption `json:"options,omitempty"`
 	Selected string         `json:"selected,omitempty"`
@@ -91,10 +108,56 @@ type BundleEnvVar struct {
 }
 
 type BundleTemplate struct {
-	FilePath    string `json:"file_path"`
-	Content     string `json:"content"`
-	IncludeInAI bool   `json:"include_in_ai"`
-	Redacted    bool   `json:"redacted,omitempty"`
+	FilePath string `json:"file_path"`
+	Content  string `json:"content"`
+	Private  bool   `json:"private"`
+	Redacted bool   `json:"redacted,omitempty"`
+}
+
+// legacyPublic reads the include_in_ai flag of bundles exported before it was
+// renamed to private. It meant the opposite, and a bundle that carries it must
+// not lose the privacy of what it holds.
+type legacyPublic struct {
+	IncludeInAI *bool `json:"include_in_ai"`
+}
+
+// UnmarshalJSON accepts the older include_in_ai field when private is absent.
+func (v *BundleEnvVar) UnmarshalJSON(data []byte) error {
+	type plain BundleEnvVar
+	var p struct {
+		plain
+		Private *bool `json:"private"`
+		legacyPublic
+	}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = BundleEnvVar(p.plain)
+	v.Private = legacyPrivate(p.Private, p.IncludeInAI)
+	return nil
+}
+
+// UnmarshalJSON accepts the older include_in_ai field when private is absent.
+func (t *BundleTemplate) UnmarshalJSON(data []byte) error {
+	type plain BundleTemplate
+	var p struct {
+		plain
+		Private *bool `json:"private"`
+		legacyPublic
+	}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*t = BundleTemplate(p.plain)
+	t.Private = legacyPrivate(p.Private, p.IncludeInAI)
+	return nil
+}
+
+func legacyPrivate(private, includeInAI *bool) bool {
+	if private != nil {
+		return *private
+	}
+	return includeInAI != nil && !*includeInAI
 }
 
 type BundleCommandList struct {

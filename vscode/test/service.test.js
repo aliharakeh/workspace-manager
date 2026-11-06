@@ -89,6 +89,27 @@ test('env vars: upsert, update key, remove, other set is readable', async () => 
   await svc.deleteSet(project, 'Other');
 });
 
+test('shared variables are visible but read-only, and follow the workspace', async () => {
+  const app = await svc.requireApp(project);
+  const sharedSet = await client.call('sharedSets.create', { workspaceID: app.workspace_id, name: 'dev' });
+  const shared = await client.call('sharedVars.create', { setID: sharedSet.id, body: { key: 'DATABASE_URL', value: 'postgres://one' } });
+  const sets = await client.call('configSets.list', { appID: app.id });
+  const activeSet = sets.find((s) => s.id === app.active_config_set_id);
+  await client.call('configSets.linkShared', { id: activeSet.id, body: { shared_set_id: sharedSet.id, var_ids: [shared.id] } });
+
+  assert.equal((await svc.listEnv(project)).env.DATABASE_URL, 'postgres://one', 'the shared variable is listed');
+  await assert.rejects(svc.setEnv(project, { DATABASE_URL: 'mine' }), /shared from the workspace/);
+  await assert.rejects(svc.updateEnv(project, 'DATABASE_URL', 'DATABASE_URL', 'mine'), /shared from the workspace/);
+  await assert.rejects(svc.removeEnv(project, 'DATABASE_URL'), /shared from the workspace/);
+
+  await client.call('sharedVars.update', { id: shared.id, body: { value: 'postgres://two' } });
+  assert.equal((await svc.listEnv(project)).env.DATABASE_URL, 'postgres://two', 'a workspace edit reaches the app');
+
+  await client.call('configSets.unlinkShared', { id: activeSet.id, keep: false });
+  assert.equal((await svc.listEnv(project)).env.DATABASE_URL, undefined, 'unlinking removed it');
+  await client.call('sharedSets.delete', { id: sharedSet.id });
+});
+
 test('templates: set, get, update, render, snapshot, import, remove', async () => {
   fs.writeFileSync(path.join(project, 'app.conf'), 'port=1\n');
   await svc.setTemplate(project, 'app.conf', 'port={{A}}\n');

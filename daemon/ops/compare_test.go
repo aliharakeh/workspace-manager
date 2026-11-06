@@ -26,30 +26,30 @@ func cmds(items ...[2]string) *types.RunConfig {
 func fixture() (types.ConfigSetDetail, types.ConfigSetDetail) {
 	l := types.ConfigSetDetail{
 		EnvVars: []types.EnvVar{
-			{Key: "A", Value: "1", IncludeInAI: true},
-			{Key: "B", Value: "left", IncludeInAI: true},
-			{Key: "ONLYL", Value: "x", IncludeInAI: true},
-			{Key: "SECRET", Value: "hunter2", IncludeInAI: false},
-			{Key: "SAMESECRET", Value: "s", IncludeInAI: false},
+			{Key: "A", Value: "1", Private: false},
+			{Key: "B", Value: "left", Private: false},
+			{Key: "ONLYL", Value: "x", Private: false},
+			{Key: "SECRET", Value: "hunter2", Private: true},
+			{Key: "SAMESECRET", Value: "s", Private: true},
 		},
 		Templates: []types.Template{
-			{FilePath: ".env", Content: "a", IncludeInAI: true},
-			{FilePath: "k.pem", Content: "PRIVATE", IncludeInAI: false},
+			{FilePath: ".env", Content: "a", Private: false},
+			{FilePath: "k.pem", Content: "PRIVATE", Private: true},
 		},
 		DevConfig: cmds([2]string{"web", "npm run dev"}, [2]string{"", "echo 1"}),
 	}
 	r := types.ConfigSetDetail{
 		EnvVars: []types.EnvVar{
-			{Key: "A", Value: "1", IncludeInAI: true},
-			{Key: "B", Value: "right", IncludeInAI: true},
-			{Key: "ONLYR", Value: "y", IncludeInAI: true},
-			{Key: "SECRET", Value: "other", IncludeInAI: false},
-			{Key: "SAMESECRET", Value: "s", IncludeInAI: false},
+			{Key: "A", Value: "1", Private: false},
+			{Key: "B", Value: "right", Private: false},
+			{Key: "ONLYR", Value: "y", Private: false},
+			{Key: "SECRET", Value: "other", Private: true},
+			{Key: "SAMESECRET", Value: "s", Private: true},
 		},
 		Templates: []types.Template{
-			{FilePath: ".env", Content: "b", IncludeInAI: true},
-			{FilePath: "k.pem", Content: "OTHERPRIVATE", IncludeInAI: false},
-			{FilePath: "new.txt", Content: "n", IncludeInAI: true},
+			{FilePath: ".env", Content: "b", Private: false},
+			{FilePath: "k.pem", Content: "OTHERPRIVATE", Private: true},
+			{FilePath: "new.txt", Content: "n", Private: false},
 		},
 		DevConfig: cmds([2]string{"web", "npm start"}, [2]string{"", "echo 1"}, [2]string{"", "echo 2"}),
 	}

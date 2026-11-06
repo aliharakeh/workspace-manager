@@ -27,8 +27,12 @@ type ConfigSet struct {
 	ID        int64  `json:"id"`
 	AppID     int64  `json:"app_id"`
 	Name      string `json:"name"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	// SharedSetID is the workspace shared set this config set takes variables
+	// from (nil when not linked); SharedSetName is that set's name.
+	SharedSetID   *int64  `json:"shared_set_id"`
+	SharedSetName *string `json:"shared_set_name"`
+	CreatedAt     string  `json:"created_at"`
+	UpdatedAt     string  `json:"updated_at"`
 }
 
 // EnvVarOption is one named value a variable can take.
@@ -45,11 +49,14 @@ type EnvVar struct {
 	ConfigSetID int64          `json:"config_set_id"`
 	Key         string         `json:"key"`
 	Value       string         `json:"value"`
-	IncludeInAI bool           `json:"include_in_ai"`
+	Private bool           `json:"private"`
 	Options     []EnvVarOption `json:"options"`
 	Selected    string         `json:"selected"`
-	CreatedAt   string         `json:"created_at"`
-	UpdatedAt   string         `json:"updated_at"`
+	// SharedVarID is set on a row that mirrors a workspace shared variable. Such
+	// a row is read-only in the app.
+	SharedVarID *int64 `json:"shared_var_id"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
 }
 
 type Template struct {
@@ -57,7 +64,7 @@ type Template struct {
 	ConfigSetID int64  `json:"config_set_id"`
 	FilePath    string `json:"file_path"`
 	Content     string `json:"content"`
-	IncludeInAI bool   `json:"include_in_ai"`
+	Private bool   `json:"private"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }
@@ -308,7 +315,7 @@ type ConfigSetActivateResult struct {
 type EnvVarCreateInput struct {
 	Key         string          `json:"key"`
 	Value       *string         `json:"value"`
-	IncludeInAI *bool           `json:"include_in_ai"`
+	Private *bool           `json:"private"`
 	Options     *[]EnvVarOption `json:"options"`
 	Selected    *string         `json:"selected"`
 }
@@ -320,7 +327,7 @@ type EnvVarCreateInput struct {
 type EnvVarUpdateInput struct {
 	Key         *string         `json:"key"`
 	Value       *string         `json:"value"`
-	IncludeInAI *bool           `json:"include_in_ai"`
+	Private *bool           `json:"private"`
 	Options     *[]EnvVarOption `json:"options"`
 	Selected    *string         `json:"selected"`
 }
@@ -328,13 +335,13 @@ type EnvVarUpdateInput struct {
 type TemplateCreateInput struct {
 	FilePath    string  `json:"file_path"`
 	Content     *string `json:"content"`
-	IncludeInAI *bool   `json:"include_in_ai"`
+	Private *bool   `json:"private"`
 }
 
 type TemplateUpdateInput struct {
 	FilePath    *string `json:"file_path"`
 	Content     *string `json:"content"`
-	IncludeInAI *bool   `json:"include_in_ai"`
+	Private *bool   `json:"private"`
 }
 
 type RunConfigSaveInput struct {
@@ -365,78 +372,6 @@ type FsPickFolderInput struct {
 type FsPickFileInput struct {
 	StartDir *string `json:"startDir"`
 	AppID    *int64  `json:"appId"`
-}
-
-// AIProviderConfigInput is the save payload for one AI connection. The API key
-// is write-only: empty keeps the stored key, ClearAPIKey removes it. It is
-// never persisted or returned to the UI. Name is the user-chosen connection
-// name; one provider may have several connections under different names.
-type AIProviderConfigInput struct {
-	Name            string   `json:"name"`
-	Provider        string   `json:"provider"`
-	BaseURL         string   `json:"baseURL,omitempty"`
-	APIKey          string   `json:"apiKey,omitempty"`
-	Model           string   `json:"model,omitempty"`
-	Temperature     *float64 `json:"temperature,omitempty"`
-	OpenCodeSession bool     `json:"opencodeSession,omitempty"`
-	ClearAPIKey     bool     `json:"clearApiKey,omitempty"`
-}
-
-// AIConnectionInfo is one saved connection as the frontend sees it: no secret,
-// plus a flag for whether a key is stored.
-type AIConnectionInfo struct {
-	Name            string   `json:"name"`
-	Provider        string   `json:"provider"`
-	BaseURL         string   `json:"baseURL,omitempty"`
-	Model           string   `json:"model,omitempty"`
-	HasAPIKey       bool     `json:"hasApiKey"`
-	Temperature     *float64 `json:"temperature,omitempty"`
-	OpenCodeSession bool     `json:"opencodeSession,omitempty"`
-}
-
-// AIConfigInfo is the full config payload: every saved connection plus the
-// active (default) connection name.
-type AIConfigInfo struct {
-	Providers []AIConnectionInfo `json:"providers"`
-	Active    string             `json:"active"`
-}
-
-type AIActivateInput struct {
-	Name string `json:"name"`
-}
-
-type AIChatInput struct {
-	System string `json:"system,omitempty"`
-	Prompt string `json:"prompt"`
-}
-
-// AITestInput carries an unsaved connection payload for a test request.
-type AITestInput struct {
-	Provider        string   `json:"provider"`
-	BaseURL         string   `json:"baseURL,omitempty"`
-	APIKey          string   `json:"apiKey,omitempty"`
-	Model           string   `json:"model,omitempty"`
-	Temperature     *float64 `json:"temperature,omitempty"`
-	OpenCodeSession bool     `json:"opencodeSession,omitempty"`
-}
-
-// AIApplyPatchInput carries the AI agent's staged changes to write.
-// The patch is applied in one call, so the changes cannot half-land while the
-// review UI is still running.
-type AIApplyPatchInput struct {
-	AppID       int64      `json:"appId"`
-	ConfigSetID int64      `json:"configSetId"`
-	Patch       AppAIPatch `json:"patch"`
-}
-
-type AIChatResult struct {
-	Text string `json:"text"`
-}
-
-type AppAIChatTurn struct {
-	Role  string          `json:"role"`
-	Text  string          `json:"text"`
-	Tools []AppAIToolCall `json:"tools,omitempty"`
 }
 
 type AppAIEnvUpsert struct {
@@ -557,38 +492,6 @@ type WorktreeLinkState struct {
 	Message string `json:"message,omitempty"`
 }
 
-type AppAIChatInput struct {
-	AppID       int64           `json:"appId"`
-	ConfigSetID int64           `json:"configSetId"`
-	History     []AppAIChatTurn `json:"history"`
-	Instruction string          `json:"instruction"`
-}
-
-type AppAIToolCall struct {
-	Name   string `json:"name"`
-	Input  any    `json:"input"`
-	Output any    `json:"output"`
-}
-
-type AppAIChatResult struct {
-	Text      string          `json:"text"`
-	Patch     AppAIPatch      `json:"patch"`
-	ToolCalls []AppAIToolCall `json:"toolCalls,omitempty"`
-}
-
-type AppAIStreamEvent struct {
-	Type  string         `json:"type"`
-	Text  string         `json:"text,omitempty"`
-	Call  *AppAIToolCall `json:"call,omitempty"`
-	Error string         `json:"error,omitempty"`
-}
-
-// AITestResult echoes whether the connection worked plus the model's reply.
-type AITestResult struct {
-	Ok   bool   `json:"ok"`
-	Text string `json:"text"`
-}
-
 type BlueprintCommand struct {
 	Label   *string `json:"label"`
 	Command string  `json:"command"`
@@ -612,22 +515,6 @@ type BlueprintInput struct {
 	SampleName   string             `json:"sample_name"`
 	CreateFolder bool               `json:"create_folder"`
 	Commands     []BlueprintCommand `json:"commands"`
-}
-
-// BlueprintAIInput asks the blueprint agent for a blueprint. Draft is what the
-// editor currently holds (nil for a blank one), so the instruction can either
-// describe a new blueprint or change that draft.
-type BlueprintAIInput struct {
-	Instruction string          `json:"instruction"`
-	Draft       *BlueprintInput `json:"draft"`
-}
-
-// BlueprintAIResult is the agent's proposal. Nothing is saved; the UI loads
-// Blueprint into the editor for the user to review. Message holds the agent's
-// short notes (assumptions, things to check).
-type BlueprintAIResult struct {
-	Blueprint BlueprintInput `json:"blueprint"`
-	Message   string         `json:"message"`
 }
 
 // BlueprintRunInput starts a blueprint run. RunID is chosen by the UI so it can

@@ -72,7 +72,7 @@ export class WmTree {
       case 'setsGroup':
         return data.sets.map((set) => ({ type: 'set', project, set }));
       case 'envGroup':
-        return data.detail.env_vars.map((v) => ({ type: 'env', project, setName: data.set.name, key: v.key, value: v.value }));
+        return data.detail.env_vars.map((v) => ({ type: 'env', project, setName: data.set.name, key: v.key, value: v.value, private: v.private === true, shared: v.shared_var_id != null, sharedSet: data.set.shared_set_name ?? null }));
       case 'templatesGroup':
         return data.detail.templates.map((t) => ({
           type: 'template',
@@ -150,10 +150,18 @@ export class WmTree {
       }
       case 'env': {
         item = new vscode.TreeItem(node.key, none);
-        item.description = `= ${node.value}`;
-        item.tooltip = `${node.key}=${node.value}\nClick to edit`;
-        item.iconPath = new vscode.ThemeIcon('symbol-key');
-        item.command = { command: 'workspaceManager.editEnv', title: 'Edit Environment Variable', arguments: [node] };
+        // A private value stays masked in the tree, description and tooltip alike.
+        const shown = node.private ? '••••••' : node.value;
+        item.description = `= ${shown}`;
+        if (node.shared) {
+          // Taken from the workspace's shared config: read-only here, edited in the app.
+          item.tooltip = `${node.key}=${shown}\nShared from the workspace's "${node.sharedSet}" config. Read-only here; change it in Workspace Manager.`;
+          item.iconPath = new vscode.ThemeIcon('lock');
+        } else {
+          item.tooltip = `${node.key}=${shown}\nClick to edit`;
+          item.iconPath = new vscode.ThemeIcon('symbol-key');
+          item.command = { command: 'workspaceManager.editEnv', title: 'Edit Environment Variable', arguments: [node] };
+        }
         break;
       }
       case 'templatesGroup': {
@@ -209,7 +217,8 @@ export class WmTree {
     }
 
     item.id = this.#id(node, data);
-    item.contextValue = node.type;
+    // A shared variable has no edit or delete buttons (their menus match "env").
+    item.contextValue = node.type === 'env' && node.shared ? 'envShared' : node.type;
     return item;
   }
 

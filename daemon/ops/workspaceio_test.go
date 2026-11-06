@@ -30,21 +30,22 @@ func seedWorkspace(t *testing.T) (*ops.Ops, *recorder, types.Workspace, string) 
 	icon := "rocket"
 	ws, err := o.WorkspacesCreate(types.WorkspaceCreateInput{Name: "Shop", Icon: &icon})
 	must(t, err)
-	hidden, shown := false, true
+	hidden, shown := true, true
+	public := false
 	for _, name := range []string{"api", "web"} {
 		dir := filepath.Join(root, name)
 		must(t, os.MkdirAll(dir, 0o755))
 		app, err := o.AppsCreate(ws.ID, types.AppCreateInput{Name: name, ProjectPath: dir})
 		must(t, err)
 		v1, v2 := "http://localhost", "hunter2"
-		_, err = o.EnvVarsCreate(app.ID, 0, types.EnvVarCreateInput{Key: "URL", Value: &v1, IncludeInAI: &shown})
+		_, err = o.EnvVarsCreate(app.ID, 0, types.EnvVarCreateInput{Key: "URL", Value: &v1, Private: &public})
 		must(t, err)
-		_, err = o.EnvVarsCreate(app.ID, 0, types.EnvVarCreateInput{Key: "TOKEN", Value: &v2, IncludeInAI: &hidden})
+		_, err = o.EnvVarsCreate(app.ID, 0, types.EnvVarCreateInput{Key: "TOKEN", Value: &v2, Private: &hidden})
 		must(t, err)
 		c1, c2 := "plain", "password=hunter2"
-		_, err = o.TemplatesCreate(app.ID, 0, types.TemplateCreateInput{FilePath: "a.txt", Content: &c1, IncludeInAI: &shown})
+		_, err = o.TemplatesCreate(app.ID, 0, types.TemplateCreateInput{FilePath: "a.txt", Content: &c1, Private: &public})
 		must(t, err)
-		_, err = o.TemplatesCreate(app.ID, 0, types.TemplateCreateInput{FilePath: ".env", Content: &c2, IncludeInAI: &hidden})
+		_, err = o.TemplatesCreate(app.ID, 0, types.TemplateCreateInput{FilePath: ".env", Content: &c2, Private: &hidden})
 		must(t, err)
 		set, err := o.DB.ResolveActive(o.Ctx(), app.ID)
 		must(t, err)
@@ -132,7 +133,7 @@ func TestExportImportRoundTrip(t *testing.T) {
 		for _, v := range d.EnvVars {
 			vals[v.Key] = v
 		}
-		if vals["URL"].Value != "http://localhost" || !vals["URL"].IncludeInAI || vals["TOKEN"].Value != "hunter2" || vals["TOKEN"].IncludeInAI {
+		if vals["URL"].Value != "http://localhost" || vals["URL"].Private || vals["TOKEN"].Value != "hunter2" || !vals["TOKEN"].Private {
 			t.Errorf("env vars: %+v", vals)
 		}
 		if len(d.Templates) != 2 {
@@ -254,13 +255,13 @@ func TestImportBlanksRedactedValues(t *testing.T) {
 		for _, v := range det.EnvVars {
 			if v.Key == "TOKEN" {
 				seen++
-				if v.Value != "" || v.IncludeInAI {
+				if v.Value != "" || !v.Private {
 					t.Errorf("TOKEN should come in empty and hidden: %+v", v)
 				}
 			}
 		}
 		for _, tpl := range det.Templates {
-			if tpl.FilePath == ".env" && (tpl.Content != "" || tpl.IncludeInAI) {
+			if tpl.FilePath == ".env" && (tpl.Content != "" || !tpl.Private) {
 				t.Errorf(".env should come in empty and hidden: %+v", tpl)
 			}
 		}

@@ -26,10 +26,43 @@ CREATE TABLE IF NOT EXISTS apps (
 
 CREATE INDEX IF NOT EXISTS idx_apps_workspace_id ON apps (workspace_id);
 
+-- Shared config: env var sets a workspace owns. An app config set links to one
+-- (config_sets.shared_set_id) and takes chosen variables as live rows in
+-- env_vars (env_vars.shared_var_id), kept in step by the daemon's writes.
+CREATE TABLE IF NOT EXISTS workspace_config_sets (
+  id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+  workspace_id integer NOT NULL,
+  name text NOT NULL,
+  created_at text DEFAULT (datetime('now')) NOT NULL,
+  updated_at text DEFAULT (datetime('now')) NOT NULL,
+  FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE cascade
+);
+
+CREATE INDEX IF NOT EXISTS idx_workspace_config_sets_workspace_id ON workspace_config_sets (workspace_id);
+CREATE UNIQUE INDEX IF NOT EXISTS workspace_config_sets_workspace_id_name_unique ON workspace_config_sets (workspace_id, name);
+
+CREATE TABLE IF NOT EXISTS workspace_env_vars (
+  id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+  workspace_config_set_id integer NOT NULL,
+  key text NOT NULL,
+  value text DEFAULT '' NOT NULL,
+  private integer DEFAULT false NOT NULL,
+  options text DEFAULT '[]' NOT NULL,
+  selected text DEFAULT '' NOT NULL,
+  created_at text DEFAULT (datetime('now')) NOT NULL,
+  updated_at text DEFAULT (datetime('now')) NOT NULL,
+  FOREIGN KEY (workspace_config_set_id) REFERENCES workspace_config_sets (id) ON DELETE cascade
+);
+
+CREATE INDEX IF NOT EXISTS idx_workspace_env_vars_set_id ON workspace_env_vars (workspace_config_set_id);
+CREATE UNIQUE INDEX IF NOT EXISTS workspace_env_vars_set_id_key_unique ON workspace_env_vars (workspace_config_set_id, key);
+
 CREATE TABLE IF NOT EXISTS config_sets (
   id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
   app_id integer NOT NULL,
   name text NOT NULL,
+  -- The workspace config set this one takes shared variables from, if linked.
+  shared_set_id integer REFERENCES workspace_config_sets (id) ON DELETE set null,
   created_at text DEFAULT (datetime('now')) NOT NULL,
   updated_at text DEFAULT (datetime('now')) NOT NULL,
   FOREIGN KEY (app_id) REFERENCES apps (id) ON DELETE cascade
@@ -43,12 +76,15 @@ CREATE TABLE IF NOT EXISTS env_vars (
   config_set_id integer NOT NULL,
   key text NOT NULL,
   value text DEFAULT '' NOT NULL,
-  include_in_ai integer DEFAULT true NOT NULL,
+  private integer DEFAULT false NOT NULL,
   -- A variable with options is a choice: options is a JSON list of
   -- {label, value}, selected the label in use, and value always mirrors the
   -- selected option so every reader of value keeps working.
   options text DEFAULT '[]' NOT NULL,
   selected text DEFAULT '' NOT NULL,
+  -- The workspace variable this row mirrors. Such a row is read-only: the
+  -- daemon rewrites it whenever the workspace variable changes.
+  shared_var_id integer REFERENCES workspace_env_vars (id) ON DELETE cascade,
   created_at text DEFAULT (datetime('now')) NOT NULL,
   updated_at text DEFAULT (datetime('now')) NOT NULL,
   FOREIGN KEY (config_set_id) REFERENCES config_sets (id) ON DELETE cascade
@@ -56,13 +92,14 @@ CREATE TABLE IF NOT EXISTS env_vars (
 
 CREATE INDEX IF NOT EXISTS idx_env_vars_config_set_id ON env_vars (config_set_id);
 CREATE UNIQUE INDEX IF NOT EXISTS env_vars_config_set_id_key_unique ON env_vars (config_set_id, key);
+CREATE INDEX IF NOT EXISTS idx_env_vars_shared_var_id ON env_vars (shared_var_id);
 
 CREATE TABLE IF NOT EXISTS templates (
   id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
   config_set_id integer NOT NULL,
   file_path text NOT NULL,
   content text DEFAULT '' NOT NULL,
-  include_in_ai integer DEFAULT true NOT NULL,
+  private integer DEFAULT false NOT NULL,
   created_at text DEFAULT (datetime('now')) NOT NULL,
   updated_at text DEFAULT (datetime('now')) NOT NULL,
   FOREIGN KEY (config_set_id) REFERENCES config_sets (id) ON DELETE cascade
