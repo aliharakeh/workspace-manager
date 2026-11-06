@@ -41,6 +41,10 @@ renamable or made public.
 
 ## Build
 
+For source changes, `tools.go` holds the registry and schema builders;
+`tools_<domain>.go` holds each tool's schema and handler. See the
+[architecture map](../../docs/architecture.md) for the surrounding layers.
+
 From the repo root:
 
 ```bash

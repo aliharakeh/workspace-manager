@@ -88,6 +88,9 @@ starts it on demand, so there is nothing to launch by hand.
 
 ## 📁 Project layout
 
+See the [architecture map](docs/architecture.md) for request flow, ownership and
+the domain file conventions.
+
 | Path | Role |
 |---|---|
 | `main.go` | The Wails entry point |

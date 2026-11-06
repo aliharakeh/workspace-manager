@@ -101,7 +101,7 @@ screen. The React frontend lives in `frontend/`.
   method in `gui/bind.go` that calls it through `call[...]`. The daemon refuses to
   start if a method has no handler, or a handler has no method, so nothing can
   drift. Param struct tags in the handler must match the map keys `bind.go` sends.
-- Adding an MCP tool: a tool in `cmd/wm-mcp/tools.go` that calls a daemon method. `wm_call` derives its allowlist from `api.AgentMethods()`, so a new method only needs `Agent: true` to be reachable; GUI-only methods (settings, git support, `configSets.applyChanges`, resizes) are not. Map typed errors with `api.KindOf`.
+- Adding an MCP tool: implement it in the matching `cmd/wm-mcp/tools_<domain>.go` file and register it in `allTools` in `tools.go`. Each tool calls daemon methods. `wm_call` derives its allowlist from `api.AgentMethods()`, so a new method only needs `Agent: true` to be reachable; GUI-only methods (settings, git support, `configSets.applyChanges`, resizes) are not. Map typed errors with `api.KindOf`.
 - The VS Code extension (`vscode/`): `service.js` holds everything per project
   folder and is shared by the UI and the `workspaceManager.agent.*` commands; both
   `daemon.js` and `service.js` must stay free of `vscode` imports so they can be

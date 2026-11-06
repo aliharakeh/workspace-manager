@@ -1,21 +1,15 @@
-import { useEffect, useRef, useState } from "react"
-import { toast } from "sonner"
+import { ConfigSetCompareDialog } from "@/components/config-set-compare-dialog"
 import {
-  CheckIcon,
-  ChevronsUpDownIcon,
-  CopyIcon,
-  GitCompareIcon,
-  Link2Icon,
-  PencilIcon,
-  PlusIcon,
-  SearchIcon,
-  Trash2Icon,
-  XIcon,
-} from "lucide-react"
-import { api } from "@/lib/api"
-import type { App, ConfigSet, ConfigSetDetail, CopyParts } from "@/lib/types"
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -33,24 +27,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from "@/components/ui/input-group"
 import {
   Select,
   SelectContent,
@@ -61,326 +39,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ConfigSetCompareDialog } from "@/components/config-set-compare-dialog"
-
-type CategorySel = { all: boolean; items: string[] }
-
-type CopySel = {
-  env: CategorySel
-  templates: CategorySel
-  dev: CategorySel
-  prod: CategorySel
-  build: CategorySel
-  setup: CategorySel
-}
-
-function blankCategory(): CategorySel {
-  return { all: true, items: [] }
-}
-
-function blankSel(): CopySel {
-  return {
-    env: blankCategory(),
-    templates: blankCategory(),
-    dev: blankCategory(),
-    prod: blankCategory(),
-    build: blankCategory(),
-    setup: blankCategory(),
-  }
-}
-
-function categoryToPart(sel: CategorySel): boolean | string[] {
-  if (sel.all) return true
-  return sel.items.length > 0 ? sel.items : false
-}
-
-function runToPart(sel: CategorySel): boolean | number[] {
-  if (sel.all) return true
-  return sel.items.length > 0 ? sel.items.map(Number) : false
-}
-
-function selToParts(sel: CopySel): CopyParts {
-  return {
-    env: categoryToPart(sel.env),
-    templates: categoryToPart(sel.templates),
-    dev: runToPart(sel.dev),
-    prod: runToPart(sel.prod),
-    build: runToPart(sel.build),
-    setup: runToPart(sel.setup),
-  }
-}
-
-function isPartEnabled(part: boolean | string[] | number[] | undefined) {
-  if (part === undefined || part === true) return true
-  return Array.isArray(part) && part.length > 0
-}
-
-function partsEnabled(parts: CopyParts): boolean {
-  return (
-    isPartEnabled(parts.env) ||
-    isPartEnabled(parts.templates) ||
-    isPartEnabled(parts.dev) ||
-    isPartEnabled(parts.prod) ||
-    isPartEnabled(parts.build) ||
-    isPartEnabled(parts.setup)
-  )
-}
-
+import { api } from "@/lib/api"
+import type { App, ConfigSet, ConfigSetDetail } from "@/lib/types"
+import {
+  CheckIcon,
+  ChevronsUpDownIcon,
+  CopyIcon,
+  GitCompareIcon,
+  Link2Icon,
+  PencilIcon,
+  PlusIcon,
+  Trash2Icon,
+} from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
+import {
+  blankSel,
+  partsEnabled,
+  selToParts,
+  type CopySel,
+} from "./config-sets/copy-selection"
+import { PartsPicker } from "./config-sets/parts-picker"
 type ConfigSetSwitcherProps = {
   app: App
   onAppChange: (app: App) => void
-}
-
-type CategoryItem = { id: string; title: string; sub?: string }
-
-function CategoryPicker({
-  items,
-  sel,
-  onChange,
-  query,
-  onQueryChange,
-}: {
-  items: CategoryItem[]
-  sel: CategorySel
-  onChange: (sel: CategorySel) => void
-  query: string
-  onQueryChange: (query: string) => void
-}) {
-  const count = items.length
-  const allChecked = count > 0 && (sel.all || sel.items.length === count)
-  const q = query.trim().toLowerCase()
-  const visible = q
-    ? items.filter(
-        (item) =>
-          item.title.toLowerCase().includes(q) ||
-          (item.sub ?? "").toLowerCase().includes(q)
-      )
-    : items
-  return (
-    <div className="flex flex-col gap-2">
-      {count > 0 ? (
-        <InputGroup className="w-full">
-          <InputGroupAddon align="inline-start">
-            <SearchIcon />
-          </InputGroupAddon>
-          <InputGroupInput
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Search…"
-            aria-label="Search items to copy"
-          />
-          {query ? (
-            <InputGroupAddon align="inline-end">
-              <InputGroupButton
-                size="icon-xs"
-                aria-label="Clear search"
-                onClick={() => onQueryChange("")}
-              >
-                <XIcon />
-              </InputGroupButton>
-            </InputGroupAddon>
-          ) : null}
-        </InputGroup>
-      ) : null}
-      <Field orientation="horizontal">
-        <Checkbox
-          id="category-select-all"
-          checked={allChecked}
-          disabled={count === 0}
-          onCheckedChange={() =>
-            onChange(
-              allChecked ? { all: false, items: [] } : { all: true, items: [] }
-            )
-          }
-        />
-        <FieldLabel htmlFor="category-select-all">Select all</FieldLabel>
-        <span className="text-xs text-muted-foreground">
-          {count === 0
-            ? "(none)"
-            : sel.all
-              ? `All ${count}`
-              : `${sel.items.length} of ${count}`}
-        </span>
-      </Field>
-      {count > 0 && !sel.all ? (
-        <div className="flex max-h-52 flex-col gap-1 overflow-y-auto rounded-lg border p-2 text-sm">
-          {visible.length === 0 ? (
-            <p className="px-1 py-2 text-xs text-muted-foreground">
-              No items match “{query.trim()}”.
-            </p>
-          ) : (
-            visible.map((item, index) => {
-              const checkboxId = `category-item-${index}`
-              return (
-                <Field
-                  key={item.id}
-                  orientation="horizontal"
-                  className="min-w-0"
-                >
-                  <Checkbox
-                    id={checkboxId}
-                    checked={sel.items.includes(item.id)}
-                    onCheckedChange={(checked) => {
-                      const next = new Set(sel.items)
-                      if (checked) next.add(item.id)
-                      else next.delete(item.id)
-                      onChange(
-                        next.size === count
-                          ? { all: true, items: [] }
-                          : { all: false, items: [...next] }
-                      )
-                    }}
-                  />
-                  <FieldLabel
-                    htmlFor={checkboxId}
-                    className="min-w-0 truncate font-normal"
-                    title={item.sub ?? item.title}
-                  >
-                    {item.title}
-                  </FieldLabel>
-                </Field>
-              )
-            })
-          )}
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-function PartsPicker({
-  detail,
-  loading,
-  error,
-  sel,
-  onChange,
-}: {
-  detail: ConfigSetDetail | null
-  loading: boolean
-  error: string | null
-  sel: CopySel
-  onChange: (sel: CopySel) => void
-}) {
-  const [tab, setTab] = useState("env")
-  const [query, setQuery] = useState("")
-
-  if (loading) {
-    return <p className="text-xs text-muted-foreground">Loading source set…</p>
-  }
-  if (error) {
-    return <p className="text-xs text-destructive">{error}</p>
-  }
-  if (!detail) return null
-  return (
-    <Tabs
-      value={tab}
-      onValueChange={(value) => {
-        if (value) {
-          setTab(value)
-          setQuery("")
-        }
-      }}
-    >
-      <TabsList className="w-full">
-        <TabsTrigger value="env" className="flex-1">
-          Env vars
-        </TabsTrigger>
-        <TabsTrigger value="templates" className="flex-1">
-          Templates
-        </TabsTrigger>
-        <TabsTrigger value="setup" className="flex-1">
-          Setup config
-        </TabsTrigger>
-        <TabsTrigger value="dev" className="flex-1">
-          Dev config
-        </TabsTrigger>
-        <TabsTrigger value="build" className="flex-1">
-          Build config
-        </TabsTrigger>
-        <TabsTrigger value="prod" className="flex-1">
-          Prod config
-        </TabsTrigger>
-      </TabsList>
-      <TabsContent value="env" className="mt-3">
-        <CategoryPicker
-          items={detail.env_vars.map((v) => ({
-            id: v.key,
-            title: v.key,
-            sub: v.value,
-          }))}
-          sel={sel.env}
-          onChange={(env) => onChange({ ...sel, env })}
-          query={query}
-          onQueryChange={setQuery}
-        />
-      </TabsContent>
-      <TabsContent value="templates" className="mt-3">
-        <CategoryPicker
-          items={detail.templates.map((t) => ({
-            id: t.file_path,
-            title: t.file_path,
-          }))}
-          sel={sel.templates}
-          onChange={(templates) => onChange({ ...sel, templates })}
-          query={query}
-          onQueryChange={setQuery}
-        />
-      </TabsContent>
-      <TabsContent value="setup" className="mt-3">
-        <CategoryPicker
-          items={(detail.setup_config?.commands ?? []).map((c) => ({
-            id: String(c.id),
-            title: c.label ?? c.command,
-            sub: c.label ? c.command : undefined,
-          }))}
-          sel={sel.setup}
-          onChange={(setup) => onChange({ ...sel, setup })}
-          query={query}
-          onQueryChange={setQuery}
-        />
-      </TabsContent>
-      <TabsContent value="dev" className="mt-3">
-        <CategoryPicker
-          items={(detail.dev_config?.commands ?? []).map((c) => ({
-            id: String(c.id),
-            title: c.label ?? c.command,
-            sub: c.label ? c.command : undefined,
-          }))}
-          sel={sel.dev}
-          onChange={(dev) => onChange({ ...sel, dev })}
-          query={query}
-          onQueryChange={setQuery}
-        />
-      </TabsContent>
-      <TabsContent value="build" className="mt-3">
-        <CategoryPicker
-          items={(detail.build_config?.commands ?? []).map((c) => ({
-            id: String(c.id),
-            title: c.label ?? c.command,
-            sub: c.label ? c.command : undefined,
-          }))}
-          sel={sel.build}
-          onChange={(build) => onChange({ ...sel, build })}
-          query={query}
-          onQueryChange={setQuery}
-        />
-      </TabsContent>
-      <TabsContent value="prod" className="mt-3">
-        <CategoryPicker
-          items={(detail.prod_config?.commands ?? []).map((c) => ({
-            id: String(c.id),
-            title: c.label ?? c.command,
-            sub: c.label ? c.command : undefined,
-          }))}
-          sel={sel.prod}
-          onChange={(prod) => onChange({ ...sel, prod })}
-          query={query}
-          onQueryChange={setQuery}
-        />
-      </TabsContent>
-    </Tabs>
-  )
 }
 
 export function ConfigSetSwitcher({
@@ -668,9 +350,9 @@ export function ConfigSetSwitcher({
           </DropdownMenu>
         </div>
         <p className="text-xs text-muted-foreground">
-          Each set bundles its own env vars, templates, run and build commands — use
-          one per environment (e.g. dev, staging, prod). Switch the active set,
-          or copy selected items between sets.
+          Each set bundles its own env vars, templates, run and build commands —
+          use one per environment (e.g. dev, staging, prod). Switch the active
+          set, or copy selected items between sets.
         </p>
       </div>
 
@@ -680,8 +362,8 @@ export function ConfigSetSwitcher({
             <DialogTitle>New config set</DialogTitle>
             <DialogDescription>
               Each set has its own env vars, templates, and setup, dev, build
-              and prod configs.
-              Optionally copy selected parts from an existing set.
+              and prod configs. Optionally copy selected parts from an existing
+              set.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
