@@ -2,7 +2,7 @@
 
 `wails3 build` uses the root Taskfile to generate bindings, build the frontend,
 build wmd and the desktop app, and embed Windows resources. Output goes to
-`build/bin`. `build.ps1` also builds wm-mcp and the VS Code extension.
+`build/bin`. `build.ps1` also builds wm-mcp.
 
 `config.yml` holds v3 application metadata and development watcher settings.
 The Windows resource JSON, manifest, NSIS helpers, and macOS plists are concrete

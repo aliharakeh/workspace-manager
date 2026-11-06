@@ -495,8 +495,8 @@ func TestGUIOnlyMethods(t *testing.T) {
 	}
 }
 
-// TestTCPEndpointNeedsTheToken covers the loopback endpoint the VS Code
-// extension uses: hello without the right token is refused and nothing else
+// TestTCPEndpointNeedsTheToken covers the loopback endpoint:
+// hello without the right token is refused and nothing else
 // runs; with it the client is served like any other.
 func TestTCPEndpointNeedsTheToken(t *testing.T) {
 	startServer(t)

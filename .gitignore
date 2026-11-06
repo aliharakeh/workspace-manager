@@ -10,7 +10,4 @@ wails-dev.log
 .task/
 build/windows/installer/MicrosoftEdgeWebview2Setup.exe
 
-vscode/node_modules/
-vscode/out/
-opencode/dist/
 *.vsix

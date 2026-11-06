@@ -1,7 +1,6 @@
 #!/usr/bin/env pwsh
-# Builds everything into build/bin: the app, its daemon, the MCP server and the
-# VS Code extension (.vsix) and OpenCode plugin (.tgz). The app and wm-mcp start wmd.exe from the folder they
-# live in, so those three must stay together.
+# Builds everything into build/bin: the app, its daemon, and the MCP server.
+# The app and wm-mcp start wmd.exe from the folder they live in, so those three must stay together.
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
@@ -13,32 +12,6 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 wails3 build
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-# The VS Code extension; its build writes the .vsix to build/bin.
-Push-Location vscode
-try {
-  if (-not (Test-Path node_modules)) {
-    npm install
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-  }
-  npm run build
-  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-} finally {
-  Pop-Location
-}
-
-# The OpenCode Desktop plugin embeds the shared VS Code daemon client/service.
-Push-Location opencode
-try {
-  if (-not (Test-Path node_modules)) {
-    npm ci
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-  }
-  npm pack --pack-destination ../build/bin
-  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-} finally {
-  Pop-Location
-}
 
 Write-Host ""
 Write-Host "Built into build/bin:"

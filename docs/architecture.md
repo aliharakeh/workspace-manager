@@ -21,8 +21,6 @@ contract. Start with the directory that owns the behavior you want to change.
 | RPC transport and client startup/handshake | `shared/rpc/`, `shared/client/` |
 | Operating-system integration | `shared/native/` |
 | Agent tool definitions and stdio MCP protocol | `cmd/wm-mcp/` |
-| Shared Node client and project service | `vscode/daemon.js`, `vscode/service.js` |
-| OpenCode host integration | `opencode/src/` |
 
 ## Follow a request
 

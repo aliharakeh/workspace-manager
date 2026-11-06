@@ -90,8 +90,8 @@ type AppSidebarProps = {
 }
 
 const COLLAPSED_STORAGE_KEY = "workspace-manager.sidebar.collapsed"
-// Pins and the workspace order live in the daemon (shared with the VS Code
-// extension); only the collapsed set (every other workspace shows its apps) is
+// Pins and the workspace order live in the daemon (shared across clients);
+// only the collapsed set (every other workspace shows its apps) is
 // per-device view state kept here.
 function loadIdSet(key: string): Set<number> {
   try {

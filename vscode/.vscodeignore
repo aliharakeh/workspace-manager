@@ -1,8 +1,0 @@
-.vscode/**
-*.vsix
-*.js
-*.mjs
-test/**
-node_modules/**
-package-lock.json
-!out/**

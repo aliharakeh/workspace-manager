@@ -12,7 +12,7 @@ dev_mode:
   log_level: warn
   debounce: 1000
   ignore:
-    dir: [.git, node_modules, frontend, build/bin, vscode]
+    dir: [.git, node_modules, frontend, build/bin]
     file: ["*_test.go", "*.syso"]
     watched_extension: ["*.go"]
     git_ignore: true

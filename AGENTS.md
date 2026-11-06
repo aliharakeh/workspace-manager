@@ -16,8 +16,6 @@ screen. The React frontend lives in `frontend/`.
 | `main.go` | Wails entry point only (Wails needs the main package at the repo root): embeds the frontend and runs `gui.App`. |
 | `cmd/wmd` | The daemon's entry point: opens the database, runs the server. |
 | `cmd/wm-mcp` | The MCP server (stdio) for external coding agents. An `agent` client of the daemon; starts it on demand. See its README. |
-| `vscode` | The VS Code extension (JS, esbuild): config sets, env vars, templates and run buttons backed by the daemon, as a `gui` client over the TCP endpoint. See its README. |
-| `opencode` | OpenCode V2 Desktop GUI plugin (Solid, Vite): reuses `vscode/daemon.js` and `vscode/service.js` in Electron main, with schema-validated IPC to its session side panel. See its README. |
 | `gui` | The desktop app's Go side. `app.go` (the `App` struct, event relay), `link.go` (`Link`, the connection to `wmd`: dials, auto-starts it, resubscribes), `bind.go` (the Wails-bound surface; data, runner and blueprint methods proxy to the daemon, the rest runs here), `events.go`, `dialog.go` (Wails events and file pickers). |
 | `gui/git` | Git and worktrees: `git.go`, `worktreelinks.go` (the git plumbing) and `operations.go` (the Git panel's operations, reading what they need from the daemon through a `Backend`). |
 | `daemon` | Daemon lifecycle: data-folder lock, socket, idle exit, `hello`, method permissions. |
@@ -52,7 +50,7 @@ screen. The React frontend lives in `frontend/`.
   also listens on `127.0.0.1:<port>` and publishes `{addr, token}` in
   `wmd.endpoint` (mode 0600) in the data folder. A TCP connection must put the
   token in its `hello` (`ClientInfo.Token`) before anything else runs; unix
-  connections need none. The VS Code extension uses this. AF_UNIX paths are
+  connections need none.  AF_UNIX paths are
   limited to ~108 characters, so a long `WM_DATA_DIR` stops the daemon from
   starting.
 - **Client kinds.** Every client's first call is `hello`, stating `gui` or
@@ -102,21 +100,8 @@ screen. The React frontend lives in `frontend/`.
   start if a method has no handler, or a handler has no method, so nothing can
   drift. Param struct tags in the handler must match the map keys `bind.go` sends.
 - Adding an MCP tool: implement it in the matching `cmd/wm-mcp/tools_<domain>.go` file and register it in `allTools` in `tools.go`. Each tool calls daemon methods. `wm_call` derives its allowlist from `api.AgentMethods()`, so a new method only needs `Agent: true` to be reachable; GUI-only methods (settings, git support, `configSets.applyChanges`, resizes) are not. Map typed errors with `api.KindOf`.
-- The VS Code extension (`vscode/`): `service.js` holds everything per project
-  folder and is shared by the UI and the `workspaceManager.agent.*` commands; both
-  `daemon.js` and `service.js` must stay free of `vscode` imports so they can be
-  tested against a real `wmd` (`npm test`; `npm run test:host` runs it inside VS
-  Code). Edit commands and menus in `vscode/gen-manifest.mjs` and run
-  `npm run manifest`. When an agent command or its arguments change, update the
-  table in `vscode/README.md`. Env vars and new templates are written to the
-  active config set, because the daemon's `envVars.*`/`templates.create` work on it.
 - Adding a GUI-only operation (git, dialogs): put it in `gui/git` or
   `gui/bind.go`; it reaches data only through daemon calls, never the database.
-- The OpenCode Desktop plugin (`opencode/`) bundles the VS Code client/service;
-  keep them free of host-specific imports. Its GUI-privileged connection belongs
-  in Electron main, never model tools. Add panel operations to the allowlist in
-  `src/backend.js` and the IPC contract as needed. Run `npm run typecheck` and
-  `npm test` from `opencode/`; rebuild with `npm run build` after shared client edits.
 - Changing the bound surface: edit `gui/bind.go`, then run `wails3 generate bindings -ts -clean=true`
   and check `frontend/host.ts`. Keep helper methods that must not be bound on
   other types (see `gitBackend`), since Wails binds every exported method of

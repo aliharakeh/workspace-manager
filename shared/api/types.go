@@ -111,8 +111,7 @@ type ClientInfo struct {
 var Version = "dev"
 
 // EndpointPath is the file where the daemon publishes its loopback TCP
-// endpoint for clients that cannot use the unix socket (Node on Windows, the
-// VS Code extension).
+// endpoint for clients that cannot use the unix socket (Node on Windows).
 func EndpointPath() string {
 	return filepath.Join(DataDir(), "wmd.endpoint")
 }
