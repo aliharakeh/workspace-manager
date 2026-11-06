@@ -115,7 +115,7 @@ func (a *App) ConfigSetsCompare(leftID, rightID int64) (types.ConfigSetCompare, 
 }
 
 // ConfigSetsLinkShared links an app config set to a workspace shared set and
-// takes the chosen variables from it; calling it again changes the selection.
+// takes all of its variables, including ones added later.
 func (a *App) ConfigSetsLinkShared(id int64, body types.SharedLinkInput) (types.ConfigSet, error) {
 	return call[types.ConfigSet](a.link, api.MethodConfigSetsLinkShared, m{"id": id, "body": body})
 }
@@ -124,6 +124,12 @@ func (a *App) ConfigSetsLinkShared(id int64, body types.SharedLinkInput) (types.
 // variables stay as the app's own.
 func (a *App) ConfigSetsUnlinkShared(id int64, keep bool) (types.ConfigSet, error) {
 	return call[types.ConfigSet](a.link, api.MethodConfigSetsUnlinkShared, m{"id": id, "keep": keep})
+}
+
+// SharedLinksRefresh adds the shared variables that appeared since a config
+// set was linked to every linked config set. It never runs a script.
+func (a *App) SharedLinksRefresh() (types.Ok, error) {
+	return call[types.Ok](a.link, api.MethodSharedLinksRefresh, m{})
 }
 
 func (a *App) SharedSetsList(workspaceID int64) ([]types.SharedSet, error) {

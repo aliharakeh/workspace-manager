@@ -7,7 +7,7 @@ import (
 
 func TestProviderBundleWithoutDeclaredKeys(t *testing.T) {
 	f := newSharedFixture(t)
-	f.link(t, f.url.ID)
+	f.link(t)
 	p := types.EnvProvider{Command: "echo private-command", Directory: t.TempDir(), Timeout: 30}
 	if _, err := f.o.EnvProviderSave(true, f.shared.ID, p); err != nil {
 		t.Fatal(err)
@@ -66,14 +66,14 @@ func TestProviderRunSavesLinkableVariables(t *testing.T) {
 	if id == 0 {
 		t.Fatal("script output was not saved as a shared variable")
 	}
-	if _, err := f.o.ConfigSetsLinkShared(f.setID, types.SharedLinkInput{SharedSetID: f.shared.ID, VarIDs: []int64{id}}); err != nil {
+	if _, err := f.o.ConfigSetsLinkShared(f.setID, types.SharedLinkInput{SharedSetID: f.shared.ID}); err != nil {
 		t.Fatal("generated variable should be linkable:", err)
 	}
 }
 
 func TestProviderOutputOverridesManualVariables(t *testing.T) {
 	f := newSharedFixture(t)
-	f.link(t, f.url.ID)
+	f.link(t)
 	manual, err := f.o.EnvVarsCreate(f.appID, f.setID, types.EnvVarCreateInput{Key: "MANUAL", Value: ptr("old")})
 	if err != nil {
 		t.Fatal(err)

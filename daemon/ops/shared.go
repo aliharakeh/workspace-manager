@@ -291,7 +291,13 @@ func (o *Ops) SharedVarsCreate(setID int64, body types.EnvVarCreateInput) (types
 	if err != nil {
 		return types.SharedEnvVar{}, db.UniqueErr(err, "Variable key already exists in this shared config set")
 	}
+	// Every config set linked to this one takes the new variable.
+	apps, err := o.mirrorSharedSet(o.Ctx(), o.DB.Queries, setID, false)
+	if err != nil {
+		return types.SharedEnvVar{}, err
+	}
 	o.changed("sharedSet", set.WorkspaceID)
+	o.changed("envVar", apps...)
 	return sharedVarFrom(row, nil), nil
 }
 
@@ -374,9 +380,10 @@ func (o *Ops) SharedVarsDelete(id int64) (types.Ok, error) {
 }
 
 // ConfigSetsLinkShared links an app config set to a shared set of its own
-// workspace and takes the chosen variables from it. Calling it again changes
-// the selection, or the shared set (the old shared rows are dropped). A chosen
-// key that an own variable already uses is a conflict unless Replace is set.
+// workspace. The config set takes every variable of the shared set, now and
+// later (see mirrorSharedSet). Calling it with another shared set replaces the
+// old shared rows. A shared key that an own variable already uses is a conflict
+// unless Replace is set.
 func (o *Ops) ConfigSetsLinkShared(configSetID int64, in types.SharedLinkInput) (types.ConfigSet, error) {
 	ctx := o.Ctx()
 	set, err := o.DB.GetConfigSetT(ctx, configSetID)
@@ -394,24 +401,11 @@ func (o *Ops) ConfigSetsLinkShared(configSetID int64, in types.SharedLinkInput) 
 	if shared.WorkspaceID != app.WorkspaceID {
 		return types.ConfigSet{}, api.Errf(api.KindInvalid, "The shared config set belongs to another workspace")
 	}
-	if len(in.VarIDs) == 0 {
-		return types.ConfigSet{}, api.Errf(api.KindInvalid, "Select at least one variable (use unlink to stop sharing)")
-	}
 	sharedVars, err := o.DB.ListWorkspaceEnvVars(ctx, shared.ID)
 	if err != nil {
 		return types.ConfigSet{}, err
 	}
-	byID := map[int64]db.WorkspaceEnvVar{}
-	for _, v := range sharedVars {
-		byID[v.ID] = v
-	}
-	chosen := map[int64]bool{}
-	for _, id := range in.VarIDs {
-		if _, ok := byID[id]; !ok {
-			return types.ConfigSet{}, api.Errf(api.KindInvalid, "Variable %d is not in the shared config set", id)
-		}
-		chosen[id] = true
-	}
+	sort.Slice(sharedVars, func(i, j int) bool { return sharedVars[i].Key < sharedVars[j].Key })
 
 	tx, err := o.DB.SQL.BeginTx(ctx, nil)
 	if err != nil {
@@ -433,56 +427,26 @@ func (o *Ops) ConfigSetsLinkShared(configSetID int64, in types.SharedLinkInput) 
 	if err != nil {
 		return types.ConfigSet{}, err
 	}
-	linked := map[int64]bool{}    // shared var ids already mirrored here
-	own := map[string]db.EnvVar{} // own variables by key
+	linked := map[int64]bool{}
+	own := map[string]bool{}
 	for _, r := range current {
-		if r.SharedVarID == nil {
-			own[r.Key] = r
-			continue
+		if r.SharedVarID != nil {
+			linked[*r.SharedVarID] = true
+		} else {
+			own[r.Key] = true
 		}
-		if !chosen[*r.SharedVarID] {
-			if _, err := q.DeleteEnvVar(ctx, r.ID); err != nil {
-				return types.ConfigSet{}, err
-			}
-			continue
-		}
-		linked[*r.SharedVarID] = true
 	}
 	var clashes []string
-	for id := range chosen {
-		if linked[id] {
-			continue
-		}
-		if _, clash := own[byID[id].Key]; clash {
-			clashes = append(clashes, byID[id].Key)
+	for _, v := range sharedVars {
+		if !linked[v.ID] && own[v.Key] {
+			clashes = append(clashes, v.Key)
 		}
 	}
 	if len(clashes) > 0 && !in.Replace {
-		sort.Strings(clashes)
 		return types.ConfigSet{}, api.Errf(api.KindConflict, "This config set already has its own %s", strings.Join(clashes, ", "))
 	}
-	for _, key := range clashes {
-		if _, err := q.DeleteEnvVar(ctx, own[key].ID); err != nil {
-			return types.ConfigSet{}, err
-		}
-	}
-	// Create in key order so ids are stable across runs.
-	ids := make([]int64, 0, len(chosen))
-	for id := range chosen {
-		if !linked[id] {
-			ids = append(ids, id)
-		}
-	}
-	sort.Slice(ids, func(i, j int) bool { return byID[ids[i]].Key < byID[ids[j]].Key })
-	for _, id := range ids {
-		v := byID[id]
-		vid := v.ID
-		if _, err := q.CreateSharedEnvVar(ctx, db.CreateSharedEnvVarParams{
-			ConfigSetID: configSetID, Key: v.Key, Value: v.Value, Private: v.Private,
-			Options: v.Options, Selected: v.Selected, SharedVarID: &vid,
-		}); err != nil {
-			return types.ConfigSet{}, err
-		}
+	if _, err := o.mirrorInto(ctx, q, configSetID, sharedVars, true); err != nil {
+		return types.ConfigSet{}, err
 	}
 	if err := tx.Commit(); err != nil {
 		return types.ConfigSet{}, err

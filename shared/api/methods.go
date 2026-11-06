@@ -46,6 +46,7 @@ const (
 	MethodConfigSetsCompare      = "configSets.compare"
 	MethodConfigSetsLinkShared   = "configSets.linkShared"
 	MethodConfigSetsUnlinkShared = "configSets.unlinkShared"
+	MethodSharedLinksRefresh     = "sharedLinks.refresh"
 
 	// Workspace shared config: config sets a workspace owns, which app config
 	// sets link to and take read-only live variables from.
@@ -188,6 +189,7 @@ var Methods = []Method{
 	{Name: MethodConfigSetsCompare, Agent: true},
 	{Name: MethodConfigSetsLinkShared, Agent: true},
 	{Name: MethodConfigSetsUnlinkShared, Agent: true},
+	{Name: MethodSharedLinksRefresh, Agent: true},
 
 	// Private shared values are blanked for agents, like app variables.
 	{Name: MethodSharedSetsList, Agent: true},

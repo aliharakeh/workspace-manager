@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"workspace-manager/shared/api"
 )
@@ -48,7 +47,7 @@ func sharedTool() mcpTool {
 		Name: "wm_shared",
 		Description: "A workspace's shared config: sets of env vars several apps can use (for example a database URL per environment). " +
 			"Edit them with set/delete; a change reaches every app config set that uses them at once. " +
-			"An app config set takes chosen variables with link (any shared set, whatever the names) and stops with unlink; " +
+			"An app config set takes all of a shared set's variables (also ones added later) with link (any shared set, whatever the names) and stops with unlink; " +
 			"linked variables are read-only in the app (wm_env refuses them). Private values are never returned.",
 		Schema: schema("Workspace shared config", map[string]any{
 			"action":    map[string]any{"type": "string", "description": "list (shared sets), get (a set's variables and where they are used), create_set, rename_set, delete_set, set (create or update a variable), delete (a variable), link, unlink", "enum": []string{"list", "get", "create_set", "rename_set", "delete_set", "set", "delete", "link", "unlink"}},
@@ -62,7 +61,6 @@ func sharedTool() mcpTool {
 			"private":   boolProp("make the value private: agents never see it (set); omit to keep the current flag; a private variable cannot be made public here"),
 			"app":       strProp(appRefDesc + " (link/unlink)"),
 			"set":       strProp(setRefDesc + " (link/unlink)"),
-			"keys":      map[string]any{"type": "array", "description": "variable names the config set takes from the shared set (link); omit for all of them", "items": map[string]any{"type": "string"}},
 			"replace":   boolProp("let a shared variable overwrite an own variable of the same name (link)"),
 			"keep":      boolProp("keep the shared variables as the app's own instead of deleting them (unlink)"),
 		}, "action"),
@@ -108,36 +106,9 @@ func sharedTool() mcpTool {
 				if err != nil {
 					return nil, err
 				}
-				detail, err := daoCall(api.MethodSharedSetsGet, map[string]any{"id": shared.ID})
-				if err != nil {
-					return nil, err
-				}
-				var d struct{ Vars []map[string]any }
-				raw, _ := json.Marshal(detail)
-				_ = json.Unmarshal(raw, &d)
-				want := map[string]bool{}
-				for _, k := range argStrList(args, "keys") {
-					want[strings.ToLower(k)] = true
-				}
-				var ids []int64
-				for _, v := range d.Vars {
-					key, _ := v["key"].(string)
-					if len(want) == 0 || want[strings.ToLower(key)] {
-						id, _ := v["id"].(float64)
-						ids = append(ids, int64(id))
-						delete(want, strings.ToLower(key))
-					}
-				}
-				if len(want) > 0 {
-					missing := make([]string, 0, len(want))
-					for k := range want {
-						missing = append(missing, k)
-					}
-					return nil, api.Errf(api.KindNotFound, "shared set %q has no variable %s", shared.Name, strings.Join(missing, ", "))
-				}
 				return daoCall(api.MethodConfigSetsLinkShared, map[string]any{
 					"id":   set.ID,
-					"body": map[string]any{"shared_set_id": shared.ID, "var_ids": ids, "replace": argBool(args, "replace", false)},
+					"body": map[string]any{"shared_set_id": shared.ID, "replace": argBool(args, "replace", false)},
 				})
 			}
 

@@ -39,11 +39,11 @@ type SharedSetDetail struct {
 	Vars []SharedEnvVar `json:"vars"`
 }
 
-// SharedLinkInput links an app config set to a shared set and picks the
-// variables it takes. Replace lets a chosen variable overwrite an own variable
-// with the same key; without it such a clash is a conflict.
+// SharedLinkInput links an app config set to a shared set; it takes all of the
+// set's variables, including ones added later. Replace lets a shared variable
+// overwrite an own variable with the same key; without it such a clash is a
+// conflict.
 type SharedLinkInput struct {
 	SharedSetID int64   `json:"shared_set_id"`
-	VarIDs      []int64 `json:"var_ids"`
 	Replace     bool    `json:"replace"`
 }

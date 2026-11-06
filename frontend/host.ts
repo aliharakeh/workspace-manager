@@ -218,9 +218,11 @@ export const api = {
                     ) as unknown as Promise<SharedEnvVar>,
             ),
         deleteVar: (id: number) => call(() => Go.SharedVarsDelete(id)),
-        /** Links an app config set to a shared set, taking the chosen variables (also edits the selection). */
+        /** Links an app config set to a shared set, taking all of its variables. */
         link: (configSetId: number, body: SharedLinkInput) =>
             call(() => Go.ConfigSetsLinkShared(configSetId, types.SharedLinkInput.createFrom(body))),
+        /** Adds shared variables that appeared since linking to every linked config set (runs no script). */
+        refresh: () => call(() => Go.SharedLinksRefresh()),
         /** Stops sharing; with `keep` the shared variables stay as the app's own. */
         unlink: (configSetId: number, keep: boolean) =>
             call(() => Go.ConfigSetsUnlinkShared(configSetId, keep)),

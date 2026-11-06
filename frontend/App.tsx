@@ -195,6 +195,8 @@ function AppContent() {
         setLoading(true)
         setServerError(null)
         try {
+            // Pick up variables a shared script added since the last run.
+            await api.sharedSets.refresh().catch(() => undefined)
             let list = await api.workspaces.list()
             if (await migrateLocalPins(list)) list = await api.workspaces.list()
             setWorkspaces(list)

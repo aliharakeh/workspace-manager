@@ -334,3 +334,6 @@ INSERT INTO env_providers(shared_set_id, config) VALUES (?, ?) ON CONFLICT(share
 
 -- name: ListConfigSetIDsLinkedToSharedSet :many
 SELECT id FROM config_sets WHERE shared_set_id = ?;
+
+-- name: ListLinkedSharedSetIDs :many
+SELECT DISTINCT shared_set_id FROM config_sets WHERE shared_set_id IS NOT NULL ORDER BY shared_set_id;

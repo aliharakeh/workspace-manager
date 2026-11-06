@@ -136,4 +136,7 @@ func (r *Registry) sharedConfig() {
 	}) (types.ConfigSet, error) {
 		return o.ConfigSetsUnlinkShared(in.ID, in.Keep)
 	}))
+	r.handle(api.MethodSharedLinksRefresh, typed(func(in struct{}) (types.Ok, error) {
+		return o.SharedLinksRefresh()
+	}))
 }

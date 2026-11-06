@@ -29,6 +29,7 @@ import { api, handleReadyUrlClick } from "@/lib/api"
 import { isTaskKind } from "@/lib/app-state"
 import type { App, StatusEvent, Workspace } from "@/lib/types"
 import { AppRunControls } from "@/components/app-run-controls"
+import { AppScriptButtons } from "@/components/script-run-buttons"
 import { ConfigSetPicker } from "@/components/config-set-picker"
 import { OpenEditorButton } from "@/components/open-editor-button"
 import { OpenFolderButton } from "@/components/open-folder-button"
@@ -384,14 +385,20 @@ function SortableAppCard({
             onAppChange={onAppChange}
             stopPropagation
           />
-          <AppRunControls
-            appId={app.id}
-            activeConfigSetId={app.active_config_set_id ?? null}
-            running={running}
-            kind={status?.kind}
-            onStatus={onStatus}
-            variant="icon"
-          />
+          <div className="flex items-center gap-1">
+            <AppScriptButtons
+              appId={app.id}
+              activeConfigSetId={app.active_config_set_id ?? null}
+            />
+            <AppRunControls
+              appId={app.id}
+              activeConfigSetId={app.active_config_set_id ?? null}
+              running={running}
+              kind={status?.kind}
+              onStatus={onStatus}
+              variant="icon"
+            />
+          </div>
         </div>
       </div>
     </li>

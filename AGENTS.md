@@ -124,8 +124,11 @@ screen. The React frontend lives in `frontend/`.
 - Shared config: a workspace owns config sets of env vars (`workspace_config_sets`,
   `workspace_env_vars`; `daemon/ops/shared.go`). An app config set links to one of
   them by hand (`config_sets.shared_set_id`, `configSets.linkShared`, any set
-  whatever the names) and takes chosen variables as ordinary `env_vars` rows that
-  carry `shared_var_id`. Those rows are **live and read-only**: every write to a
+  whatever the names) and takes **all** its variables as ordinary `env_vars` rows that
+  carry `shared_var_id`; a variable added to the shared set later (by hand or by its
+  script) is mirrored into every linked config set (`mirrorSharedSet` in
+  `daemon/ops/sharedlinks.go`), and `sharedLinks.refresh` re-checks all links (the GUI
+  calls it at startup; it never runs a script). Those rows are **live and read-only**: every write to a
   workspace variable (`sharedVars.update`/`delete`, which go through `mergeEnvUpdate`
   so option rules stay the same) rewrites or removes them in the same transaction,
   so the runner, templates, compare, AI and export keep reading `env_vars.value`

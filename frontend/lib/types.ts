@@ -539,7 +539,6 @@ export type SharedSetDetail = SharedSet & {
 
 export type SharedLinkInput = {
     shared_set_id: number
-    var_ids: number[]
-    /** Let a chosen variable overwrite an own variable with the same key. */
+    /** Let a shared variable overwrite an own variable with the same key. */
     replace: boolean
 }

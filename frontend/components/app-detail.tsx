@@ -9,6 +9,7 @@ import { handleReadyUrlClick } from "@/lib/api"
 import type { App, StatusEvent } from "@/lib/types"
 import type { AppTab } from "@/lib/routes"
 import { AppRunControls } from "@/components/app-run-controls"
+import { AppScriptButtons } from "@/components/script-run-buttons"
 import { OpenEditorButton } from "@/components/open-editor-button"
 import { OpenFolderButton } from "@/components/open-folder-button"
 import { appStateLabel } from "@/lib/app-state"
@@ -131,6 +132,10 @@ export function AppDetail({
           ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <AppScriptButtons
+            appId={app.id}
+            activeConfigSetId={app.active_config_set_id ?? null}
+          />
           <AppRunControls
             appId={app.id}
             activeConfigSetId={app.active_config_set_id ?? null}

@@ -1,5 +1,6 @@
 import { EnvProviderEditor } from "./env-provider-editor"
 import { LinkSharedDialog } from "@/components/link-shared-dialog"
+import { ScriptRunButton } from "@/components/script-run-buttons"
 import { SecretInput } from "@/components/secret-input"
 import {
   AlertDialog,
@@ -363,14 +364,22 @@ export function EnvVarsPanel({
                   <span className="font-mono">{configSet.shared_set_name}</span>
                 </h3>
                 <div className="ml-auto flex gap-2">
+                  {configSet.shared_set_id != null ? (
+                    <ScriptRunButton
+                      shared
+                      setId={configSet.shared_set_id}
+                      setName={configSet.shared_set_name}
+                      iconOnly={false}
+                    />
+                  ) : null}
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setLinkOpen(true)}
-                    title="Choose which variables to take, or link another set"
+                    title="Link another shared set"
                   >
                     <Link2Icon data-icon="inline-start" />
-                    Edit selection
+                    Change set
                   </Button>
                   <Button
                     variant="outline"
@@ -443,7 +452,6 @@ export function EnvVarsPanel({
           configSetId={configSet.id}
           configSetName={configSet.name}
           currentSetId={configSet.shared_set_id}
-          linkedVarIds={sharedVars.map((v) => v.shared_var_id as number)}
           ownKeys={ownVars.map((v) => v.key)}
           onLinked={() => void load(true)}
         />

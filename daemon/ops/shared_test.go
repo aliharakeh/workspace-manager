@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"workspace-manager/daemon/db"
 	"workspace-manager/daemon/ops"
 	"workspace-manager/shared/api"
 	"workspace-manager/shared/api/types"
@@ -44,9 +45,9 @@ func newSharedFixture(t *testing.T) sharedFixture {
 	return sharedFixture{o: o, appID: appID, setID: *app.ActiveConfigSetID, shared: shared, url: url, pwd: pwd}
 }
 
-func (f sharedFixture) link(t *testing.T, ids ...int64) types.ConfigSet {
+func (f sharedFixture) link(t *testing.T) types.ConfigSet {
 	t.Helper()
-	cs, err := f.o.ConfigSetsLinkShared(f.setID, types.SharedLinkInput{SharedSetID: f.shared.ID, VarIDs: ids})
+	cs, err := f.o.ConfigSetsLinkShared(f.setID, types.SharedLinkInput{SharedSetID: f.shared.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,14 +67,14 @@ func (f sharedFixture) vars(t *testing.T) map[string]types.EnvVar {
 	return out
 }
 
-func TestLinkTakesChosenVariablesAsReadOnlyRows(t *testing.T) {
+func TestLinkTakesEveryVariableAsReadOnlyRows(t *testing.T) {
 	f := newSharedFixture(t)
-	cs := f.link(t, f.url.ID)
+	cs := f.link(t)
 	if cs.SharedSetID == nil || *cs.SharedSetID != f.shared.ID || cs.SharedSetName == nil || *cs.SharedSetName != "dev2" {
 		t.Fatalf("config set not linked: %+v", cs)
 	}
 	vars := f.vars(t)
-	if len(vars) != 1 || vars["DATABASE_URL"].Value != "postgres://dev2" || vars["DATABASE_URL"].SharedVarID == nil {
+	if len(vars) != 2 || vars["DATABASE_URL"].Value != "postgres://dev2" || vars["DATABASE_URL"].SharedVarID == nil {
 		t.Fatalf("unexpected rows: %+v", vars)
 	}
 	// The row is read-only in the app.
@@ -92,7 +93,7 @@ func TestLinkTakesChosenVariablesAsReadOnlyRows(t *testing.T) {
 
 func TestWorkspaceEditsReachLinkedRowsImmediately(t *testing.T) {
 	f := newSharedFixture(t)
-	f.link(t, f.url.ID, f.pwd.ID)
+	f.link(t)
 
 	if _, err := f.o.SharedVarsUpdate(f.url.ID, types.EnvVarUpdateInput{Value: sp("postgres://new")}); err != nil {
 		t.Fatal(err)
@@ -125,21 +126,21 @@ func TestWorkspaceEditsReachLinkedRowsImmediately(t *testing.T) {
 
 func TestEditsReachEveryLinkedConfigSet(t *testing.T) {
 	f := newSharedFixture(t)
-	f.link(t, f.url.ID)
+	f.link(t)
 	// A second app and a second config set of the first app, both linked.
 	app, _ := f.o.AppsGet(f.appID)
 	other, err := f.o.AppsCreate(app.WorkspaceID, types.AppCreateInput{Name: "other", ProjectPath: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.o.ConfigSetsLinkShared(*other.ActiveConfigSetID, types.SharedLinkInput{SharedSetID: f.shared.ID, VarIDs: []int64{f.url.ID}}); err != nil {
+	if _, err := f.o.ConfigSetsLinkShared(*other.ActiveConfigSetID, types.SharedLinkInput{SharedSetID: f.shared.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.o.SharedVarsUpdate(f.url.ID, types.EnvVarUpdateInput{Value: sp("v2")}); err != nil {
 		t.Fatal(err)
 	}
 	otherVars, _ := f.o.EnvVarsList(other.ID, 0)
-	if len(otherVars) != 1 || otherVars[0].Value != "v2" || f.vars(t)["DATABASE_URL"].Value != "v2" {
+	if len(otherVars) != 2 || f.vars(t)["DATABASE_URL"].Value != "v2" {
 		t.Fatal("not every linked config set was updated")
 	}
 	d, err := f.o.SharedSetsGet(f.shared.ID)
@@ -150,15 +151,15 @@ func TestEditsReachEveryLinkedConfigSet(t *testing.T) {
 		if v.ID == f.url.ID && len(v.UsedBy) != 2 {
 			t.Fatalf("usage not listed: %+v", v.UsedBy)
 		}
-		if v.ID == f.pwd.ID && len(v.UsedBy) != 0 {
-			t.Fatalf("unused variable reports usage: %+v", v.UsedBy)
+		if v.ID == f.pwd.ID && len(v.UsedBy) != 2 {
+			t.Fatalf("private variable usage not listed: %+v", v.UsedBy)
 		}
 	}
 }
 
 func TestRenamePropagatesAndRefusesCollisions(t *testing.T) {
 	f := newSharedFixture(t)
-	f.link(t, f.url.ID)
+	f.link(t)
 	if _, err := f.o.SharedVarsUpdate(f.url.ID, types.EnvVarUpdateInput{Key: sp("DB_URL")}); err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +182,7 @@ func TestRenamePropagatesAndRefusesCollisions(t *testing.T) {
 
 func TestDeletingAVariableOrSetCleansTheApps(t *testing.T) {
 	f := newSharedFixture(t)
-	f.link(t, f.url.ID, f.pwd.ID)
+	f.link(t)
 	if _, err := f.o.SharedVarsDelete(f.pwd.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -207,14 +208,14 @@ func TestLinkConflictWithOwnVariable(t *testing.T) {
 	if _, err := f.o.EnvVarsCreate(f.appID, f.setID, types.EnvVarCreateInput{Key: "DATABASE_URL", Value: sp("mine")}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := f.o.ConfigSetsLinkShared(f.setID, types.SharedLinkInput{SharedSetID: f.shared.ID, VarIDs: []int64{f.url.ID}})
+	_, err := f.o.ConfigSetsLinkShared(f.setID, types.SharedLinkInput{SharedSetID: f.shared.ID})
 	if err == nil || api.KindOf(err) != api.KindConflict {
 		t.Fatalf("clash not reported as a conflict: %v", err)
 	}
 	if v := f.vars(t)["DATABASE_URL"]; v.Value != "mine" || v.SharedVarID != nil {
 		t.Fatalf("refused link changed the own variable: %+v", v)
 	}
-	if _, err := f.o.ConfigSetsLinkShared(f.setID, types.SharedLinkInput{SharedSetID: f.shared.ID, VarIDs: []int64{f.url.ID}, Replace: true}); err != nil {
+	if _, err := f.o.ConfigSetsLinkShared(f.setID, types.SharedLinkInput{SharedSetID: f.shared.ID, Replace: true}); err != nil {
 		t.Fatal(err)
 	}
 	if v := f.vars(t)["DATABASE_URL"]; v.Value != "postgres://dev2" || v.SharedVarID == nil {
@@ -224,11 +225,9 @@ func TestLinkConflictWithOwnVariable(t *testing.T) {
 
 func TestRelinkChangesSelectionAndSource(t *testing.T) {
 	f := newSharedFixture(t)
-	f.link(t, f.url.ID, f.pwd.ID)
-	// Drop one variable from the selection.
-	f.link(t, f.url.ID)
-	if vars := f.vars(t); len(vars) != 1 || vars["DATABASE_URL"].SharedVarID == nil {
-		t.Fatalf("selection not narrowed: %+v", vars)
+	f.link(t)
+	if vars := f.vars(t); len(vars) != 2 {
+		t.Fatalf("link did not take every variable: %+v", vars)
 	}
 	// Link to a differently named set: the old rows are replaced.
 	app, _ := f.o.AppsGet(f.appID)
@@ -236,11 +235,11 @@ func TestRelinkChangesSelectionAndSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pv, err := f.o.SharedVarsCreate(other.ID, types.EnvVarCreateInput{Key: "API_KEY", Value: sp("k")})
+	_, err = f.o.SharedVarsCreate(other.ID, types.EnvVarCreateInput{Key: "API_KEY", Value: sp("k")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	cs, err := f.o.ConfigSetsLinkShared(f.setID, types.SharedLinkInput{SharedSetID: other.ID, VarIDs: []int64{pv.ID}})
+	cs, err := f.o.ConfigSetsLinkShared(f.setID, types.SharedLinkInput{SharedSetID: other.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,25 +249,55 @@ func TestRelinkChangesSelectionAndSource(t *testing.T) {
 	if vars := f.vars(t); len(vars) != 1 || vars["API_KEY"].SharedVarID == nil {
 		t.Fatalf("old rows were not replaced: %+v", vars)
 	}
-	// A variable of a set the config set is not linked to, or of another workspace, is refused.
+	// A shared set of another workspace is refused.
 	ws2, _ := f.o.WorkspacesCreate(types.WorkspaceCreateInput{Name: "w2"})
 	foreign, _ := f.o.SharedSetsCreate(ws2.ID, "dev2")
-	fv, _ := f.o.SharedVarsCreate(foreign.ID, types.EnvVarCreateInput{Key: "X", Value: sp("1")})
-	if _, err := f.o.ConfigSetsLinkShared(f.setID, types.SharedLinkInput{SharedSetID: foreign.ID, VarIDs: []int64{fv.ID}}); err == nil {
+	if _, err := f.o.ConfigSetsLinkShared(f.setID, types.SharedLinkInput{SharedSetID: foreign.ID}); err == nil {
 		t.Fatal("linked to a shared set of another workspace")
 	}
-	if _, err := f.o.ConfigSetsLinkShared(f.setID, types.SharedLinkInput{SharedSetID: other.ID, VarIDs: []int64{f.url.ID}}); err == nil {
-		t.Fatal("linked a variable that is not in the chosen shared set")
+}
+
+func TestNewSharedVariablesReachLinkedSets(t *testing.T) {
+	f := newSharedFixture(t)
+	f.link(t)
+	if _, err := f.o.SharedVarsCreate(f.shared.ID, types.EnvVarCreateInput{Key: "LATER", Value: sp("1")}); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := f.o.ConfigSetsLinkShared(f.setID, types.SharedLinkInput{SharedSetID: other.ID}); err == nil {
-		t.Fatal("linked with nothing selected")
+	if v := f.vars(t)["LATER"]; v.SharedVarID == nil || v.Value != "1" {
+		t.Fatalf("new shared variable was not mirrored: %+v", f.vars(t))
+	}
+}
+
+func TestRefreshAddsMissingMirrorsAndKeepsOwnVariables(t *testing.T) {
+	f := newSharedFixture(t)
+	f.link(t)
+	// Simulate a variable that appeared without being mirrored, plus an own clash.
+	row, err := f.o.DB.CreateWorkspaceEnvVar(f.o.Ctx(), db.CreateWorkspaceEnvVarParams{WorkspaceConfigSetID: f.shared.ID, Key: "ORPHAN", Value: "o"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.o.DB.CreateWorkspaceEnvVar(f.o.Ctx(), db.CreateWorkspaceEnvVarParams{WorkspaceConfigSetID: f.shared.ID, Key: "OWN", Value: "shared"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.o.EnvVarsCreate(f.appID, f.setID, types.EnvVarCreateInput{Key: "OWN", Value: sp("mine")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.o.SharedLinksRefresh(); err != nil {
+		t.Fatal(err)
+	}
+	vars := f.vars(t)
+	if v := vars["ORPHAN"]; v.SharedVarID == nil || *v.SharedVarID != row.ID {
+		t.Fatalf("missing variable was not linked: %+v", vars)
+	}
+	if v := vars["OWN"]; v.SharedVarID != nil || v.Value != "mine" {
+		t.Fatalf("refresh overwrote an own variable: %+v", v)
 	}
 }
 
 func TestUnlinkKeepsOrDeletes(t *testing.T) {
 	for _, keep := range []bool{true, false} {
 		f := newSharedFixture(t)
-		f.link(t, f.url.ID)
+		f.link(t)
 		cs, err := f.o.ConfigSetsUnlinkShared(f.setID, keep)
 		if err != nil {
 			t.Fatal(err)
@@ -300,7 +329,7 @@ func TestUnlinkKeepsOrDeletes(t *testing.T) {
 
 func TestOtherWritesLeaveSharedRowsAlone(t *testing.T) {
 	f := newSharedFixture(t)
-	f.link(t, f.url.ID)
+	f.link(t)
 	// The AI's reviewed patch cannot change or delete a shared row.
 	err := f.o.ConfigSetsApplyChanges(f.appID, f.setID, types.AppAIPatch{Env: &types.AppAIEnvPatch{
 		Upsert: []types.AppAIEnvUpsert{{Key: "DATABASE_URL", Value: "ai"}},
@@ -336,7 +365,7 @@ func TestOtherWritesLeaveSharedRowsAlone(t *testing.T) {
 
 func TestExportImportKeepsSharedLinks(t *testing.T) {
 	f := newSharedFixture(t)
-	f.link(t, f.url.ID, f.pwd.ID)
+	f.link(t)
 	if _, err := f.o.EnvVarsCreate(f.appID, f.setID, types.EnvVarCreateInput{Key: "PORT", Value: sp("3001")}); err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +437,7 @@ func TestExportWithoutSharedConfigStaysVersionOne(t *testing.T) {
 
 func TestImportRejectsBrokenSharedLinks(t *testing.T) {
 	f := newSharedFixture(t)
-	f.link(t, f.url.ID)
+	f.link(t)
 	app, _ := f.o.AppsGet(f.appID)
 	bundle, err := f.o.WorkspacesExport(app.WorkspaceID, types.WorkspaceExportOptions{Secrets: types.SecretsInclude}, true)
 	if err != nil {

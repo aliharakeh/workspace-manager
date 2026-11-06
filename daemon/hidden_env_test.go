@@ -206,7 +206,7 @@ func TestAgentSeesSharedHiddenValuesBlanked(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := agent.Call(api.MethodConfigSetsLinkShared, map[string]any{
-		"id": sets[0].ID, "body": types.SharedLinkInput{SharedSetID: set.ID, VarIDs: []int64{pwd.ID, url.ID}},
+		"id": sets[0].ID, "body": types.SharedLinkInput{SharedSetID: set.ID},
 	}, nil); err != nil {
 		t.Fatal(err)
 	}

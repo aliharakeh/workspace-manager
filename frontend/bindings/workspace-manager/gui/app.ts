@@ -186,7 +186,7 @@ export function ConfigSetsGetDetail(id: number): $CancellablePromise<types$0.Con
 
 /**
  * ConfigSetsLinkShared links an app config set to a workspace shared set and
- * takes the chosen variables from it; calling it again changes the selection.
+ * takes all of its variables, including ones added later.
  */
 export function ConfigSetsLinkShared(id: number, body: types$0.SharedLinkInput): $CancellablePromise<types$0.ConfigSet> {
     return $Call.ByID(3392669999, id, body).then(($result: any) => {
@@ -619,6 +619,16 @@ export function SettingsGet(): $CancellablePromise<{ [_ in string]?: string }> {
 export function SettingsSet(key: string, value: string): $CancellablePromise<{ [_ in string]?: string }> {
     return $Call.ByID(3626487008, key, value).then(($result: any) => {
         return $$createType37($result);
+    });
+}
+
+/**
+ * SharedLinksRefresh adds the shared variables that appeared since a config
+ * set was linked to every linked config set. It never runs a script.
+ */
+export function SharedLinksRefresh(): $CancellablePromise<types$0.Ok> {
+    return $Call.ByID(3812555788).then(($result: any) => {
+        return $$createType1($result);
     });
 }
 

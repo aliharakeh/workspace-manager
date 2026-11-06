@@ -1104,6 +1104,33 @@ func (q *Queries) ListEnvVarsByConfigSet(ctx context.Context, configSetID int64)
 	return items, nil
 }
 
+const listLinkedSharedSetIDs = `-- name: ListLinkedSharedSetIDs :many
+SELECT DISTINCT shared_set_id FROM config_sets WHERE shared_set_id IS NOT NULL ORDER BY shared_set_id
+`
+
+func (q *Queries) ListLinkedSharedSetIDs(ctx context.Context) ([]*int64, error) {
+	rows, err := q.db.QueryContext(ctx, listLinkedSharedSetIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []*int64{}
+	for rows.Next() {
+		var shared_set_id *int64
+		if err := rows.Scan(&shared_set_id); err != nil {
+			return nil, err
+		}
+		items = append(items, shared_set_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listReadyUrlPatterns = `-- name: ListReadyUrlPatterns :many
 SELECT id, "key", label, pattern, flags, sort_order, created_at, updated_at FROM ready_url_patterns ORDER BY sort_order ASC, id ASC
 `

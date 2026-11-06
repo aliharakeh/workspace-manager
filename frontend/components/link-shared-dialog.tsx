@@ -31,18 +31,16 @@ type LinkSharedDialogProps = {
   configSetName: string
   /** The shared set it is linked to now (null: not linked yet). */
   currentSetId: number | null
-  /** Shared variable ids it takes now. */
-  linkedVarIds: number[]
   /** Keys of the config set's own (not shared) variables. */
   ownKeys: string[]
   onLinked: () => void
 }
 
 /**
- * Links an app config set to a shared set of its workspace and picks which of
- * the set's variables it takes. Any shared set can be chosen, whatever the
- * names. The chosen variables are read-only in the app and follow the
- * workspace's changes.
+ * Links an app config set to a shared set of its workspace. The config set
+ * takes every variable of that set, now and whenever the set gains one (for
+ * example from its script). They are read-only in the app and follow the
+ * workspace's changes. Any shared set can be chosen, whatever the names.
  */
 export function LinkSharedDialog({
   open,
@@ -51,14 +49,12 @@ export function LinkSharedDialog({
   configSetId,
   configSetName,
   currentSetId,
-  linkedVarIds,
   ownKeys,
   onLinked,
 }: LinkSharedDialogProps) {
   const [sets, setSets] = useState<SharedSet[] | null>(null)
   const [setId, setSetId] = useState<number | null>(null)
   const [detail, setDetail] = useState<SharedSetDetail | null>(null)
-  const [picked, setPicked] = useState<Set<number>>(new Set())
   const [replace, setReplace] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -94,16 +90,7 @@ export function LinkSharedDialog({
     api.sharedSets
       .get(setId)
       .then((d) => {
-        if (cancelled) return
-        setDetail(d)
-        // Keep the current selection when looking at the set already linked.
-        setPicked(
-          new Set(
-            setId === currentSetId
-              ? d.vars.filter((v) => linkedVarIds.includes(v.id)).map((v) => v.id)
-              : []
-          )
-        )
+        if (!cancelled) setDetail(d)
       })
       .catch((err) =>
         toast.error(err instanceof Error ? err.message : "Failed to load variables")
@@ -111,39 +98,22 @@ export function LinkSharedDialog({
     return () => {
       cancelled = true
     }
-  }, [open, setId, currentSetId, linkedVarIds])
+  }, [open, setId])
 
+  const vars = useMemo(() => detail?.vars ?? [], [detail])
   const clashes = useMemo(
     () =>
-      (detail?.vars ?? []).filter(
-        (v) =>
-          picked.has(v.id) &&
-          !linkedVarIds.includes(v.id) &&
-          ownKeys.includes(v.key)
-      ),
-    [detail, picked, linkedVarIds, ownKeys]
+      setId === currentSetId ? [] : vars.filter((v) => ownKeys.includes(v.key)),
+    [vars, ownKeys, setId, currentSetId]
   )
 
-  function toggle(id: number, on: boolean) {
-    setPicked((prev) => {
-      const next = new Set(prev)
-      if (on) next.add(id)
-      else next.delete(id)
-      return next
-    })
-  }
-
   async function handleSave() {
-    if (setId == null || picked.size === 0) return
+    if (setId == null) return
     setSaving(true)
     try {
-      await api.sharedSets.link(configSetId, {
-        shared_set_id: setId,
-        var_ids: [...picked],
-        replace,
-      })
+      await api.sharedSets.link(configSetId, { shared_set_id: setId, replace })
       toast.success(
-        currentSetId == null ? "Shared variables linked" : "Selection saved"
+        currentSetId == null ? "Shared variables linked" : "Shared set changed"
       )
       onLinked()
       onOpenChange(false)
@@ -154,7 +124,6 @@ export function LinkSharedDialog({
     }
   }
 
-  const vars = detail?.vars ?? []
   const switching = currentSetId != null && setId !== currentSetId
 
   return (
@@ -165,9 +134,9 @@ export function LinkSharedDialog({
             Shared variables for <span className="font-mono">{configSetName}</span>
           </DialogTitle>
           <DialogDescription>
-            Pick a workspace config set and the variables this config set takes.
-            They are read-only here and change whenever the workspace changes
-            them. The set&apos;s name does not have to match.
+            Pick a workspace config set. This config set takes all of its
+            variables, including ones added later by its script. They are
+            read-only here and change whenever the workspace changes them.
           </DialogDescription>
         </DialogHeader>
 
@@ -212,55 +181,30 @@ export function LinkSharedDialog({
               <p className="text-sm text-muted-foreground">Loading variables…</p>
             ) : vars.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                This set has no variables yet.
+                This set has no variables yet. Variables added to it later are
+                linked automatically.
               </p>
             ) : (
               <>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>
-                    {picked.size} of {vars.length} selected
-                  </span>
-                  <span className="flex gap-2">
-                    <button
-                      type="button"
-                      className="underline"
-                      onClick={() => setPicked(new Set(vars.map((v) => v.id)))}
-                    >
-                      All
-                    </button>
-                    <button
-                      type="button"
-                      className="underline"
-                      onClick={() => setPicked(new Set())}
-                    >
-                      None
-                    </button>
-                  </span>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  {vars.length} variable{vars.length === 1 ? "" : "s"} will be
+                  linked.
+                </p>
                 <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
-                  {vars.map((v) => {
-                    const clash =
-                      ownKeys.includes(v.key) && !linkedVarIds.includes(v.id)
-                    return (
-                      <label
-                        key={v.id}
-                        className="flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2"
-                      >
-                        <Checkbox
-                          checked={picked.has(v.id)}
-                          disabled={saving}
-                          onCheckedChange={(checked) => toggle(v.id, checked === true)}
-                        />
-                        <span className="font-mono text-sm">{v.key}</span>
-                        <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
-                          {v.private ? "••••••" : v.value}
-                        </span>
-                        {clash ? (
-                          <Badge variant="outline">already defined here</Badge>
-                        ) : null}
-                      </label>
-                    )
-                  })}
+                  {vars.map((v) => (
+                    <div
+                      key={v.id}
+                      className="flex items-center gap-3 rounded-md border px-3 py-2"
+                    >
+                      <span className="font-mono text-sm">{v.key}</span>
+                      <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+                        {v.private ? "••••••" : v.value}
+                      </span>
+                      {ownKeys.includes(v.key) ? (
+                        <Badge variant="outline">already defined here</Badge>
+                      ) : null}
+                    </div>
+                  ))}
                 </div>
                 {clashes.length > 0 ? (
                   <label className="flex items-start gap-2 rounded-md border border-amber-500/50 p-3 text-sm">
@@ -292,12 +236,12 @@ export function LinkSharedDialog({
             disabled={
               saving ||
               setId == null ||
-              picked.size === 0 ||
+              setId === currentSetId ||
               (clashes.length > 0 && !replace)
             }
             onClick={() => void handleSave()}
           >
-            {saving ? "Saving…" : currentSetId == null ? "Link" : "Save"}
+            {saving ? "Saving…" : "Link"}
           </Button>
         </DialogFooter>
       </DialogContent>
