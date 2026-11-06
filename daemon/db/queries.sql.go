@@ -1003,6 +1003,33 @@ func (q *Queries) ListBlueprints(ctx context.Context) ([]Blueprint, error) {
 	return items, nil
 }
 
+const listConfigSetIDsLinkedToSharedSet = `-- name: ListConfigSetIDsLinkedToSharedSet :many
+SELECT id FROM config_sets WHERE shared_set_id = ?
+`
+
+func (q *Queries) ListConfigSetIDsLinkedToSharedSet(ctx context.Context, sharedSetID *int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listConfigSetIDsLinkedToSharedSet, sharedSetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listConfigSetsByApp = `-- name: ListConfigSetsByApp :many
 SELECT id, app_id, name, shared_set_id, created_at, updated_at FROM config_sets WHERE app_id = ? ORDER BY name COLLATE NOCASE ASC
 `

@@ -78,7 +78,7 @@ export function EnvProviderEditor({
     try {
       await api.envProvider.run(shared, setId)
       toast.success(
-        "Dynamic values refreshed. Future app starts will use them."
+        "Dynamic values refreshed and saved to the variables."
       )
     } catch (e) {
       toast.error(String(e))

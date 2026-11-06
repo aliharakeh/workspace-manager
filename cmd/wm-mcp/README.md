@@ -79,6 +79,7 @@ Environment is inherited, so the server uses your normal data folder. Set
 | `wm_app` | list, get (app + config + status), create, update, delete, reorder |
 | `wm_config` | Config sets: list, detail, create, rename, activate, copy, delete; command lists: get/save, package scripts |
 | `wm_env` | Env vars: list, set (upsert, with `options` and `selected` for a choice variable), delete, import |
+| `wm_env_script` | The dynamic environment script of an app config set or a shared set: get, set, clear, run. Output is never returned |
 | `wm_shared` | A workspace's shared config: list, get, create_set, rename_set, delete_set, set/delete a variable, and link/unlink an app config set to a shared set |
 | `wm_template` | File templates: list, add, edit, delete |
 | `wm_run` | run, build, setup, stop, reload, status, logs, startAll, stopAll (a whole workspace) |

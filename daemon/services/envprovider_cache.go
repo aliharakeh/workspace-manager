@@ -42,6 +42,17 @@ func (c *EnvProviders) read(_ context.Context, shared bool, id int64, p types.En
 	}
 	return out, nil
 }
+
+// Values returns a copy of the last successful result of a script.
+func (c *EnvProviders) Values(shared bool, id int64) map[string]string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := map[string]string{}
+	for k, v := range c.results[providerID{shared, id}].values {
+		out[k] = v
+	}
+	return out
+}
 func (c *EnvProviders) Resolve(ctx context.Context, setID int64, dir string) (map[string]string, error) {
 	return resolveRunEnv(ctx, c.db, setID, dir, c.read)
 }

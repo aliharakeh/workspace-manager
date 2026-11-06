@@ -40,6 +40,7 @@ func allTools() []mcpTool {
 		appTool(),
 		configTool(),
 		envTool(),
+		envScriptTool(),
 		sharedTool(),
 		templateTool(),
 		runTool(),

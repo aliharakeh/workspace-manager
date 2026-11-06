@@ -43,3 +43,66 @@ func TestProviderBundleWithoutDeclaredKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestProviderRunSavesLinkableVariables(t *testing.T) {
+	f := newSharedFixture(t)
+	p := types.EnvProvider{Command: `echo {"GEN_TOKEN":"abc"}`, Directory: t.TempDir(), Timeout: 30}
+	if _, err := f.o.EnvProviderSave(true, f.shared.ID, p); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.o.EnvProviderRun(true, f.shared.ID); err != nil {
+		t.Fatal(err)
+	}
+	detail, err := f.o.SharedSetsGet(f.shared.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var id int64
+	for _, v := range detail.Vars {
+		if v.Key == "GEN_TOKEN" && v.Value == "abc" && v.Private {
+			id = v.ID
+		}
+	}
+	if id == 0 {
+		t.Fatal("script output was not saved as a shared variable")
+	}
+	if _, err := f.o.ConfigSetsLinkShared(f.setID, types.SharedLinkInput{SharedSetID: f.shared.ID, VarIDs: []int64{id}}); err != nil {
+		t.Fatal("generated variable should be linkable:", err)
+	}
+}
+
+func TestProviderOutputOverridesManualVariables(t *testing.T) {
+	f := newSharedFixture(t)
+	f.link(t, f.url.ID)
+	manual, err := f.o.EnvVarsCreate(f.appID, f.setID, types.EnvVarCreateInput{Key: "MANUAL", Value: ptr("old")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sharedManual, err := f.o.SharedVarsCreate(f.shared.ID, types.EnvVarCreateInput{Key: "SHARED_MANUAL", Value: ptr("old")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := `echo {"SHARED_MANUAL":"new"}`
+	_, _ = f.o.EnvVarsCreate(f.appID, f.setID, types.EnvVarCreateInput{Key: "SHARED_MANUAL", Value: ptr("old")})
+	if _, err := f.o.EnvProviderSave(true, f.shared.ID, types.EnvProvider{Command: cmd, Directory: t.TempDir(), Timeout: 30}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.o.EnvProviderRun(true, f.shared.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := f.o.SharedVarsGet(sharedManual.ID)
+	if got.Value != "new" {
+		t.Fatalf("shared variable not overridden: %q", got.Value)
+	}
+	vars, _ := f.o.EnvVarsList(f.appID, f.setID)
+	for _, v := range vars {
+		if v.Key == "SHARED_MANUAL" && v.Value != "new" {
+			t.Fatalf("linked app variable not overridden: %q", v.Value)
+		}
+		if v.ID == manual.ID && v.Value != "old" {
+			t.Fatal("unrelated variable changed")
+		}
+	}
+}
+
+func ptr(s string) *string { return &s }

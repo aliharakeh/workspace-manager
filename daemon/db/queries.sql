@@ -331,3 +331,6 @@ SELECT config FROM env_providers WHERE shared_set_id = ?;
 INSERT INTO env_providers(app_set_id, config) VALUES (?, ?) ON CONFLICT(app_set_id) DO UPDATE SET config=excluded.config;
 -- name: SaveSharedEnvProvider :exec
 INSERT INTO env_providers(shared_set_id, config) VALUES (?, ?) ON CONFLICT(shared_set_id) DO UPDATE SET config=excluded.config;
+
+-- name: ListConfigSetIDsLinkedToSharedSet :many
+SELECT id FROM config_sets WHERE shared_set_id = ?;

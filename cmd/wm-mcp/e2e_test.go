@@ -146,6 +146,31 @@ func TestStartsDaemonAndServesTools(t *testing.T) {
 		t.Fatalf("unlink did not remove the shared variable: %+v", vars)
 	}
 
+	// Dynamic environment script: saved, read back, kept on a partial update, cleared.
+	var script types.EnvProvider
+	call("wm_env_script", map[string]any{"action": "set", "command": "node gen.js", "timeout": 60}, &script)
+	call("wm_env_script", map[string]any{"action": "get"}, &script)
+	if script.Command != "node gen.js" || script.Timeout != 60 {
+		t.Fatalf("env script not saved: %+v", script)
+	}
+	call("wm_env_script", map[string]any{"action": "set", "timeout": 90}, &script)
+	call("wm_env_script", map[string]any{"action": "get"}, &script)
+	if script.Command != "node gen.js" || script.Timeout != 90 {
+		t.Fatalf("a partial update lost the command: %+v", script)
+	}
+	call("wm_env_script", map[string]any{"action": "set", "workspace": "mcp-ws", "shared": "dev", "command": "node shared.js", "directory": t.TempDir()}, nil)
+	relative := send(stdin, out, 13, "tools/call", map[string]any{
+		"name": "wm_env_script", "arguments": map[string]any{"action": "set", "workspace": "mcp-ws", "shared": "dev", "directory": "relative"},
+	})
+	if !strings.Contains(toJSON(relative), `"isError":true`) {
+		t.Fatal("a shared script accepted a relative directory")
+	}
+	call("wm_env_script", map[string]any{"action": "clear"}, &script)
+	call("wm_env_script", map[string]any{"action": "get"}, &script)
+	if script.Command != "" {
+		t.Fatalf("clear did not disable the script: %+v", script)
+	}
+
 	var active types.ConfigSet
 	call("wm_config", map[string]any{"action": "create", "name": "selected"}, &active)
 	for _, kind := range []string{"dev", "prod", "build", "setup"} {

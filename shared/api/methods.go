@@ -146,9 +146,11 @@ type Method struct {
 // Methods lists every daemon method. The daemon refuses to start when a method
 // has no handler or a handler has no method, so the two cannot drift apart.
 var Methods = []Method{
-	{Name: MethodEnvProviderRun, Agent: false},
-	{Name: MethodEnvProviderGet, Agent: false},
-	{Name: MethodEnvProviderSave, Agent: false},
+	// Dynamic environment scripts: agents may read, save and run them through
+	// wm_env_script. Results stay in daemon memory and are never returned.
+	{Name: MethodEnvProviderRun, Agent: true},
+	{Name: MethodEnvProviderGet, Agent: true},
+	{Name: MethodEnvProviderSave, Agent: true},
 	{Name: MethodHello, Agent: true},
 	{Name: MethodStop, Agent: true},
 	{Name: MethodSubscribe, Agent: true},
