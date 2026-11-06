@@ -31,14 +31,25 @@ type ConfigSet struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+// EnvVarOption is one named value a variable can take.
+type EnvVarOption struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
+// EnvVar is one variable of a config set. A variable with Options is a choice:
+// Selected is the label in use and Value always equals that option's value, so
+// anything that only reads Value (runs, templates) needs no change.
 type EnvVar struct {
-	ID          int64  `json:"id"`
-	ConfigSetID int64  `json:"config_set_id"`
-	Key         string `json:"key"`
-	Value       string `json:"value"`
-	IncludeInAI bool   `json:"include_in_ai"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
+	ID          int64          `json:"id"`
+	ConfigSetID int64          `json:"config_set_id"`
+	Key         string         `json:"key"`
+	Value       string         `json:"value"`
+	IncludeInAI bool           `json:"include_in_ai"`
+	Options     []EnvVarOption `json:"options"`
+	Selected    string         `json:"selected"`
+	CreatedAt   string         `json:"created_at"`
+	UpdatedAt   string         `json:"updated_at"`
 }
 
 type Template struct {
@@ -295,15 +306,23 @@ type ConfigSetActivateResult struct {
 }
 
 type EnvVarCreateInput struct {
-	Key         string  `json:"key"`
-	Value       *string `json:"value"`
-	IncludeInAI *bool   `json:"include_in_ai"`
+	Key         string          `json:"key"`
+	Value       *string         `json:"value"`
+	IncludeInAI *bool           `json:"include_in_ai"`
+	Options     *[]EnvVarOption `json:"options"`
+	Selected    *string         `json:"selected"`
 }
 
+// EnvVarUpdateInput changes a variable. Options replaces the whole list (an
+// empty list turns the variable back into a plain value); Selected picks the
+// option in use (the first when empty or when options change and it is gone).
+// Value on a variable with options edits the selected option.
 type EnvVarUpdateInput struct {
-	Key         *string `json:"key"`
-	Value       *string `json:"value"`
-	IncludeInAI *bool   `json:"include_in_ai"`
+	Key         *string         `json:"key"`
+	Value       *string         `json:"value"`
+	IncludeInAI *bool           `json:"include_in_ai"`
+	Options     *[]EnvVarOption `json:"options"`
+	Selected    *string         `json:"selected"`
 }
 
 type TemplateCreateInput struct {

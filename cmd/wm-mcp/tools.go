@@ -278,7 +278,7 @@ func configTool() mcpTool {
 			"app":        strProp(appRefDesc),
 			"set":        strProp(setRefDesc),
 			"name":       strProp("config set name (create/rename)"),
-			"kind":       strProp("dev, prod, build or setup (get_commands/save_commands)"),
+			"kind":       strProp("dev, prod, build or setup (get_commands/save_commands; these work on any set, no activation needed)"),
 			"from":       strProp("source config set id or name (create/copy)"),
 			"parts":      strProp("comma list: env,templates,dev,prod,build,setup (create/copy, default all)"),
 			"noActivate": boolProp("do not make the new set active (create)"),
@@ -372,7 +372,11 @@ func configTool() mcpTool {
 				if err := checkKind(kind); err != nil {
 					return nil, err
 				}
-				return daoCall(api.MethodRunConfigGet, map[string]any{"appID": appID, "kind": kind})
+				setID, err := setIDArg(app, args)
+				if err != nil {
+					return nil, err
+				}
+				return daoCall(api.MethodRunConfigGet, map[string]any{"appID": appID, "configSetID": setID, "kind": kind})
 			case "save_commands":
 				kind, err := need(args, "kind", "the command list kind")
 				if err != nil {
@@ -404,13 +408,35 @@ func configTool() mcpTool {
 				if mode, ok := argOpt(args, "mode"); ok {
 					body["mode"] = mode
 				}
-				return daoCall(api.MethodRunConfigSave, map[string]any{"appID": appID, "kind": kind, "body": body})
+				setID, err := setIDArg(app, args)
+				if err != nil {
+					return nil, err
+				}
+				return daoCall(api.MethodRunConfigSave, map[string]any{"appID": appID, "configSetID": setID, "kind": kind, "body": body})
 			case "scripts":
 				return daoCall(api.MethodPackageScriptsList, map[string]any{"appID": appID})
 			}
 			return nil, fmt.Errorf("unknown action %q", action)
 		},
 	}
+}
+
+// setIDArg resolves the optional "set" argument (or the older "configSet"
+// alias) to a config set id of the app; 0 means the app's active set. Nothing
+// ever has to be activated to work on another set.
+func setIDArg(app map[string]any, args map[string]any) (int64, error) {
+	ref := argStr(args, "set")
+	if ref == "" {
+		ref = argStr(args, "configSet")
+	}
+	if ref == "" {
+		return 0, nil
+	}
+	set, err := resolveConfigSet(app, ref)
+	if err != nil {
+		return 0, err
+	}
+	return set.ID, nil
 }
 
 func copyParts(list string) map[string]any {
@@ -461,13 +487,16 @@ func splitComma(s string) []string {
 func envTool() mcpTool {
 	return mcpTool{
 		Name:        "wm_env",
-		Description: "Manage an app's environment variables on its active config set. Hidden values can be replaced, but are never returned or made visible by this MCP server.",
+		Description: "Manage an app's environment variables on any config set (the active one by default). A variable can be a choice: give it options (label/value pairs) and the one in use is selected, the first by default; its value is always the selected option's. Hidden values can be replaced, but are never returned or made visible by this MCP server.",
 		Schema: schema("Environment variables", map[string]any{
 			"action":    map[string]any{"type": "string", "description": "list, set (create or update), delete, import", "enum": []string{"list", "set", "delete", "import"}},
 			"app":       strProp(appRefDesc),
-			"configSet": strProp("config set id or name to list (list only; writes go to the active set)"),
+			"set":       strProp(setRefDesc + " (all actions work on any set without activating it)"),
+			"configSet": strProp("alias of set"),
 			"key":       strProp("variable name (set/delete)"),
 			"value":     strProp("variable value (set; omit to keep the stored value on update)"),
+			"options":   map[string]any{"type": "array", "description": "make the variable a choice: its options in order, replacing any existing ones; [] turns it back into a plain value (set)", "items": map[string]any{"type": "object", "properties": map[string]any{"label": map[string]any{"type": "string"}, "value": map[string]any{"type": "string"}}, "required": []string{"label"}}},
+			"selected":  strProp("label of the option in use; omit to keep the current one (the first for new options) (set; needs options)"),
 			"hidden":    boolProp("hide the value from AI clients, i.e. include_in_ai=false (set); omit to preserve visibility on update; hidden variables cannot be unhidden here"),
 			"file":      strProp(".env or YAML file to import (import)"),
 		}, "action"),
@@ -477,30 +506,20 @@ func envTool() mcpTool {
 				return nil, err
 			}
 			appID := appIDOf(app)
+			setID, err := setIDArg(app, args)
+			if err != nil {
+				return nil, err
+			}
 			switch argStr(args, "action") {
 			case "list":
-				if cs, ok := argOpt(args, "configSet"); ok {
-					set, err := resolveConfigSet(app, cs)
-					if err != nil {
-						return nil, err
-					}
-					detail, err := daoCall(api.MethodConfigSetsDetail, map[string]any{"id": set.ID})
-					if err != nil {
-						return nil, err
-					}
-					if m, ok := detail.(map[string]any); ok {
-						return m["env_vars"], nil
-					}
-					return detail, nil
-				}
-				return daoCall(api.MethodEnvVarsList, map[string]any{"appID": appID})
+				return daoCall(api.MethodEnvVarsList, map[string]any{"appID": appID, "configSetID": setID})
 			case "set":
 				key, err := need(args, "key", "the variable name")
 				if err != nil {
 					return nil, err
 				}
 				include := !argBool(args, "hidden", false)
-				vars, err := daoCall(api.MethodEnvVarsList, map[string]any{"appID": appID})
+				vars, err := daoCall(api.MethodEnvVarsList, map[string]any{"appID": appID, "configSetID": setID})
 				if err != nil {
 					return nil, err
 				}
@@ -509,6 +528,16 @@ func envTool() mcpTool {
 				_ = json.Unmarshal(raw, &list)
 				_, hasValue := args["value"]
 				value, _ := args["value"].(string)
+				options, hasOptions := args["options"]
+				selected, hasSelected := args["selected"].(string)
+				extra := func(body map[string]any) {
+					if hasOptions {
+						body["options"] = options
+					}
+					if hasSelected {
+						body["selected"] = selected
+					}
+				}
 				for _, v := range list {
 					if v["key"] == key {
 						id, _ := v["id"].(float64)
@@ -519,6 +548,7 @@ func envTool() mcpTool {
 						if hasValue {
 							body["value"] = value
 						}
+						extra(body)
 						return daoCall(api.MethodEnvVarsUpdate, map[string]any{"id": int64(id), "body": body})
 					}
 				}
@@ -526,13 +556,14 @@ func envTool() mcpTool {
 				if hasValue {
 					body["value"] = value
 				}
-				return daoCall(api.MethodEnvVarsCreate, map[string]any{"appID": appID, "body": body})
+				extra(body)
+				return daoCall(api.MethodEnvVarsCreate, map[string]any{"appID": appID, "configSetID": setID, "body": body})
 			case "delete":
 				key, err := need(args, "key", "the variable name")
 				if err != nil {
 					return nil, err
 				}
-				vars, err := daoCall(api.MethodEnvVarsList, map[string]any{"appID": appID})
+				vars, err := daoCall(api.MethodEnvVarsList, map[string]any{"appID": appID, "configSetID": setID})
 				if err != nil {
 					return nil, err
 				}
@@ -557,7 +588,7 @@ func envTool() mcpTool {
 				if _, err := os.Stat(file); err != nil {
 					return nil, api.Errf(api.KindNotFound, "cannot read %s", file)
 				}
-				return daoCall(api.MethodEnvVarsImport, map[string]any{"appID": appID, "path": file})
+				return daoCall(api.MethodEnvVarsImport, map[string]any{"appID": appID, "configSetID": setID, "path": file})
 			}
 			return nil, fmt.Errorf("unknown action %q", argStr(args, "action"))
 		},
@@ -569,10 +600,11 @@ func envTool() mcpTool {
 func templateTool() mcpTool {
 	return mcpTool{
 		Name:        "wm_template",
-		Description: "Manage an app's file templates (generated config files) on its active config set.",
+		Description: "Manage an app's file templates (generated config files) on any config set (the active one by default).",
 		Schema: schema("File templates", map[string]any{
 			"action":  map[string]any{"type": "string", "description": "list, add, edit, delete", "enum": []string{"list", "add", "edit", "delete"}},
 			"app":     strProp(appRefDesc),
+			"set":     strProp(setRefDesc + " (all actions work on any set without activating it)"),
 			"file":    strProp("project-relative file path, e.g. .env.local (add/edit/delete)"),
 			"content": strProp("template content, with {{placeholders}} (add/edit)"),
 			"hidden":  boolProp("hide the content from AI clients (add/edit)"),
@@ -583,8 +615,12 @@ func templateTool() mcpTool {
 				return nil, err
 			}
 			appID := appIDOf(app)
+			setID, err := setIDArg(app, args)
+			if err != nil {
+				return nil, err
+			}
 			find := func(file string) (map[string]any, error) {
-				res, err := daoCall(api.MethodTemplatesList, map[string]any{"appID": appID})
+				res, err := daoCall(api.MethodTemplatesList, map[string]any{"appID": appID, "configSetID": setID})
 				if err != nil {
 					return nil, err
 				}
@@ -600,7 +636,7 @@ func templateTool() mcpTool {
 			}
 			switch argStr(args, "action") {
 			case "list":
-				return daoCall(api.MethodTemplatesList, map[string]any{"appID": appID})
+				return daoCall(api.MethodTemplatesList, map[string]any{"appID": appID, "configSetID": setID})
 			case "add":
 				file, err := need(args, "file", "the project-relative file path")
 				if err != nil {
@@ -613,7 +649,7 @@ func templateTool() mcpTool {
 				if _, changed := args["hidden"]; changed {
 					body["include_in_ai"] = !argBool(args, "hidden", false)
 				}
-				return daoCall(api.MethodTemplatesCreate, map[string]any{"appID": appID, "body": body})
+				return daoCall(api.MethodTemplatesCreate, map[string]any{"appID": appID, "configSetID": setID, "body": body})
 			case "edit":
 				file, err := need(args, "file", "the project-relative file path")
 				if err != nil {

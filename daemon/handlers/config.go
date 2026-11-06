@@ -83,22 +83,24 @@ func (r *Registry) envVars() {
 	o := r.Ops
 
 	r.handle(api.MethodEnvVarsList, kindTyped(func(kind string, in struct {
-		AppID int64 `json:"appID"`
+		AppID       int64 `json:"appID"`
+		ConfigSetID int64 `json:"configSetID"`
 	}) ([]types.EnvVar, error) {
-		vars, err := o.EnvVarsList(in.AppID)
+		vars, err := o.EnvVarsList(in.AppID, in.ConfigSetID)
 		if err != nil {
 			return nil, err
 		}
 		return hideEnvVars(kind, vars), nil
 	}))
 	r.handle(api.MethodEnvVarsCreate, kindTyped(func(kind string, in struct {
-		AppID int64                   `json:"appID"`
-		Body  types.EnvVarCreateInput `json:"body"`
+		AppID       int64                   `json:"appID"`
+		ConfigSetID int64                   `json:"configSetID"`
+		Body        types.EnvVarCreateInput `json:"body"`
 	}) (types.EnvVar, error) {
-		if err := requireVisibleVarKey(kind, o, in.AppID, in.Body.Key); err != nil {
+		if err := requireVisibleVarKey(kind, o, in.AppID, in.ConfigSetID, in.Body.Key); err != nil {
 			return types.EnvVar{}, err
 		}
-		v, err := o.EnvVarsCreate(in.AppID, in.Body)
+		v, err := o.EnvVarsCreate(in.AppID, in.ConfigSetID, in.Body)
 		if err != nil {
 			return types.EnvVar{}, err
 		}
@@ -114,8 +116,9 @@ func (r *Registry) envVars() {
 				return types.EnvVar{}, err
 			}
 			if !existing.IncludeInAI {
-				// Hidden variables allow value replacement, never renaming or unhiding.
-				if in.Body.Value == nil ||
+				// Hidden variables allow value replacement, never renaming, unhiding
+				// or changing their options and choice.
+				if in.Body.Value == nil || in.Body.Options != nil || in.Body.Selected != nil ||
 					(in.Body.Key != nil && strings.TrimSpace(*in.Body.Key) != existing.Key) ||
 					(in.Body.IncludeInAI != nil && *in.Body.IncludeInAI) {
 					return types.EnvVar{}, errHidden()
@@ -132,16 +135,15 @@ func (r *Registry) envVars() {
 	r.handle(api.MethodEnvVarsDelete, kindTyped(func(kind string, in struct {
 		ID int64 `json:"id"`
 	}) (types.Ok, error) {
-		if err := requireVisibleVarID(kind, o, in.ID); err != nil {
-			return types.Ok{}, err
-		}
+		// Deleting reveals nothing, so agents may delete hidden variables.
 		return o.EnvVarsDelete(in.ID)
 	}))
 	r.handle(api.MethodEnvVarsImport, kindTyped(func(kind string, in struct {
-		AppID int64  `json:"appID"`
-		Path  string `json:"path"`
+		AppID       int64  `json:"appID"`
+		ConfigSetID int64  `json:"configSetID"`
+		Path        string `json:"path"`
 	}) (types.ImportEnvResult, error) {
-		res, err := o.EnvVarsImport(in.AppID, in.Path)
+		res, err := o.EnvVarsImport(in.AppID, in.ConfigSetID, in.Path)
 		if err != nil {
 			return types.ImportEnvResult{}, err
 		}
@@ -154,19 +156,21 @@ func (r *Registry) templates() {
 	o := r.Ops
 
 	r.handle(api.MethodTemplatesList, kindTyped(func(kind string, in struct {
-		AppID int64 `json:"appID"`
+		AppID       int64 `json:"appID"`
+		ConfigSetID int64 `json:"configSetID"`
 	}) ([]types.Template, error) {
-		tpls, err := o.TemplatesList(in.AppID)
+		tpls, err := o.TemplatesList(in.AppID, in.ConfigSetID)
 		if err != nil {
 			return nil, err
 		}
 		return hideTemplates(kind, tpls), nil
 	}))
 	r.handle(api.MethodTemplatesCreate, kindTyped(func(kind string, in struct {
-		AppID int64                     `json:"appID"`
-		Body  types.TemplateCreateInput `json:"body"`
+		AppID       int64                     `json:"appID"`
+		ConfigSetID int64                     `json:"configSetID"`
+		Body        types.TemplateCreateInput `json:"body"`
 	}) (types.Template, error) {
-		t, err := o.TemplatesCreate(in.AppID, in.Body)
+		t, err := o.TemplatesCreate(in.AppID, in.ConfigSetID, in.Body)
 		if err != nil {
 			return types.Template{}, err
 		}
@@ -176,8 +180,20 @@ func (r *Registry) templates() {
 		ID   int64                     `json:"id"`
 		Body types.TemplateUpdateInput `json:"body"`
 	}) (types.Template, error) {
-		if err := requireVisibleTemplateID(kind, o, in.ID); err != nil {
-			return types.Template{}, err
+		if kind == ClientAgent {
+			existing, err := o.GetTemplateByID(in.ID)
+			if err != nil {
+				return types.Template{}, err
+			}
+			if !existing.IncludeInAI {
+				// Hidden templates allow content replacement, never renaming or unhiding.
+				if in.Body.Content == nil ||
+					(in.Body.FilePath != nil && strings.TrimSpace(*in.Body.FilePath) != existing.FilePath) ||
+					(in.Body.IncludeInAI != nil && *in.Body.IncludeInAI) {
+					return types.Template{}, errHidden()
+				}
+				in.Body.IncludeInAI = &existing.IncludeInAI
+			}
 		}
 		t, err := o.TemplatesUpdate(in.ID, in.Body)
 		if err != nil {
@@ -188,9 +204,7 @@ func (r *Registry) templates() {
 	r.handle(api.MethodTemplatesDelete, kindTyped(func(kind string, in struct {
 		ID int64 `json:"id"`
 	}) (types.Ok, error) {
-		if err := requireVisibleTemplateID(kind, o, in.ID); err != nil {
-			return types.Ok{}, err
-		}
+		// Deleting reveals nothing, so agents may delete hidden templates.
 		return o.TemplatesDelete(in.ID)
 	}))
 	r.handle(api.MethodTemplatesRender, typed(func(in types.TemplateRenderInput) (types.TemplateRenderResult, error) {
@@ -215,11 +229,11 @@ func errHidden() error {
 	return api.Errf(api.KindNotFound, "not found")
 }
 
-func requireVisibleVarKey(kind string, o *ops.Ops, appID int64, key string) error {
+func requireVisibleVarKey(kind string, o *ops.Ops, appID, setID int64, key string) error {
 	if kind != ClientAgent {
 		return nil
 	}
-	vars, err := o.EnvVarsList(appID)
+	vars, err := o.EnvVarsList(appID, setID)
 	if err != nil {
 		return err
 	}
@@ -231,34 +245,6 @@ func requireVisibleVarKey(kind string, o *ops.Ops, appID int64, key string) erro
 	return nil
 }
 
-func requireVisibleVarID(kind string, o *ops.Ops, id int64) error {
-	if kind != ClientAgent {
-		return nil
-	}
-	v, err := o.GetEnvVarByID(id)
-	if err != nil {
-		return err
-	}
-	if !v.IncludeInAI {
-		return errHidden()
-	}
-	return nil
-}
-
-func requireVisibleTemplateID(kind string, o *ops.Ops, id int64) error {
-	if kind != ClientAgent {
-		return nil
-	}
-	t, err := o.GetTemplateByID(id)
-	if err != nil {
-		return err
-	}
-	if !t.IncludeInAI {
-		return errHidden()
-	}
-	return nil
-}
-
 func hideEnvVars(kind string, vars []types.EnvVar) []types.EnvVar {
 	if kind != ClientAgent {
 		return vars
@@ -266,16 +252,21 @@ func hideEnvVars(kind string, vars []types.EnvVar) []types.EnvVar {
 	out := make([]types.EnvVar, len(vars))
 	copy(out, vars)
 	for i := range out {
-		if !out[i].IncludeInAI {
-			out[i].Value = ""
-		}
+		out[i] = hideEnvVar(kind, out[i])
 	}
 	return out
 }
 
+// hideEnvVar blanks the value of a hidden variable for agents, and the value of
+// each of its options (the labels stay so the choice can still be described).
 func hideEnvVar(kind string, v types.EnvVar) types.EnvVar {
 	if kind == ClientAgent && !v.IncludeInAI {
 		v.Value = ""
+		opts := make([]types.EnvVarOption, len(v.Options))
+		for i, o := range v.Options {
+			opts[i] = types.EnvVarOption{Label: o.Label}
+		}
+		v.Options = opts
 	}
 	return v
 }

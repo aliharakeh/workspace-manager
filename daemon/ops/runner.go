@@ -17,22 +17,22 @@ func checkConfigKind(kind string) error {
 	return fmt.Errorf("kind must be dev, prod, build or setup")
 }
 
-// RunConfigGet returns the active config set's dev, prod, build or setup commands.
-func (o *Ops) RunConfigGet(appID int64, kind string) (types.RunConfig, error) {
+// RunConfigGet returns the config set's (the active one when setID is 0) dev, prod, build or setup commands.
+func (o *Ops) RunConfigGet(appID, setID int64, kind string) (types.RunConfig, error) {
 	if err := checkConfigKind(kind); err != nil {
 		return types.RunConfig{}, err
 	}
 	if _, err := o.DB.GetAppT(o.Ctx(), appID); err != nil {
 		return types.RunConfig{}, err
 	}
-	set, err := o.DB.ResolveActive(o.Ctx(), appID)
+	set, err := o.targetSet(appID, setID)
 	if err != nil {
 		return types.RunConfig{}, err
 	}
 	return o.DB.GetOrCreateRunConfig(o.Ctx(), set.ID, kind)
 }
 
-func (o *Ops) RunConfigSave(appID int64, kind string, body types.RunConfigSaveInput) (types.RunConfig, error) {
+func (o *Ops) RunConfigSave(appID, setID int64, kind string, body types.RunConfigSaveInput) (types.RunConfig, error) {
 	if err := checkConfigKind(kind); err != nil {
 		return types.RunConfig{}, err
 	}
@@ -52,7 +52,7 @@ func (o *Ops) RunConfigSave(appID int64, kind string, body types.RunConfigSaveIn
 			cmds = append(cmds, types.RunCommandInput{Label: c.Label, Command: strings.TrimSpace(c.Command)})
 		}
 	}
-	set, err := o.DB.ResolveActive(o.Ctx(), appID)
+	set, err := o.targetSet(appID, setID)
 	if err != nil {
 		return types.RunConfig{}, err
 	}

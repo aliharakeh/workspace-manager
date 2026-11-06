@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -48,8 +49,69 @@ func EnvVarFrom(row EnvVar) types.EnvVar {
 	return types.EnvVar{
 		ID: row.ID, ConfigSetID: row.ConfigSetID, Key: row.Key, Value: row.Value,
 		IncludeInAI: row.IncludeInAi != 0,
-		CreatedAt:   row.CreatedAt, UpdatedAt: row.UpdatedAt,
+		Options:     decodeEnvOptions(row.Options), Selected: row.Selected,
+		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
+}
+
+func decodeEnvOptions(s string) []types.EnvVarOption {
+	var out []types.EnvVarOption
+	if s != "" {
+		_ = json.Unmarshal([]byte(s), &out)
+	}
+	if out == nil {
+		out = []types.EnvVarOption{}
+	}
+	return out
+}
+
+// NormalizeEnvOptions trims labels and rejects empty or repeated ones.
+func NormalizeEnvOptions(opts []types.EnvVarOption) ([]types.EnvVarOption, error) {
+	out := make([]types.EnvVarOption, 0, len(opts))
+	seen := map[string]bool{}
+	for _, o := range opts {
+		label := strings.TrimSpace(o.Label)
+		if label == "" {
+			return nil, fmt.Errorf("option label is required")
+		}
+		if seen[label] {
+			return nil, fmt.Errorf("option label %q is repeated", label)
+		}
+		seen[label] = true
+		out = append(out, types.EnvVarOption{Label: label, Value: o.Value})
+	}
+	return out, nil
+}
+
+// EnvStore returns the value, options and selected columns to store. With
+// options, the selected label falls back to the first option and the value
+// mirrors the selected option; without, the plain value is kept.
+func EnvStore(value string, opts []types.EnvVarOption, selected string) (string, string, string) {
+	if len(opts) == 0 {
+		return value, "[]", ""
+	}
+	idx := 0
+	for i, o := range opts {
+		if o.Label == selected {
+			idx = i
+			break
+		}
+	}
+	data, _ := json.Marshal(opts)
+	return opts[idx].Value, string(data), opts[idx].Label
+}
+
+// EnvStoreValue is EnvStore after editing the value of v: on a variable with
+// options the edit lands on the selected option.
+func EnvStoreValue(v types.EnvVar, value string) (string, string, string) {
+	opts := append([]types.EnvVarOption(nil), v.Options...)
+	for i := range opts {
+		if opts[i].Label == v.Selected || v.Selected == "" && i == 0 {
+			opts[i].Value = value
+			break
+		}
+	}
+	return EnvStore(value, opts, v.Selected)
 }
 
 func templateFrom(row Template) types.Template {
@@ -496,8 +558,9 @@ func BoolInt(v bool) int64 {
 func (d *DB) UpsertEnvVarByKey(ctx context.Context, configSetID int64, key, value string, includeInAI bool) (types.EnvVar, error) {
 	existing, err := d.GetEnvVarByKey(ctx, GetEnvVarByKeyParams{ConfigSetID: configSetID, Key: key})
 	if err == nil {
+		val, opts, sel := EnvStoreValue(EnvVarFrom(existing), value)
 		row, err := d.UpdateEnvVar(ctx, UpdateEnvVarParams{
-			Key: existing.Key, Value: value, IncludeInAi: BoolInt(includeInAI), ID: existing.ID,
+			Key: existing.Key, Value: val, IncludeInAi: BoolInt(includeInAI), Options: opts, Selected: sel, ID: existing.ID,
 		})
 		if err != nil {
 			return types.EnvVar{}, err
@@ -508,7 +571,7 @@ func (d *DB) UpsertEnvVarByKey(ctx context.Context, configSetID int64, key, valu
 		return types.EnvVar{}, err
 	}
 	row, err := d.CreateEnvVar(ctx, CreateEnvVarParams{
-		ConfigSetID: configSetID, Key: key, Value: value, IncludeInAi: BoolInt(includeInAI),
+		ConfigSetID: configSetID, Key: key, Value: value, IncludeInAi: BoolInt(includeInAI), Options: "[]",
 	})
 	if err != nil {
 		return types.EnvVar{}, err
@@ -674,8 +737,9 @@ func (d *DB) CopyFrom(ctx context.Context, sourceID, targetID int64, parts *type
 		}
 		for _, v := range sourceEnv {
 			if envAll || containsStr(envItems, v.Key) {
+				val, opts, sel := EnvStore(v.Value, v.Options, v.Selected)
 				if _, err := d.CreateEnvVar(ctx, CreateEnvVarParams{
-					ConfigSetID: targetID, Key: v.Key, Value: v.Value, IncludeInAi: BoolInt(v.IncludeInAI),
+					ConfigSetID: targetID, Key: v.Key, Value: val, IncludeInAi: BoolInt(v.IncludeInAI), Options: opts, Selected: sel,
 				}); err != nil {
 					return err
 				}

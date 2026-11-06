@@ -60,9 +60,6 @@ func TestAgentCanReplaceHiddenEnvValue(t *testing.T) {
 			t.Fatal("agent could unhide or rename a hidden variable")
 		}
 	}
-	if err := agent.Call(api.MethodEnvVarsDelete, map[string]any{"id": created.ID}, nil); err == nil {
-		t.Fatal("agent could delete a hidden variable")
-	}
 	var vars []types.EnvVar
 	if err := agent.Call(api.MethodEnvVarsList, map[string]any{"appID": app.ID}, &vars); err != nil {
 		t.Fatal(err)
@@ -83,5 +80,65 @@ func TestAgentCanReplaceHiddenEnvValue(t *testing.T) {
 		"id": created.ID, "body": types.EnvVarUpdateInput{IncludeInAI: &visible},
 	}, &result); err != nil || result.Value != replacement || !result.IncludeInAI {
 		t.Fatalf("GUI update failed: %v", err)
+	}
+}
+
+func TestAgentCanDeleteAndReplaceHiddenItems(t *testing.T) {
+	agent := startServer(t)
+	app := makeApp(t, agent)
+	gui, err := client.Dial(client.Options{Kind: "gui", Version: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gui.Close()
+	hidden, visible := false, true
+	secret := "s"
+	var v types.EnvVar
+	if err := gui.Call(api.MethodEnvVarsCreate, map[string]any{
+		"appID": app.ID, "body": types.EnvVarCreateInput{Key: "K", Value: &secret, IncludeInAI: &hidden},
+	}, &v); err != nil {
+		t.Fatal(err)
+	}
+	content := "original"
+	var tpl types.Template
+	if err := gui.Call(api.MethodTemplatesCreate, map[string]any{
+		"appID": app.ID, "body": types.TemplateCreateInput{FilePath: ".env.x", Content: &content, IncludeInAI: &hidden},
+	}, &tpl); err != nil {
+		t.Fatal(err)
+	}
+	// Replacing content works and keeps the template hidden.
+	next, renamed := "new", "other.txt"
+	var out types.Template
+	if err := agent.Call(api.MethodTemplatesUpdate, map[string]any{
+		"id": tpl.ID, "body": types.TemplateUpdateInput{Content: &next, IncludeInAI: &hidden},
+	}, &out); err != nil || out.Content != "" || out.IncludeInAI {
+		t.Fatalf("agent could not replace hidden template content: %v", err)
+	}
+	for _, body := range []types.TemplateUpdateInput{
+		{IncludeInAI: &visible},
+		{Content: &next, IncludeInAI: &visible},
+		{FilePath: &renamed, Content: &next},
+	} {
+		if err := agent.Call(api.MethodTemplatesUpdate, map[string]any{"id": tpl.ID, "body": body}, nil); err == nil {
+			t.Fatal("agent could unhide or rename a hidden template")
+		}
+	}
+	var stored types.Template
+	if err := gui.Call(api.MethodTemplatesUpdate, map[string]any{"id": tpl.ID, "body": types.TemplateUpdateInput{}}, &stored); err != nil || stored.Content != next || stored.IncludeInAI {
+		t.Fatalf("stored template wrong: %v", err)
+	}
+	// The list still names the hidden template, with its content blanked.
+	var listed []types.Template
+	if err := agent.Call(api.MethodTemplatesList, map[string]any{"appID": app.ID}, &listed); err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 1 || listed[0].FilePath != ".env.x" || listed[0].Content != "" || listed[0].IncludeInAI {
+		t.Fatalf("hidden template should list with its file name and no content: %+v", listed)
+	}
+	if err := agent.Call(api.MethodTemplatesDelete, map[string]any{"id": tpl.ID}, nil); err != nil {
+		t.Fatalf("agent could not delete hidden template: %v", err)
+	}
+	if err := agent.Call(api.MethodEnvVarsDelete, map[string]any{"id": v.ID}, nil); err != nil {
+		t.Fatalf("agent could not delete hidden variable: %v", err)
 	}
 }

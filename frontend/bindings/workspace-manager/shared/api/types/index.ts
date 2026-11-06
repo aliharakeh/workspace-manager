@@ -52,6 +52,7 @@ export {
     Editor,
     EnvVar,
     EnvVarCreateInput,
+    EnvVarOption,
     EnvVarUpdateInput,
     FsPickFileInput,
     FsPickFolderInput,

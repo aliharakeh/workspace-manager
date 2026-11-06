@@ -47,6 +47,8 @@ type EnvVar struct {
 	Key         string `json:"key"`
 	Value       string `json:"value"`
 	IncludeInAi int64  `json:"include_in_ai"`
+	Options     string `json:"options"`
+	Selected    string `json:"selected"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }

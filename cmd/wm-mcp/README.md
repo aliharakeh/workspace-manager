@@ -9,10 +9,22 @@ demand, so there is nothing to run by hand. It identifies as an `agent` client:
 AI methods stay unavailable and values with `include_in_ai=false` stay hidden,
 exactly as for any external agent.
 
-`wm_env` can replace a hidden variable's value without reading the previous one.
+`wm_env`, `wm_template` and `wm_config` (`get_commands`/`save_commands`) take an
+optional `set` (id or name) and work on any config set of the app; nothing has to
+be activated first. Without `set` they use the active set.
+
+A `wm_env` variable can be a choice: `set` it with `options` (`[{label, value}, ...]`)
+and optionally `selected` (a label); the first option is selected by default, and
+`value` always equals the selected option's. Passing `value` alone on a choice edits
+the selected option, `selected` alone switches it, and `options: []` makes it a plain
+value again. A hidden choice returns its labels but never its values, and its options
+and selection cannot be changed through MCP.
+
+`wm_env` can replace or delete a hidden variable, and `wm_template` can edit or
+delete a hidden template, without reading the previous value.
 Omit `hidden` when updating to preserve the existing flag, or pass `hidden: true`.
 The stored value stays blank in lists, config details and write responses.
-Hidden variables cannot be renamed, deleted or made visible through MCP; use
+Hidden items cannot be renamed or made visible through MCP; use
 the GUI for those changes. New variables default to visible unless `hidden: true`.
 
 ## Build
@@ -50,7 +62,7 @@ Environment is inherited, so the server uses your normal data folder. Set
 | `wm_overview` | Workspaces, their apps and runner states. Start here. |
 | `wm_app` | list, get (app + config + status), create, update, delete, reorder |
 | `wm_config` | Config sets: list, detail, create, rename, activate, copy, delete; command lists: get/save, package scripts |
-| `wm_env` | Env vars: list, set (upsert), delete, import |
+| `wm_env` | Env vars: list, set (upsert, with `options` and `selected` for a choice variable), delete, import |
 | `wm_template` | File templates: list, add, edit, delete |
 | `wm_run` | run, build, setup, stop, reload, status, logs, startAll, stopAll (a whole workspace) |
 | `wm_blueprint` | Blueprints: list, show, create, update, delete, create_app (fails fast), resolve, cancel |

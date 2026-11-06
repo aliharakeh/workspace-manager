@@ -106,7 +106,7 @@ func bundleConfigSet(d types.ConfigSetDetail, mode string) types.BundleConfigSet
 		case secret && mode == types.SecretsPlaceholder:
 			out.EnvVars = append(out.EnvVars, types.BundleEnvVar{Key: v.Key, Value: types.SecretPlaceholder, Redacted: true})
 		default:
-			out.EnvVars = append(out.EnvVars, types.BundleEnvVar{Key: v.Key, Value: v.Value, IncludeInAI: v.IncludeInAI})
+			out.EnvVars = append(out.EnvVars, types.BundleEnvVar{Key: v.Key, Value: v.Value, IncludeInAI: v.IncludeInAI, Options: v.Options, Selected: v.Selected})
 		}
 	}
 	for _, t := range d.Templates {
@@ -276,11 +276,12 @@ func (o *Ops) WorkspacesImport(bundle types.WorkspaceBundle, opts types.Workspac
 
 func importConfigSet(ctx context.Context, q *db.Queries, setID int64, cs types.BundleConfigSet) error {
 	for _, v := range cs.EnvVars {
-		value, include := v.Value, v.IncludeInAI
+		value, include, opts := v.Value, v.IncludeInAI, v.Options
 		if v.Redacted {
-			value, include = "", false
+			value, include, opts = "", false, nil
 		}
-		if _, err := q.CreateEnvVar(ctx, db.CreateEnvVarParams{ConfigSetID: setID, Key: v.Key, Value: value, IncludeInAi: db.BoolInt(include)}); err != nil {
+		value, optsJSON, selected := db.EnvStore(value, opts, v.Selected)
+		if _, err := q.CreateEnvVar(ctx, db.CreateEnvVarParams{ConfigSetID: setID, Key: v.Key, Value: value, IncludeInAi: db.BoolInt(include), Options: optsJSON, Selected: selected}); err != nil {
 			return err
 		}
 	}
@@ -334,6 +335,11 @@ func validateBundleApp(a *types.BundleApp) error {
 			}
 			seen[k] = true
 			cs.EnvVars[i].Key = k
+			opts, err := db.NormalizeEnvOptions(cs.EnvVars[i].Options)
+			if err != nil {
+				return fmt.Errorf("config set %q: env var %q: %w", cs.Name, k, err)
+			}
+			cs.EnvVars[i].Options = opts
 		}
 		seen = map[string]bool{}
 		for i := range cs.Templates {

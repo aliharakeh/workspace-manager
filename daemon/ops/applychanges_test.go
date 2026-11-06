@@ -57,7 +57,7 @@ func TestApplyChangesWritesAndSkipsExcludedValues(t *testing.T) {
 		{Key: "PORT", Value: &one, IncludeInAI: &visible},
 		{Key: "SECRET", Value: &secret, IncludeInAI: &hidden},
 	} {
-		if _, err := o.EnvVarsCreate(appID, v); err != nil {
+		if _, err := o.EnvVarsCreate(appID, 0, v); err != nil {
 			t.Fatalf("create %s: %v", v.Key, err)
 		}
 	}
@@ -72,7 +72,7 @@ func TestApplyChangesWritesAndSkipsExcludedValues(t *testing.T) {
 	if err := o.ConfigSetsApplyChanges(appID, sets[0].ID, patch); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
-	vars, err := o.EnvVarsList(appID)
+	vars, err := o.EnvVarsList(appID, 0)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}

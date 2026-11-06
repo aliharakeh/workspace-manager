@@ -77,6 +77,9 @@ export function AppDetail({
   }
 
   const panelKey = `${app.active_config_set_id ?? "none"}-${panelEpoch}-${dataEpoch}`
+  // The env panel refreshes in place on data events (see EnvVarsPanel), so its
+  // key leaves out dataEpoch: a remount would reset the scroll position.
+  const envKey = `${app.active_config_set_id ?? "none"}-${panelEpoch}`
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 md:p-6">
@@ -235,7 +238,7 @@ export function AppDetail({
           </TabsTrigger>
         </TabsList>
         <TabsContent value="env" className="mt-4 min-h-0 overflow-y-auto">
-          <EnvVarsPanel key={panelKey} appId={app.id} />
+          <EnvVarsPanel key={envKey} appId={app.id} dataEpoch={dataEpoch} />
         </TabsContent>
         <TabsContent value="templates" className="mt-4 min-h-0 overflow-y-auto">
           <TemplatesPanel key={panelKey} appId={app.id} />

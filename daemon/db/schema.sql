@@ -44,6 +44,11 @@ CREATE TABLE IF NOT EXISTS env_vars (
   key text NOT NULL,
   value text DEFAULT '' NOT NULL,
   include_in_ai integer DEFAULT true NOT NULL,
+  -- A variable with options is a choice: options is a JSON list of
+  -- {label, value}, selected the label in use, and value always mirrors the
+  -- selected option so every reader of value keeps working.
+  options text DEFAULT '[]' NOT NULL,
+  selected text DEFAULT '' NOT NULL,
   created_at text DEFAULT (datetime('now')) NOT NULL,
   updated_at text DEFAULT (datetime('now')) NOT NULL,
   FOREIGN KEY (config_set_id) REFERENCES config_sets (id) ON DELETE cascade

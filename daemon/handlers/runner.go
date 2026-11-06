@@ -14,17 +14,19 @@ func (r *Registry) scripts() {
 		return o.PackageScriptsList(in.AppID)
 	}))
 	r.handle(api.MethodRunConfigGet, typed(func(in struct {
-		AppID int64  `json:"appID"`
-		Kind  string `json:"kind"`
+		AppID       int64  `json:"appID"`
+		ConfigSetID int64  `json:"configSetID"`
+		Kind        string `json:"kind"`
 	}) (types.RunConfig, error) {
-		return o.RunConfigGet(in.AppID, in.Kind)
+		return o.RunConfigGet(in.AppID, in.ConfigSetID, in.Kind)
 	}))
 	r.handle(api.MethodRunConfigSave, typed(func(in struct {
-		AppID int64                    `json:"appID"`
-		Kind  string                   `json:"kind"`
-		Body  types.RunConfigSaveInput `json:"body"`
+		AppID       int64                    `json:"appID"`
+		ConfigSetID int64                    `json:"configSetID"`
+		Kind        string                   `json:"kind"`
+		Body        types.RunConfigSaveInput `json:"body"`
 	}) (types.RunConfig, error) {
-		return o.RunConfigSave(in.AppID, in.Kind, in.Body)
+		return o.RunConfigSave(in.AppID, in.ConfigSetID, in.Kind, in.Body)
 	}))
 }
 

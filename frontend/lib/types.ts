@@ -58,12 +58,16 @@ export type CopyParts = {
     setup?: boolean | number[]
 }
 
+export type EnvVarOption = { label: string; value: string }
+
 export type EnvVar = {
     id: number
     config_set_id: number
     key: string
     value: string
     include_in_ai: boolean
+    options: EnvVarOption[]
+    selected: string
     created_at: string
     updated_at: string
 }
@@ -424,6 +428,8 @@ export type BundleEnvVar = {
     key: string
     value: string
     include_in_ai: boolean
+    options?: EnvVarOption[]
+    selected?: string
     redacted?: boolean
 }
 

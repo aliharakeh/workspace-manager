@@ -18,6 +18,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { EnvVarOptionsDialog } from "@/components/env-var-options-dialog"
 import { Input } from "@/components/ui/input"
 import {
   InputGroup,
@@ -25,22 +26,37 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { api } from "@/lib/api"
 import type { EnvVar } from "@/lib/types"
 import {
   FileUpIcon,
   KeyRoundIcon,
+  ListChecksIcon,
   PlusIcon,
   SaveIcon,
   SearchIcon,
   Trash2Icon,
   XIcon,
 } from "lucide-react"
-import { useDeferredValue, useEffect, useMemo, useState } from "react"
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
 type EnvVarsPanelProps = {
   appId: number
+  /**
+   * Bumped when a write to this app's data is reported (including this
+   * window's own). The panel refreshes in place instead of remounting, so the
+   * scroll position and unsaved edits stay.
+   */
+  dataEpoch: number
 }
 
 type EnvVarRowProps = {
@@ -60,13 +76,18 @@ function EnvVarRow({
   const [value, setValue] = useState(item.value)
   const [saving, setSaving] = useState(false)
   const [togglingAi, setTogglingAi] = useState(false)
+  const [optionsOpen, setOptionsOpen] = useState(false)
+  const [confirmPlain, setConfirmPlain] = useState(false)
+  const [switching, setSwitching] = useState(false)
+  // A variable with options is a choice: its value is picked, not typed.
+  const isChoice = item.options.length > 0
 
   useEffect(() => {
     setKey(item.key)
     setValue(item.value)
   }, [item.id, item.key, item.value])
 
-  const dirty = key.trim() !== item.key || value !== item.value
+  const dirty = key.trim() !== item.key || (!isChoice && value !== item.value)
 
   async function handleSave() {
     const nextKey = key.trim()
@@ -78,10 +99,10 @@ function EnvVarRow({
 
     setSaving(true)
     try {
-      const updated = await api.envVars.update(item.id, {
-        key: nextKey,
-        value,
-      })
+      const updated = await api.envVars.update(
+        item.id,
+        isChoice ? { key: nextKey } : { key: nextKey, value }
+      )
       onSaved(updated)
       toast.success("Env var updated")
     } catch (err) {
@@ -106,6 +127,33 @@ function EnvVarRow({
     }
   }
 
+  async function handleSelect(label: string) {
+    if (label === item.selected) return
+    setSwitching(true)
+    try {
+      onSaved(await api.envVars.update(item.id, { selected: label }))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to switch")
+    } finally {
+      setSwitching(false)
+    }
+  }
+
+  async function handleMakePlain() {
+    setSwitching(true)
+    try {
+      onSaved(await api.envVars.update(item.id, { options: [] }))
+      setConfirmPlain(false)
+      toast.success("Now a plain value")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update")
+    } finally {
+      setSwitching(false)
+    }
+  }
+
+  const busy = saving || deleting || togglingAi || switching
+
   return (
     <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center">
       <Input
@@ -115,13 +163,50 @@ function EnvVarRow({
         onChange={(e) => setKey(e.target.value)}
         aria-label="Variable key"
       />
-      <Input
-        className="flex-1 font-mono"
-        value={value}
-        disabled={saving || deleting || togglingAi}
-        onChange={(e) => setValue(e.target.value)}
-        aria-label="Variable value"
-      />
+      {isChoice ? (
+        <>
+          <Select
+            items={item.options.map((o) => ({
+              value: o.label,
+              label: o.label,
+            }))}
+            value={item.selected}
+            onValueChange={(next) => {
+              if (next !== null) void handleSelect(next)
+            }}
+            disabled={busy}
+          >
+            <SelectTrigger className="w-full font-mono sm:w-40" aria-label="Selected option">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {item.options.map((o) => (
+                  <SelectItem key={o.label} value={o.label}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <Input
+            className="flex-1 font-mono"
+            value={item.value}
+            readOnly
+            disabled={busy}
+            aria-label="Value of the selected option"
+            title="Edit the values in Options"
+          />
+        </>
+      ) : (
+        <Input
+          className="flex-1 font-mono"
+          value={value}
+          disabled={busy}
+          onChange={(e) => setValue(e.target.value)}
+          aria-label="Variable value"
+        />
+      )}
       <div className="flex items-center gap-1">
         <label className="flex items-center gap-1.5 pr-1 text-xs text-muted-foreground">
           <Checkbox
@@ -135,6 +220,29 @@ function EnvVarRow({
           />
           AI
         </label>
+        <label className="flex items-center gap-1.5 pr-1 text-xs text-muted-foreground">
+          <Checkbox
+            checked={isChoice}
+            disabled={busy}
+            onCheckedChange={(checked) => {
+              if (checked === true) setOptionsOpen(true)
+              else setConfirmPlain(true)
+            }}
+            aria-label="Choose from options"
+            title="Pick the value from a list of options instead of typing it"
+          />
+          Options
+        </label>
+        <Button
+          variant="ghost"
+          size="icon"
+          disabled={busy}
+          onClick={() => setOptionsOpen(true)}
+          aria-label="Edit options"
+          title="Edit options"
+        >
+          <ListChecksIcon />
+        </Button>
         <Button
           variant="ghost"
           size="icon"
@@ -156,11 +264,44 @@ function EnvVarRow({
           <Trash2Icon />
         </Button>
       </div>
+      <EnvVarOptionsDialog
+        item={item}
+        open={optionsOpen}
+        onOpenChange={setOptionsOpen}
+        onSaved={onSaved}
+      />
+      <AlertDialog
+        open={confirmPlain}
+        onOpenChange={(next) => {
+          if (!next && !switching) setConfirmPlain(false)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Make “{item.key}” a plain value?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The other options are removed. The current value stays as it is.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={switching}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={switching}
+              onClick={(e) => {
+                e.preventDefault()
+                void handleMakePlain()
+              }}
+            >
+              Remove options
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
 
-export function EnvVarsPanel({ appId }: EnvVarsPanelProps) {
+export function EnvVarsPanel({ appId, dataEpoch }: EnvVarsPanelProps) {
   const [vars, setVars] = useState<EnvVar[]>([])
   const [key, setKey] = useState("")
   const [value, setValue] = useState("")
@@ -178,20 +319,32 @@ export function EnvVarsPanel({ appId }: EnvVarsPanelProps) {
     if (!q) return vars
     return vars.filter(
       (v) =>
-        v.key.toLowerCase().includes(q) || v.value.toLowerCase().includes(q)
+        v.key.toLowerCase().includes(q) ||
+        v.value.toLowerCase().includes(q) ||
+        v.options.some(
+          (o) =>
+            o.label.toLowerCase().includes(q) ||
+            o.value.toLowerCase().includes(q)
+        )
     )
   }, [vars, deferredQuery])
 
-  async function load() {
-    setLoading(true)
+  // A silent load swaps the rows without the loading state, which would
+  // replace the list and reset the scroll position.
+  const loadSeq = useRef(0)
+  async function load(silent = false) {
+    const seq = ++loadSeq.current
+    if (!silent) setLoading(true)
     try {
-      setVars(await api.envVars.list(appId))
+      const list = await api.envVars.list(appId)
+      if (seq === loadSeq.current) setVars(list)
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to load env vars"
-      )
+      if (!silent)
+        toast.error(
+          err instanceof Error ? err.message : "Failed to load env vars"
+        )
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -199,6 +352,15 @@ export function EnvVarsPanel({ appId }: EnvVarsPanelProps) {
     setPendingDelete(null)
     void load()
   }, [appId])
+
+  const firstEpoch = useRef(true)
+  useEffect(() => {
+    if (firstEpoch.current) {
+      firstEpoch.current = false
+      return
+    }
+    void load(true)
+  }, [dataEpoch])
 
   async function handleAdd() {
     if (!key.trim()) {

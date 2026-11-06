@@ -61,8 +61,8 @@ screen. The React frontend lives in `frontend/`.
   `Agent: false` in `shared/api/methods.go` are refused to agent clients
   (settings, the worktree support methods, `configSets.applyChanges`, terminal
   resizes), and env vars/templates with `include_in_ai=false` are blanked for
-  agents. Hidden env vars allow value-only replacements, but not renaming,
-  deleting or unhiding; hidden templates refuse writes. A client that omits its
+  agents. Hidden env vars and templates allow value/content-only
+  replacements and deletion, but not renaming or unhiding. A client that omits its
   kind is an agent, the least-privileged kind, never the GUI. Any new secret-like value needs the same
   treatment in `daemon/handlers`. `wm-mcp` is the agent client; the GUI is the other.
 - **Lifecycle.** The daemon takes a lock in the data folder, so there is one
@@ -130,6 +130,15 @@ screen. The React frontend lives in `frontend/`.
   creates missing tables: a change to an existing table needs explicit upgrade
   code in `daemon/db/schema.go`. Migrations run under a file lock
   (`daemon/db/migratelock*.go`). Only the daemon opens the database.
+- Env var options: a variable can be a choice. `env_vars.options` (JSON
+  `[{label, value}]`) and `selected` (a label) sit next to `value`, which always
+  equals the selected option's value, so readers of `value` (runner env,
+  templates, compare, AI) need no change. Write through `db.EnvStore` /
+  `db.EnvStoreValue` so the three columns stay consistent (a value edit on a choice
+  edits the selected option; the first option is selected by default). Option values
+  are secret-like: `hideEnvVar` blanks them for agents and agents cannot change the
+  options or choice of a hidden variable. Copy-from and bundle export/import carry
+  them; `wm_env` takes `options` and `selected`.
 - A config set holds four command lists of the same shape: **setup**, **dev**,
   **build** and **prod**, told apart by `run_configs.kind`. Existing `run`
   commands migrate to `dev`; `runner.run` remains a legacy alias for dev. An app

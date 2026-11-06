@@ -83,6 +83,9 @@ type BundleEnvVar struct {
 	Key         string `json:"key"`
 	Value       string `json:"value"`
 	IncludeInAI bool   `json:"include_in_ai"`
+	// Options and Selected carry a choice variable; Value is the selected one.
+	Options  []EnvVarOption `json:"options,omitempty"`
+	Selected string         `json:"selected,omitempty"`
 	// Redacted marks a value replaced by a placeholder: import stores it empty.
 	Redacted bool `json:"redacted,omitempty"`
 }

@@ -40,7 +40,7 @@ func TestStartAndStopWorkspace(t *testing.T) {
 			t.Fatal(err)
 		}
 		if withCommand {
-			if _, err := o.RunConfigSave(app.ID, types.KindDev, types.RunConfigSaveInput{
+			if _, err := o.RunConfigSave(app.ID, 0, types.KindDev, types.RunConfigSaveInput{
 				Mode: &mode, Commands: []types.RunCommandInput{{Command: long}},
 			}); err != nil {
 				t.Fatal(err)
@@ -48,7 +48,7 @@ func TestStartAndStopWorkspace(t *testing.T) {
 		}
 		return app.ID
 	}
-	if _, err := o.RunConfigSave(firstID, types.KindDev, types.RunConfigSaveInput{
+	if _, err := o.RunConfigSave(firstID, 0, types.KindDev, types.RunConfigSaveInput{
 		Mode: &mode, Commands: []types.RunCommandInput{{Command: long}},
 	}); err != nil {
 		t.Fatal(err)

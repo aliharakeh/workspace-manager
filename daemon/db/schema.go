@@ -34,6 +34,9 @@ func applySchema(sqlDB *sql.DB) error {
 	if err := addAppExcludeFromStartAll(sqlDB); err != nil {
 		return err
 	}
+	if err := addEnvVarOptions(sqlDB); err != nil {
+		return err
+	}
 	if _, err := sqlDB.Exec(schemaSQL); err != nil {
 		return err
 	}
@@ -135,6 +138,24 @@ func addTemplateIncludeInAI(sqlDB *sql.DB) error {
 		return err
 	}
 	_, err = sqlDB.Exec(`ALTER TABLE templates ADD COLUMN include_in_ai integer DEFAULT true NOT NULL`)
+	return err
+}
+
+// addEnvVarOptions upgrades an env_vars table created before variables could
+// have options. Existing variables stay plain values. A fresh table already has
+// the columns from schemaSQL.
+func addEnvVarOptions(sqlDB *sql.DB) error {
+	cols, err := tableColumns(sqlDB, "env_vars")
+	if err != nil || len(cols) == 0 {
+		return err
+	}
+	has, err := hasColumn(sqlDB, "env_vars", "options")
+	if err != nil || has {
+		return err
+	}
+	_, err = sqlDB.Exec(`
+		ALTER TABLE env_vars ADD COLUMN options text DEFAULT '[]' NOT NULL;
+		ALTER TABLE env_vars ADD COLUMN selected text DEFAULT '' NOT NULL;`)
 	return err
 }
 

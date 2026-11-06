@@ -52,8 +52,9 @@ func (o *Ops) ConfigSetsApplyChanges(appID, configSetID int64, patch types.AppAI
 				if v.Value == up.Value {
 					continue
 				}
+				val, opts, sel := db.EnvStoreValue(v, up.Value)
 				if _, err := o.DB.UpdateEnvVar(ctx, db.UpdateEnvVarParams{
-					Key: v.Key, Value: up.Value, IncludeInAi: db.BoolInt(v.IncludeInAI), ID: v.ID,
+					Key: v.Key, Value: val, IncludeInAi: db.BoolInt(v.IncludeInAI), Options: opts, Selected: sel, ID: v.ID,
 				}); err != nil {
 					return err
 				}
@@ -61,7 +62,7 @@ func (o *Ops) ConfigSetsApplyChanges(appID, configSetID int64, patch types.AppAI
 				continue
 			}
 			if _, err := o.DB.CreateEnvVar(ctx, db.CreateEnvVarParams{
-				ConfigSetID: configSetID, Key: up.Key, Value: up.Value, IncludeInAi: db.BoolInt(true),
+				ConfigSetID: configSetID, Key: up.Key, Value: up.Value, IncludeInAi: db.BoolInt(true), Options: "[]",
 			}); err != nil {
 				return err
 			}

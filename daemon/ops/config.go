@@ -137,18 +137,31 @@ func (o *Ops) ConfigSetsCopyFrom(id, sourceID int64, parts *types.CopyParts) (ty
 	return o.DB.GetConfigSetT(o.Ctx(), id)
 }
 
-func (o *Ops) EnvVarsList(appID int64) ([]types.EnvVar, error) {
+// targetSet is the config set an operation works on: the given one (which must
+// belong to the app), or the app's active set when setID is 0.
+func (o *Ops) targetSet(appID, setID int64) (types.ConfigSet, error) {
+	if setID == 0 {
+		return o.DB.ResolveActive(o.Ctx(), appID)
+	}
+	set, err := o.DB.GetConfigSetT(o.Ctx(), setID)
+	if err != nil || set.AppID != appID {
+		return types.ConfigSet{}, fmt.Errorf("config set must belong to this app")
+	}
+	return set, nil
+}
+
+func (o *Ops) EnvVarsList(appID, setID int64) ([]types.EnvVar, error) {
 	if _, err := o.DB.GetAppT(o.Ctx(), appID); err != nil {
 		return nil, err
 	}
-	set, err := o.DB.ResolveActive(o.Ctx(), appID)
+	set, err := o.targetSet(appID, setID)
 	if err != nil {
 		return nil, err
 	}
 	return o.DB.ListEnvVarsT(o.Ctx(), set.ID)
 }
 
-func (o *Ops) EnvVarsCreate(appID int64, body types.EnvVarCreateInput) (types.EnvVar, error) {
+func (o *Ops) EnvVarsCreate(appID, setID int64, body types.EnvVarCreateInput) (types.EnvVar, error) {
 	if _, err := o.DB.GetAppT(o.Ctx(), appID); err != nil {
 		return types.EnvVar{}, err
 	}
@@ -156,7 +169,7 @@ func (o *Ops) EnvVarsCreate(appID int64, body types.EnvVarCreateInput) (types.En
 	if key == "" {
 		return types.EnvVar{}, fmt.Errorf("key is required")
 	}
-	set, err := o.DB.ResolveActive(o.Ctx(), appID)
+	set, err := o.targetSet(appID, setID)
 	if err != nil {
 		return types.EnvVar{}, err
 	}
@@ -168,8 +181,22 @@ func (o *Ops) EnvVarsCreate(appID int64, body types.EnvVarCreateInput) (types.En
 	if body.IncludeInAI != nil {
 		include = *body.IncludeInAI
 	}
+	var opts []types.EnvVarOption
+	if body.Options != nil {
+		if opts, err = db.NormalizeEnvOptions(*body.Options); err != nil {
+			return types.EnvVar{}, err
+		}
+	}
+	selected := ""
+	if body.Selected != nil {
+		selected = *body.Selected
+	}
+	if selected != "" && !hasOptionLabel(opts, selected) {
+		return types.EnvVar{}, fmt.Errorf("selected %q is not one of the options", selected)
+	}
+	value, optsJSON, selected := db.EnvStore(value, opts, selected)
 	row, err := o.DB.CreateEnvVar(o.Ctx(), db.CreateEnvVarParams{
-		ConfigSetID: set.ID, Key: key, Value: value, IncludeInAi: db.BoolInt(include),
+		ConfigSetID: set.ID, Key: key, Value: value, IncludeInAi: db.BoolInt(include), Options: optsJSON, Selected: selected,
 	})
 	if err != nil {
 		return types.EnvVar{}, db.UniqueErr(err, "Env var key already exists for this config set")
@@ -183,7 +210,9 @@ func (o *Ops) EnvVarsUpdate(id int64, body types.EnvVarUpdateInput) (types.EnvVa
 	if err != nil {
 		return types.EnvVar{}, fmt.Errorf("Env var not found")
 	}
+	cur := db.EnvVarFrom(existing)
 	key, value, include := existing.Key, existing.Value, existing.IncludeInAi != 0
+	opts, selected := cur.Options, cur.Selected
 	if body.Key != nil {
 		key = strings.TrimSpace(*body.Key)
 		if key == "" {
@@ -196,8 +225,29 @@ func (o *Ops) EnvVarsUpdate(id int64, body types.EnvVarUpdateInput) (types.EnvVa
 	if body.IncludeInAI != nil {
 		include = *body.IncludeInAI
 	}
+	if body.Value != nil && body.Options == nil && len(opts) > 0 {
+		// A value edit on a choice lands on the selected option.
+		_, optsJSON, _ := db.EnvStoreValue(cur, value)
+		opts = db.EnvVarFrom(db.EnvVar{Options: optsJSON}).Options
+	}
+	if body.Options != nil {
+		var err error
+		if opts, err = db.NormalizeEnvOptions(*body.Options); err != nil {
+			return types.EnvVar{}, err
+		}
+		if body.Selected == nil && !hasOptionLabel(opts, selected) {
+			selected = "" // the old choice is gone: fall back to the first option
+		}
+	}
+	if body.Selected != nil {
+		selected = *body.Selected
+		if selected != "" && !hasOptionLabel(opts, selected) {
+			return types.EnvVar{}, fmt.Errorf("selected %q is not one of the options", selected)
+		}
+	}
+	value, optsJSON, selected := db.EnvStore(value, opts, selected)
 	row, err := o.DB.UpdateEnvVar(o.Ctx(), db.UpdateEnvVarParams{
-		Key: key, Value: value, IncludeInAi: db.BoolInt(include), ID: id,
+		Key: key, Value: value, IncludeInAi: db.BoolInt(include), Options: optsJSON, Selected: selected, ID: id,
 	})
 	if err != nil {
 		return types.EnvVar{}, db.UniqueErr(err, "Env var key already exists for this config set")
@@ -218,18 +268,18 @@ func (o *Ops) EnvVarsDelete(id int64) (types.Ok, error) {
 	return types.Ok{Ok: true}, nil
 }
 
-func (o *Ops) TemplatesList(appID int64) ([]types.Template, error) {
+func (o *Ops) TemplatesList(appID, setID int64) ([]types.Template, error) {
 	if _, err := o.DB.GetAppT(o.Ctx(), appID); err != nil {
 		return nil, err
 	}
-	set, err := o.DB.ResolveActive(o.Ctx(), appID)
+	set, err := o.targetSet(appID, setID)
 	if err != nil {
 		return nil, err
 	}
 	return o.DB.ListTemplatesT(o.Ctx(), set.ID)
 }
 
-func (o *Ops) TemplatesCreate(appID int64, body types.TemplateCreateInput) (types.Template, error) {
+func (o *Ops) TemplatesCreate(appID, setID int64, body types.TemplateCreateInput) (types.Template, error) {
 	if _, err := o.DB.GetAppT(o.Ctx(), appID); err != nil {
 		return types.Template{}, err
 	}
@@ -237,7 +287,7 @@ func (o *Ops) TemplatesCreate(appID int64, body types.TemplateCreateInput) (type
 	if path == "" {
 		return types.Template{}, fmt.Errorf("file_path is required")
 	}
-	set, err := o.DB.ResolveActive(o.Ctx(), appID)
+	set, err := o.targetSet(appID, setID)
 	if err != nil {
 		return types.Template{}, err
 	}
@@ -259,6 +309,15 @@ func (o *Ops) TemplatesCreate(appID int64, body types.TemplateCreateInput) (type
 
 func templateResult(row db.Template) types.Template {
 	return types.Template{ID: row.ID, ConfigSetID: row.ConfigSetID, FilePath: row.FilePath, Content: row.Content, IncludeInAI: row.IncludeInAi != 0, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+}
+
+func hasOptionLabel(opts []types.EnvVarOption, label string) bool {
+	for _, o := range opts {
+		if o.Label == label {
+			return true
+		}
+	}
+	return false
 }
 
 func templateEnvVar(row db.EnvVar) types.EnvVar {
