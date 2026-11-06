@@ -30,6 +30,7 @@ export {
     ConfigSetUpdateInput,
     CopyParts,
     Editor,
+    EnvProvider,
     EnvVar,
     EnvVarCreateInput,
     EnvVarOption,

@@ -42,6 +42,12 @@ type ConfigSet struct {
 	UpdatedAt   string `json:"updated_at"`
 }
 
+type EnvProvider struct {
+	AppSetID    *int64 `json:"app_set_id"`
+	SharedSetID *int64 `json:"shared_set_id"`
+	Config      string `json:"config"`
+}
+
 type EnvVar struct {
 	ID          int64  `json:"id"`
 	ConfigSetID int64  `json:"config_set_id"`

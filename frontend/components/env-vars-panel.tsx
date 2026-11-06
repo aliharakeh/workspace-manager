@@ -1,3 +1,4 @@
+import { EnvProviderEditor } from "./env-provider-editor"
 import { LinkSharedDialog } from "@/components/link-shared-dialog"
 import { SecretInput } from "@/components/secret-input"
 import {
@@ -241,6 +242,9 @@ export function EnvVarsPanel({
 
   return (
     <div className="flex flex-col gap-4">
+      {activeConfigSetId != null && (
+        <EnvProviderEditor key={activeConfigSetId} setId={activeConfigSetId} />
+      )}
       <FieldGroup className="rounded-lg border p-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <Field className="flex-1">

@@ -347,7 +347,7 @@ func TestExportImportKeepsSharedLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bundle.Version != types.WorkspaceBundleVersion || len(bundle.Workspace.SharedSets) != 1 {
+	if bundle.Version != 2 || len(bundle.Workspace.SharedSets) != 1 {
 		t.Fatalf("shared config missing from the bundle: v%d %+v", bundle.Version, bundle.Workspace.SharedSets)
 	}
 	cs := bundle.Apps[0].ConfigSets[0]

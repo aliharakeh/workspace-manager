@@ -180,3 +180,10 @@ CREATE TABLE IF NOT EXISTS worktree_links (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS worktree_links_app_id_path_unique ON worktree_links (app_id, path);
+
+CREATE TABLE IF NOT EXISTS env_providers (
+  app_set_id integer UNIQUE REFERENCES config_sets(id) ON DELETE CASCADE,
+  shared_set_id integer UNIQUE REFERENCES workspace_config_sets(id) ON DELETE CASCADE,
+  config text NOT NULL,
+  CHECK ((app_set_id IS NULL) != (shared_set_id IS NULL))
+);

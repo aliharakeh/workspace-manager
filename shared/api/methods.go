@@ -5,6 +5,9 @@ package api
 
 // Method names are "group.operation". Each one matches a server handler.
 const (
+	MethodEnvProviderRun  = "envProvider.run"
+	MethodEnvProviderGet  = "envProvider.get"
+	MethodEnvProviderSave = "envProvider.save"
 	// Server lifecycle and streams.
 	MethodHello     = "hello"
 	MethodStop      = "server.stop"
@@ -113,8 +116,7 @@ const (
 	MethodSettingsSet = "settings.set"
 
 	// Filesystem helpers.
-	MethodFsReadAppFile  = "fs.readAppFile"
-
+	MethodFsReadAppFile = "fs.readAppFile"
 
 	// Blueprints.
 	MethodBlueprintsList      = "blueprints.list"
@@ -144,6 +146,9 @@ type Method struct {
 // Methods lists every daemon method. The daemon refuses to start when a method
 // has no handler or a handler has no method, so the two cannot drift apart.
 var Methods = []Method{
+	{Name: MethodEnvProviderRun, Agent: false},
+	{Name: MethodEnvProviderGet, Agent: false},
+	{Name: MethodEnvProviderSave, Agent: false},
 	{Name: MethodHello, Agent: true},
 	{Name: MethodStop, Agent: true},
 	{Name: MethodSubscribe, Agent: true},

@@ -27,7 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Field, FieldLabel } from "@/components/ui/field"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -357,7 +357,7 @@ export function ConfigSetSwitcher({
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="max-h-[85dvh] min-w-0 overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>New config set</DialogTitle>
             <DialogDescription>
@@ -366,7 +366,7 @@ export function ConfigSetSwitcher({
               set.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-3">
+          <FieldGroup className="min-w-0">
             <Field>
               <FieldLabel htmlFor="config-set-name">Name</FieldLabel>
               <Input
@@ -396,8 +396,11 @@ export function ConfigSetSwitcher({
                   if (next !== "") loadSourceDetail(next)
                 }}
               >
-                <SelectTrigger id="config-set-copy" className="w-full">
-                  <SelectValue placeholder="Empty (start fresh)" />
+                <SelectTrigger id="config-set-copy" className="w-full min-w-0">
+                  <SelectValue
+                    className="min-w-0 truncate"
+                    placeholder="Empty (start fresh)"
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
@@ -424,7 +427,7 @@ export function ConfigSetSwitcher({
                 onChange={setSel}
               />
             ) : null}
-          </div>
+          </FieldGroup>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
               Cancel
@@ -468,15 +471,17 @@ export function ConfigSetSwitcher({
       </Dialog>
 
       <Dialog open={copyOpen} onOpenChange={setCopyOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[85dvh] min-w-0 overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Copy into “{active?.name}”</DialogTitle>
+            <DialogTitle className="min-w-0 wrap-anywhere">
+              Copy into “{active?.name}”
+            </DialogTitle>
             <DialogDescription>
               Replaces the selected parts in the current set with a copy from
               another set.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-3">
+          <FieldGroup className="min-w-0">
             <Field>
               <FieldLabel htmlFor="copy-source">Source set</FieldLabel>
               <Select
@@ -493,8 +498,8 @@ export function ConfigSetSwitcher({
                   if (next !== "") loadSourceDetail(next)
                 }}
               >
-                <SelectTrigger id="copy-source" className="w-full">
-                  <SelectValue />
+                <SelectTrigger id="copy-source" className="w-full min-w-0">
+                  <SelectValue className="min-w-0 truncate" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
@@ -517,7 +522,7 @@ export function ConfigSetSwitcher({
               sel={sel}
               onChange={setSel}
             />
-          </div>
+          </FieldGroup>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCopyOpen(false)}>
               Cancel

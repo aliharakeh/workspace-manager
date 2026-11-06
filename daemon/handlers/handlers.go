@@ -40,6 +40,7 @@ func (r *Registry) RegisterAll(srv rpc.Registerer) *Registry {
 	r.configSetCompare()
 	r.envVars()
 	r.sharedConfig()
+ r.envProvider()
 	r.templates()
 	r.scripts()
 	r.runner()

@@ -11,7 +11,7 @@ import (
 )
 
 // Every method below is a proxy to the wmd daemon, which owns the database, the
-// runner and the blueprints, except: git (the git package), 
+// runner and the blueprints, except: git (the git package),
 // the file dialogs and OpenExternal, which run in this process.
 
 // m is a daemon call's parameters.
@@ -581,4 +581,15 @@ func (a *App) BlueprintsResize(runID string, cols, rows int) types.Ok {
 func (a *App) BlueprintsCancel(runID string) types.Ok {
 	out, _ := call[types.Ok](a.link, api.MethodBlueprintsCancel, m{"runID": runID})
 	return out
+}
+
+func (a *App) EnvProviderGet(shared bool, id int64) (types.EnvProvider, error) {
+	return call[types.EnvProvider](a.link, api.MethodEnvProviderGet, m{"shared": shared, "id": id})
+}
+func (a *App) EnvProviderSave(shared bool, id int64, body types.EnvProvider) (types.Ok, error) {
+	return call[types.Ok](a.link, api.MethodEnvProviderSave, m{"shared": shared, "id": id, "body": body})
+}
+
+func (a *App) EnvProviderRun(shared bool, id int64) (types.Ok, error) {
+	return call[types.Ok](a.link, api.MethodEnvProviderRun, m{"shared": shared, "id": id})
 }

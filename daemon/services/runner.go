@@ -19,6 +19,8 @@ type childProc struct {
 }
 
 type session struct {
+	ctx     context.Context
+	cancel  context.CancelFunc
 	id      string
 	appID   int64
 	appName string
@@ -66,6 +68,7 @@ func (s *session) subject() string {
 }
 
 type Runner struct {
+	Providers *EnvProviders
 	db        *db.DB
 	broadcast func(appID int64, event any)
 	notify    func(title, body string)
@@ -78,7 +81,7 @@ type Runner struct {
 
 func NewRunner(d *db.DB, broadcast func(appID int64, event any), notify func(title, body string)) *Runner {
 	return &Runner{
-		db: d, broadcast: broadcast, notify: notify, sessions: map[int64]*session{},
+		Providers: NewEnvProviders(d), db: d, broadcast: broadcast, notify: notify, sessions: map[int64]*session{},
 		cols: native.DefaultPtyCols, rows: native.DefaultPtyRows,
 	}
 }
@@ -261,15 +264,18 @@ func (r *Runner) spawnCommand(s *session, cmd types.RunCommand, cwd string, env 
 	r.systemLog(s, cmd.ID, "$ "+cmd.Command)
 
 	r.mu.Lock()
+	if s.ctx.Err() != nil {
+		r.mu.Unlock()
+		return 1
+	}
 	cols, rows := r.cols, r.rows
-	r.mu.Unlock()
 	proc, err := native.StartPty(cmd.Command, cwd, env, cols, rows)
 	if err != nil {
+		r.mu.Unlock()
 		return fail(err)
 	}
 	pid := int64(proc.Pid())
 	processState.PID = &pid
-	r.mu.Lock()
 	s.children[cmd.ID] = &childProc{pty: proc}
 	r.mu.Unlock()
 	r.emit(s, r.statusEvent(s, ""))
@@ -316,7 +322,8 @@ func (r *Runner) spawnCommand(s *session, cmd types.RunCommand, cwd string, env 
 }
 
 func (r *Runner) runSession(s *session) {
-	ctx := context.Background()
+	ctx := s.ctx
+	defer s.cancel()
 	app, err := r.db.GetAppT(ctx, s.appID)
 	if err != nil {
 		s.running = false
@@ -324,7 +331,18 @@ func (r *Runner) runSession(s *session) {
 		return
 	}
 	s.appName = app.Name
-	if err := ApplyTemplates(ctx, r.db, s.appID, s.setID, s.dir, s.id); err != nil {
+	r.systemLog(s, s.processes[0].CommandID, "Resolving environment")
+	envMap, resolveErr := r.Providers.Resolve(ctx, s.setID, s.dir)
+	r.mu.Lock()
+	if ctx.Err() != nil {
+		r.mu.Unlock()
+		return
+	}
+	if resolveErr == nil {
+		resolveErr = applyTemplatesWithEnv(ctx, r.db, s.appID, s.setID, s.dir, s.id, envMap)
+	}
+	r.mu.Unlock()
+	if err := resolveErr; err != nil {
 		s.running = false
 		s.hadError = true
 		msg := err.Error()
@@ -343,7 +361,6 @@ func (r *Runner) runSession(s *session) {
 	}
 	r.systemLog(s, cmdID, "Templates applied")
 
-	envMap, _ := r.db.EnvToRecord(ctx, s.setID)
 	env := native.MergeTerminalEnv(envMap)
 	config, err := r.db.GetRunConfigByConfigSetT(ctx, s.setID, s.kind)
 	if err != nil {
@@ -367,7 +384,7 @@ func (r *Runner) runSession(s *session) {
 			r.stopIdleWatcher(s)
 			r.clearReadyURLs(s)
 			if !s.restored {
-				_ = RestoreTemplates(ctx, r.db, s.appID, s.setID, s.dir, s.id)
+				_ = RestoreTemplates(context.Background(), r.db, s.appID, s.setID, s.dir, s.id)
 				s.restored = true
 				r.systemLog(s, cmdID, "Original files restored")
 			}
@@ -435,7 +452,8 @@ func (r *Runner) createSession(ctx context.Context, appID int64, kind, dir, work
 			Status: "pending", URLs: []string{},
 		})
 	}
-	return &session{
+	sessionCtx, cancel := context.WithCancel(context.Background())
+	return &session{ctx: sessionCtx, cancel: cancel,
 		id:          fmt.Sprintf("%d-%d", appID, time.Now().UnixMilli()),
 		appID:       appID,
 		kind:        kind,
@@ -547,6 +565,7 @@ func (r *Runner) Stop(ctx context.Context, appID int64) (types.StatusEvent, erro
 		r.mu.Unlock()
 		return types.StatusEvent{}, api.Errf(api.KindNotFound, "No active session")
 	}
+	s.cancel()
 	s.abortSequential = true
 	s.running = false
 	s.userStopped = true

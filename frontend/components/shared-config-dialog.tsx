@@ -1,3 +1,4 @@
+import { EnvProviderEditor } from "./env-provider-editor"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -524,6 +525,7 @@ export function SharedConfigDialog({
                     Add
                   </Button>
                 </div>
+                {selectedId != null && <EnvProviderEditor key={selectedId} shared setId={selectedId} />}
                 {detail && detail.vars.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     This set has no variables yet.

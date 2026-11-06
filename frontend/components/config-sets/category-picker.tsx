@@ -33,9 +33,9 @@ export function CategoryPicker({
       )
     : items
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2">
       {count > 0 ? (
-        <InputGroup className="w-full">
+        <InputGroup className="w-full min-w-0">
           <InputGroupAddon align="inline-start">
             <SearchIcon />
           </InputGroupAddon>
@@ -79,7 +79,7 @@ export function CategoryPicker({
         </span>
       </Field>
       {count > 0 && !sel.all ? (
-        <div className="flex max-h-52 flex-col gap-1 overflow-y-auto rounded-lg border p-2 text-sm">
+        <div className="flex max-h-52 min-w-0 flex-col gap-1 overflow-y-auto rounded-lg border p-2 text-sm">
           {visible.length === 0 ? (
             <p className="px-1 py-2 text-xs text-muted-foreground">
               No items match “{query.trim()}”.

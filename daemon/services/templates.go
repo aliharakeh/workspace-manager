@@ -33,6 +33,13 @@ func backupRoot(appID int64, sessionID string) string {
 // ApplyTemplates renders config set setID's templates into dir (the app's
 // project path when empty), backing up the originals for RestoreTemplates.
 func ApplyTemplates(ctx context.Context, d *db.DB, appID, setID int64, dir, sessionID string) error {
+	env, err := d.EnvToRecord(ctx, setID)
+	if err != nil {
+		return err
+	}
+	return applyTemplatesWithEnv(ctx, d, appID, setID, dir, sessionID, env)
+}
+func applyTemplatesWithEnv(ctx context.Context, d *db.DB, appID, setID int64, dir, sessionID string, env map[string]string) error {
 	app, err := d.GetAppT(ctx, appID)
 	if err != nil {
 		return err
@@ -41,10 +48,6 @@ func ApplyTemplates(ctx context.Context, d *db.DB, appID, setID int64, dir, sess
 		dir = app.ProjectPath
 	}
 	templates, err := d.ListTemplatesT(ctx, setID)
-	if err != nil {
-		return err
-	}
-	env, err := d.EnvToRecord(ctx, setID)
 	if err != nil {
 		return err
 	}

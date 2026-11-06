@@ -617,6 +617,17 @@ func (q *Queries) GetApp(ctx context.Context, id int64) (GetAppRow, error) {
 	return i, err
 }
 
+const getAppEnvProvider = `-- name: GetAppEnvProvider :one
+SELECT config FROM env_providers WHERE app_set_id = ?
+`
+
+func (q *Queries) GetAppEnvProvider(ctx context.Context, appSetID *int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getAppEnvProvider, appSetID)
+	var config string
+	err := row.Scan(&config)
+	return config, err
+}
+
 const getBlueprint = `-- name: GetBlueprint :one
 SELECT id, name, description, create_folder, commands, created_at, updated_at, sample_name FROM blueprints WHERE id = ?
 `
@@ -757,6 +768,17 @@ func (q *Queries) GetSetting(ctx context.Context, key string) (AppSetting, error
 	var i AppSetting
 	err := row.Scan(&i.Key, &i.Value, &i.UpdatedAt)
 	return i, err
+}
+
+const getSharedEnvProvider = `-- name: GetSharedEnvProvider :one
+SELECT config FROM env_providers WHERE shared_set_id = ?
+`
+
+func (q *Queries) GetSharedEnvProvider(ctx context.Context, sharedSetID *int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getSharedEnvProvider, sharedSetID)
+	var config string
+	err := row.Scan(&config)
+	return config, err
 }
 
 const getTemplate = `-- name: GetTemplate :one
@@ -1452,6 +1474,34 @@ func (q *Queries) PropagateSharedEnvVar(ctx context.Context, arg PropagateShared
 		arg.Selected,
 		arg.SharedVarID,
 	)
+	return err
+}
+
+const saveAppEnvProvider = `-- name: SaveAppEnvProvider :exec
+INSERT INTO env_providers(app_set_id, config) VALUES (?, ?) ON CONFLICT(app_set_id) DO UPDATE SET config=excluded.config
+`
+
+type SaveAppEnvProviderParams struct {
+	AppSetID *int64 `json:"app_set_id"`
+	Config   string `json:"config"`
+}
+
+func (q *Queries) SaveAppEnvProvider(ctx context.Context, arg SaveAppEnvProviderParams) error {
+	_, err := q.db.ExecContext(ctx, saveAppEnvProvider, arg.AppSetID, arg.Config)
+	return err
+}
+
+const saveSharedEnvProvider = `-- name: SaveSharedEnvProvider :exec
+INSERT INTO env_providers(shared_set_id, config) VALUES (?, ?) ON CONFLICT(shared_set_id) DO UPDATE SET config=excluded.config
+`
+
+type SaveSharedEnvProviderParams struct {
+	SharedSetID *int64 `json:"shared_set_id"`
+	Config      string `json:"config"`
+}
+
+func (q *Queries) SaveSharedEnvProvider(ctx context.Context, arg SaveSharedEnvProviderParams) error {
+	_, err := q.db.ExecContext(ctx, saveSharedEnvProvider, arg.SharedSetID, arg.Config)
 	return err
 }
 

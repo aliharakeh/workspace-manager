@@ -175,6 +175,18 @@ func (d *DB) CopyFrom(ctx context.Context, sourceID, targetID int64, parts *type
 			}
 		}
 	}
+	if !envSkip {
+		p, err := d.EnvProvider(ctx, false, sourceID)
+		if err != nil {
+			return err
+		}
+		if !envAll {
+			p = types.EnvProvider{Timeout: 30}
+		}
+		if err = d.SaveEnvProvider(ctx, false, targetID, p); err != nil {
+			return err
+		}
+	}
 	if !tplSkip {
 		sourceTpl, err := d.ListTemplatesT(ctx, sourceID)
 		if err != nil {

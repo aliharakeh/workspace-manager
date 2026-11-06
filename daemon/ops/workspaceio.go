@@ -2,6 +2,7 @@ package ops
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -65,6 +66,16 @@ func (o *Ops) WorkspacesExport(id int64, opts types.WorkspaceExportOptions, trus
 			return types.WorkspaceBundle{}, err
 		}
 		bs := types.BundleSharedSet{Name: s.Name, Vars: []types.BundleEnvVar{}}
+		if mode == "include" {
+			p, e := o.DB.EnvProvider(o.Ctx(), true, s.ID)
+			if e != nil {
+				return types.WorkspaceBundle{}, e
+			}
+			if p.Command != "" {
+				bs.EnvProvider = &p
+				bundle.Version = 3
+			}
+		}
 		for _, r := range rows {
 			if bv, ok := bundleEnvVar(sharedVarAsEnv(r), mode); ok {
 				bs.Vars = append(bs.Vars, bv)
@@ -73,7 +84,9 @@ func (o *Ops) WorkspacesExport(id int64, opts types.WorkspaceExportOptions, trus
 		bundle.Workspace.SharedSets = append(bundle.Workspace.SharedSets, bs)
 	}
 	if len(bundle.Workspace.SharedSets) > 0 {
-		bundle.Version = types.WorkspaceBundleVersion
+		if bundle.Version < 2 {
+			bundle.Version = 2
+		}
 	}
 	used := map[string]bool{}
 	for _, a := range apps {
@@ -95,7 +108,18 @@ func (o *Ops) WorkspacesExport(id int64, opts types.WorkspaceExportOptions, trus
 			if err != nil {
 				return types.WorkspaceBundle{}, err
 			}
-			ba.ConfigSets = append(ba.ConfigSets, bundleConfigSet(d, mode))
+			cs := bundleConfigSet(d, mode)
+			if mode == "include" {
+				p, e := o.DB.EnvProvider(o.Ctx(), false, set.ID)
+				if e != nil {
+					return types.WorkspaceBundle{}, e
+				}
+				if p.Command != "" {
+					cs.EnvProvider = &p
+					bundle.Version = 3
+				}
+			}
+			ba.ConfigSets = append(ba.ConfigSets, cs)
 		}
 		if ba.ConfigSets == nil {
 			ba.ConfigSets = []types.BundleConfigSet{}
@@ -326,6 +350,15 @@ func (o *Ops) WorkspacesImport(bundle types.WorkspaceBundle, opts types.Workspac
 }
 
 func importConfigSet(ctx context.Context, q *db.Queries, setID int64, cs types.BundleConfigSet) error {
+	if cs.EnvProvider != nil {
+		if err := validateBundleProvider(*cs.EnvProvider, false); err != nil {
+			return err
+		}
+		raw, _ := json.Marshal(cs.EnvProvider)
+		if err := q.SaveAppEnvProvider(ctx, db.SaveAppEnvProviderParams{AppSetID: &setID, Config: string(raw)}); err != nil {
+			return err
+		}
+	}
 	for _, v := range cs.EnvVars {
 		value, private, opts := v.Value, v.Private, v.Options
 		if v.Redacted {
@@ -601,6 +634,15 @@ func importSharedSets(ctx context.Context, q *db.Queries, workspaceID int64, set
 			}
 			is.vars[vr.Key] = vr
 		}
+		if s.EnvProvider != nil {
+			if err := validateBundleProvider(*s.EnvProvider, true); err != nil {
+				return nil, err
+			}
+			raw, _ := json.Marshal(s.EnvProvider)
+			if err := q.SaveSharedEnvProvider(ctx, db.SaveSharedEnvProviderParams{SharedSetID: &row.ID, Config: string(raw)}); err != nil {
+				return nil, err
+			}
+		}
 		out[name] = is
 	}
 	return out, nil
@@ -624,6 +666,13 @@ func linkImportedShared(ctx context.Context, q *db.Queries, setID int64, cs type
 		}); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func validateBundleProvider(p types.EnvProvider, shared bool) error {
+	if p.Timeout < 0 || p.Timeout > 600 || shared && p.Command != "" && !filepath.IsAbs(p.Directory) {
+		return fmt.Errorf("Invalid dynamic environment configuration")
 	}
 	return nil
 }

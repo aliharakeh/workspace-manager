@@ -322,3 +322,12 @@ JOIN config_sets cs ON cs.id = lv.config_set_id
 JOIN apps a ON a.id = cs.app_id
 WHERE lv.shared_var_id = ?
   AND EXISTS (SELECT 1 FROM env_vars o WHERE o.config_set_id = lv.config_set_id AND o.key = ? AND o.id <> lv.id);
+
+-- name: GetAppEnvProvider :one
+SELECT config FROM env_providers WHERE app_set_id = ?;
+-- name: GetSharedEnvProvider :one
+SELECT config FROM env_providers WHERE shared_set_id = ?;
+-- name: SaveAppEnvProvider :exec
+INSERT INTO env_providers(app_set_id, config) VALUES (?, ?) ON CONFLICT(app_set_id) DO UPDATE SET config=excluded.config;
+-- name: SaveSharedEnvProvider :exec
+INSERT INTO env_providers(shared_set_id, config) VALUES (?, ?) ON CONFLICT(shared_set_id) DO UPDATE SET config=excluded.config;

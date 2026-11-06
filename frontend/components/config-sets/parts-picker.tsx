@@ -28,6 +28,7 @@ export function PartsPicker({
   if (!detail) return null
   return (
     <Tabs
+      className="@container w-full min-w-0"
       value={tab}
       onValueChange={(value) => {
         if (value) {
@@ -36,27 +37,27 @@ export function PartsPicker({
         }
       }}
     >
-      <TabsList className="w-full">
-        <TabsTrigger value="env" className="flex-1">
+      <TabsList className="grid w-full grid-cols-2 group-data-horizontal/tabs:h-auto @sm:grid-cols-3 @2xl:grid-cols-6">
+        <TabsTrigger value="env" className="h-8 min-w-0">
           Env vars
         </TabsTrigger>
-        <TabsTrigger value="templates" className="flex-1">
+        <TabsTrigger value="templates" className="h-8 min-w-0">
           Templates
         </TabsTrigger>
-        <TabsTrigger value="setup" className="flex-1">
+        <TabsTrigger value="setup" className="h-8 min-w-0">
           Setup config
         </TabsTrigger>
-        <TabsTrigger value="dev" className="flex-1">
+        <TabsTrigger value="dev" className="h-8 min-w-0">
           Dev config
         </TabsTrigger>
-        <TabsTrigger value="build" className="flex-1">
+        <TabsTrigger value="build" className="h-8 min-w-0">
           Build config
         </TabsTrigger>
-        <TabsTrigger value="prod" className="flex-1">
+        <TabsTrigger value="prod" className="h-8 min-w-0">
           Prod config
         </TabsTrigger>
       </TabsList>
-      <TabsContent value="env" className="mt-3">
+      <TabsContent value="env" className="mt-3 min-w-0">
         <CategoryPicker
           items={detail.env_vars.map((v) => ({
             id: v.key,
@@ -69,7 +70,7 @@ export function PartsPicker({
           onQueryChange={setQuery}
         />
       </TabsContent>
-      <TabsContent value="templates" className="mt-3">
+      <TabsContent value="templates" className="mt-3 min-w-0">
         <CategoryPicker
           items={detail.templates.map((t) => ({
             id: t.file_path,
@@ -81,7 +82,7 @@ export function PartsPicker({
           onQueryChange={setQuery}
         />
       </TabsContent>
-      <TabsContent value="setup" className="mt-3">
+      <TabsContent value="setup" className="mt-3 min-w-0">
         <CategoryPicker
           items={(detail.setup_config?.commands ?? []).map((c) => ({
             id: String(c.id),
@@ -94,7 +95,7 @@ export function PartsPicker({
           onQueryChange={setQuery}
         />
       </TabsContent>
-      <TabsContent value="dev" className="mt-3">
+      <TabsContent value="dev" className="mt-3 min-w-0">
         <CategoryPicker
           items={(detail.dev_config?.commands ?? []).map((c) => ({
             id: String(c.id),
@@ -107,7 +108,7 @@ export function PartsPicker({
           onQueryChange={setQuery}
         />
       </TabsContent>
-      <TabsContent value="build" className="mt-3">
+      <TabsContent value="build" className="mt-3 min-w-0">
         <CategoryPicker
           items={(detail.build_config?.commands ?? []).map((c) => ({
             id: String(c.id),
@@ -120,7 +121,7 @@ export function PartsPicker({
           onQueryChange={setQuery}
         />
       </TabsContent>
-      <TabsContent value="prod" className="mt-3">
+      <TabsContent value="prod" className="mt-3 min-w-0">
         <CategoryPicker
           items={(detail.prod_config?.commands ?? []).map((c) => ({
             id: String(c.id),

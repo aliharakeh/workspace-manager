@@ -409,7 +409,10 @@ export type BundleCommandList = {
     commands: { label: string | null; command: string }[]
 }
 
+export type EnvProvider = { command: string; directory: string; timeout: number }
+
 export type BundleConfigSet = {
+    env_provider?: EnvProvider
     name: string
     env_vars: BundleEnvVar[]
     templates: BundleTemplate[]
@@ -440,7 +443,7 @@ export type WorkspaceBundle = {
         name: string
         icon: string | null
         color: string | null
-        shared_sets?: { name: string; vars: BundleEnvVar[] }[]
+        shared_sets?: { name: string; vars: BundleEnvVar[]; env_provider?: EnvProvider }[]
     }
     apps: BundleApp[]
 }

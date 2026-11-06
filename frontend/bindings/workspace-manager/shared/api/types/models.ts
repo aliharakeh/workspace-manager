@@ -457,6 +457,7 @@ export class BundleCommandList {
 }
 
 export class BundleConfigSet {
+    "env_provider"?: EnvProvider | null;
     "name": string;
     "env_vars": BundleEnvVar[];
     "templates": BundleTemplate[];
@@ -495,22 +496,26 @@ export class BundleConfigSet {
      * Creates a new BundleConfigSet instance from a string or object.
      */
     static createFrom($$source: any = {}): BundleConfigSet {
-        const $$createField1_0 = $$createType9;
+        const $$createField0_0 = $$createType9;
         const $$createField2_0 = $$createType11;
         const $$createField3_0 = $$createType13;
-        const $$createField5_0 = $$createType5;
+        const $$createField4_0 = $$createType15;
+        const $$createField6_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("env_provider" in $$parsedSource) {
+            $$parsedSource["env_provider"] = $$createField0_0($$parsedSource["env_provider"]);
+        }
         if ("env_vars" in $$parsedSource) {
-            $$parsedSource["env_vars"] = $$createField1_0($$parsedSource["env_vars"]);
+            $$parsedSource["env_vars"] = $$createField2_0($$parsedSource["env_vars"]);
         }
         if ("templates" in $$parsedSource) {
-            $$parsedSource["templates"] = $$createField2_0($$parsedSource["templates"]);
+            $$parsedSource["templates"] = $$createField3_0($$parsedSource["templates"]);
         }
         if ("commands" in $$parsedSource) {
-            $$parsedSource["commands"] = $$createField3_0($$parsedSource["commands"]);
+            $$parsedSource["commands"] = $$createField4_0($$parsedSource["commands"]);
         }
         if ("shared_keys" in $$parsedSource) {
-            $$parsedSource["shared_keys"] = $$createField5_0($$parsedSource["shared_keys"]);
+            $$parsedSource["shared_keys"] = $$createField6_0($$parsedSource["shared_keys"]);
         }
         return new BundleConfigSet($$parsedSource as Partial<BundleConfigSet>);
     }
@@ -551,7 +556,7 @@ export class BundleEnvVar {
      * Creates a new BundleEnvVar instance from a string or object.
      */
     static createFrom($$source: any = {}): BundleEnvVar {
-        const $$createField3_0 = $$createType15;
+        const $$createField3_0 = $$createType17;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("options" in $$parsedSource) {
             $$parsedSource["options"] = $$createField3_0($$parsedSource["options"]);
@@ -564,6 +569,7 @@ export class BundleEnvVar {
  * BundleSharedSet is a workspace shared config set with its variables.
  */
 export class BundleSharedSet {
+    "env_provider"?: EnvProvider | null;
     "name": string;
     "vars": BundleEnvVar[];
 
@@ -583,10 +589,14 @@ export class BundleSharedSet {
      * Creates a new BundleSharedSet instance from a string or object.
      */
     static createFrom($$source: any = {}): BundleSharedSet {
-        const $$createField1_0 = $$createType9;
+        const $$createField0_0 = $$createType9;
+        const $$createField2_0 = $$createType11;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("env_provider" in $$parsedSource) {
+            $$parsedSource["env_provider"] = $$createField0_0($$parsedSource["env_provider"]);
+        }
         if ("vars" in $$parsedSource) {
-            $$parsedSource["vars"] = $$createField1_0($$parsedSource["vars"]);
+            $$parsedSource["vars"] = $$createField2_0($$parsedSource["vars"]);
         }
         return new BundleSharedSet($$parsedSource as Partial<BundleSharedSet>);
     }
@@ -651,7 +661,7 @@ export class BundleWorkspace {
      * Creates a new BundleWorkspace instance from a string or object.
      */
     static createFrom($$source: any = {}): BundleWorkspace {
-        const $$createField3_0 = $$createType17;
+        const $$createField3_0 = $$createType19;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("shared_sets" in $$parsedSource) {
             $$parsedSource["shared_sets"] = $$createField3_0($$parsedSource["shared_sets"]);
@@ -824,7 +834,7 @@ export class ConfigSetCommandListDiff {
      * Creates a new ConfigSetCommandListDiff instance from a string or object.
      */
     static createFrom($$source: any = {}): ConfigSetCommandListDiff {
-        const $$createField4_0 = $$createType19;
+        const $$createField4_0 = $$createType21;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("commands" in $$parsedSource) {
             $$parsedSource["commands"] = $$createField4_0($$parsedSource["commands"]);
@@ -870,11 +880,11 @@ export class ConfigSetCompare {
      * Creates a new ConfigSetCompare instance from a string or object.
      */
     static createFrom($$source: any = {}): ConfigSetCompare {
-        const $$createField0_0 = $$createType20;
-        const $$createField1_0 = $$createType20;
-        const $$createField2_0 = $$createType22;
-        const $$createField3_0 = $$createType24;
-        const $$createField4_0 = $$createType26;
+        const $$createField0_0 = $$createType22;
+        const $$createField1_0 = $$createType22;
+        const $$createField2_0 = $$createType24;
+        const $$createField3_0 = $$createType26;
+        const $$createField4_0 = $$createType28;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("left" in $$parsedSource) {
             $$parsedSource["left"] = $$createField0_0($$parsedSource["left"]);
@@ -923,7 +933,7 @@ export class ConfigSetCreateInput {
      * Creates a new ConfigSetCreateInput instance from a string or object.
      */
     static createFrom($$source: any = {}): ConfigSetCreateInput {
-        const $$createField3_0 = $$createType28;
+        const $$createField3_0 = $$createType30;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("parts" in $$parsedSource) {
             $$parsedSource["parts"] = $$createField3_0($$parsedSource["parts"]);
@@ -1001,12 +1011,12 @@ export class ConfigSetDetail {
      * Creates a new ConfigSetDetail instance from a string or object.
      */
     static createFrom($$source: any = {}): ConfigSetDetail {
-        const $$createField7_0 = $$createType30;
-        const $$createField8_0 = $$createType32;
-        const $$createField9_0 = $$createType34;
-        const $$createField10_0 = $$createType34;
-        const $$createField11_0 = $$createType34;
-        const $$createField12_0 = $$createType34;
+        const $$createField7_0 = $$createType32;
+        const $$createField8_0 = $$createType34;
+        const $$createField9_0 = $$createType36;
+        const $$createField10_0 = $$createType36;
+        const $$createField11_0 = $$createType36;
+        const $$createField12_0 = $$createType36;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("env_vars" in $$parsedSource) {
             $$parsedSource["env_vars"] = $$createField7_0($$parsedSource["env_vars"]);
@@ -1193,6 +1203,38 @@ export class Editor {
 }
 
 /**
+ * EnvProvider generates private runtime values from a script's JSON object.
+ */
+export class EnvProvider {
+    "command": string;
+    "directory": string;
+    "timeout": number;
+
+    /** Creates a new EnvProvider instance. */
+    constructor($$source: Partial<EnvProvider> = {}) {
+        if (!("command" in $$source)) {
+            this["command"] = "";
+        }
+        if (!("directory" in $$source)) {
+            this["directory"] = "";
+        }
+        if (!("timeout" in $$source)) {
+            this["timeout"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new EnvProvider instance from a string or object.
+     */
+    static createFrom($$source: any = {}): EnvProvider {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new EnvProvider($$parsedSource as Partial<EnvProvider>);
+    }
+}
+
+/**
  * EnvVar is one variable of a config set. A variable with Options is a choice:
  * Selected is the label in use and Value always equals that option's value, so
  * anything that only reads Value (runs, templates) needs no change.
@@ -1254,7 +1296,7 @@ export class EnvVar {
      * Creates a new EnvVar instance from a string or object.
      */
     static createFrom($$source: any = {}): EnvVar {
-        const $$createField5_0 = $$createType15;
+        const $$createField5_0 = $$createType17;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("options" in $$parsedSource) {
             $$parsedSource["options"] = $$createField5_0($$parsedSource["options"]);
@@ -1295,7 +1337,7 @@ export class EnvVarCreateInput {
      * Creates a new EnvVarCreateInput instance from a string or object.
      */
     static createFrom($$source: any = {}): EnvVarCreateInput {
-        const $$createField3_0 = $$createType35;
+        const $$createField3_0 = $$createType37;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("options" in $$parsedSource) {
             $$parsedSource["options"] = $$createField3_0($$parsedSource["options"]);
@@ -1370,7 +1412,7 @@ export class EnvVarUpdateInput {
      * Creates a new EnvVarUpdateInput instance from a string or object.
      */
     static createFrom($$source: any = {}): EnvVarUpdateInput {
-        const $$createField3_0 = $$createType35;
+        const $$createField3_0 = $$createType37;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("options" in $$parsedSource) {
             $$parsedSource["options"] = $$createField3_0($$parsedSource["options"]);
@@ -1456,9 +1498,9 @@ export class GitInfo {
      * Creates a new GitInfo instance from a string or object.
      */
     static createFrom($$source: any = {}): GitInfo {
-        const $$createField1_0 = $$createType37;
+        const $$createField1_0 = $$createType39;
         const $$createField2_0 = $$createType5;
-        const $$createField3_0 = $$createType39;
+        const $$createField3_0 = $$createType41;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("worktrees" in $$parsedSource) {
             $$parsedSource["worktrees"] = $$createField1_0($$parsedSource["worktrees"]);
@@ -1738,7 +1780,7 @@ export class GitWorktreeAddResult {
      * Creates a new GitWorktreeAddResult instance from a string or object.
      */
     static createFrom($$source: any = {}): GitWorktreeAddResult {
-        const $$createField1_0 = $$createType41;
+        const $$createField1_0 = $$createType43;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("links" in $$parsedSource) {
             $$parsedSource["links"] = $$createField1_0($$parsedSource["links"]);
@@ -1771,8 +1813,8 @@ export class ImportEnvResult {
      * Creates a new ImportEnvResult instance from a string or object.
      */
     static createFrom($$source: any = {}): ImportEnvResult {
-        const $$createField4_0 = $$createType30;
-        const $$createField5_0 = $$createType43;
+        const $$createField4_0 = $$createType32;
+        const $$createField5_0 = $$createType45;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("vars" in $$parsedSource) {
             $$parsedSource["vars"] = $$createField4_0($$parsedSource["vars"]);
@@ -1924,7 +1966,7 @@ export class PackageScripts {
      * Creates a new PackageScripts instance from a string or object.
      */
     static createFrom($$source: any = {}): PackageScripts {
-        const $$createField2_0 = $$createType45;
+        const $$createField2_0 = $$createType47;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("scripts" in $$parsedSource) {
             $$parsedSource["scripts"] = $$createField2_0($$parsedSource["scripts"]);
@@ -2028,7 +2070,7 @@ export class PortsListResult {
      * Creates a new PortsListResult instance from a string or object.
      */
     static createFrom($$source: any = {}): PortsListResult {
-        const $$createField2_0 = $$createType47;
+        const $$createField2_0 = $$createType49;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("processes" in $$parsedSource) {
             $$parsedSource["processes"] = $$createField2_0($$parsedSource["processes"]);
@@ -2335,7 +2377,7 @@ export class RunConfig {
      * Creates a new RunConfig instance from a string or object.
      */
     static createFrom($$source: any = {}): RunConfig {
-        const $$createField6_0 = $$createType49;
+        const $$createField6_0 = $$createType51;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("commands" in $$parsedSource) {
             $$parsedSource["commands"] = $$createField6_0($$parsedSource["commands"]);
@@ -2364,7 +2406,7 @@ export class RunConfigSaveInput {
      * Creates a new RunConfigSaveInput instance from a string or object.
      */
     static createFrom($$source: any = {}): RunConfigSaveInput {
-        const $$createField1_0 = $$createType51;
+        const $$createField1_0 = $$createType53;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("commands" in $$parsedSource) {
             $$parsedSource["commands"] = $$createField1_0($$parsedSource["commands"]);
@@ -2462,8 +2504,8 @@ export class SharedEnvVar {
      * Creates a new SharedEnvVar instance from a string or object.
      */
     static createFrom($$source: any = {}): SharedEnvVar {
-        const $$createField5_0 = $$createType15;
-        const $$createField7_0 = $$createType53;
+        const $$createField5_0 = $$createType17;
+        const $$createField7_0 = $$createType55;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("options" in $$parsedSource) {
             $$parsedSource["options"] = $$createField5_0($$parsedSource["options"]);
@@ -2504,7 +2546,7 @@ export class SharedLinkInput {
      * Creates a new SharedLinkInput instance from a string or object.
      */
     static createFrom($$source: any = {}): SharedLinkInput {
-        const $$createField1_0 = $$createType54;
+        const $$createField1_0 = $$createType56;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("var_ids" in $$parsedSource) {
             $$parsedSource["var_ids"] = $$createField1_0($$parsedSource["var_ids"]);
@@ -2593,7 +2635,7 @@ export class SharedSetDetail {
      * Creates a new SharedSetDetail instance from a string or object.
      */
     static createFrom($$source: any = {}): SharedSetDetail {
-        const $$createField5_0 = $$createType56;
+        const $$createField5_0 = $$createType58;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("vars" in $$parsedSource) {
             $$parsedSource["vars"] = $$createField5_0($$parsedSource["vars"]);
@@ -2694,7 +2736,7 @@ export class StatusEvent {
      * Creates a new StatusEvent instance from a string or object.
      */
     static createFrom($$source: any = {}): StatusEvent {
-        const $$createField7_0 = $$createType58;
+        const $$createField7_0 = $$createType60;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("processes" in $$parsedSource) {
             $$parsedSource["processes"] = $$createField7_0($$parsedSource["processes"]);
@@ -2928,8 +2970,8 @@ export class WorkspaceBundle {
      * Creates a new WorkspaceBundle instance from a string or object.
      */
     static createFrom($$source: any = {}): WorkspaceBundle {
-        const $$createField5_0 = $$createType59;
-        const $$createField6_0 = $$createType61;
+        const $$createField5_0 = $$createType61;
+        const $$createField6_0 = $$createType63;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("workspace" in $$parsedSource) {
             $$parsedSource["workspace"] = $$createField5_0($$parsedSource["workspace"]);
@@ -2968,7 +3010,7 @@ export class WorkspaceBundleFileResult {
      * Creates a new WorkspaceBundleFileResult instance from a string or object.
      */
     static createFrom($$source: any = {}): WorkspaceBundleFileResult {
-        const $$createField2_0 = $$createType63;
+        const $$createField2_0 = $$createType65;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("bundle" in $$parsedSource) {
             $$parsedSource["bundle"] = $$createField2_0($$parsedSource["bundle"]);
@@ -3176,7 +3218,7 @@ export class WorkspaceImportOptions {
      * Creates a new WorkspaceImportOptions instance from a string or object.
      */
     static createFrom($$source: any = {}): WorkspaceImportOptions {
-        const $$createField2_0 = $$createType64;
+        const $$createField2_0 = $$createType66;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("folders" in $$parsedSource) {
             $$parsedSource["folders"] = $$createField2_0($$parsedSource["folders"]);
@@ -3220,8 +3262,8 @@ export class WorkspaceImportResult {
      * Creates a new WorkspaceImportResult instance from a string or object.
      */
     static createFrom($$source: any = {}): WorkspaceImportResult {
-        const $$createField3_0 = $$createType66;
-        const $$createField4_0 = $$createType54;
+        const $$createField3_0 = $$createType68;
+        const $$createField4_0 = $$createType56;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("apps" in $$parsedSource) {
             $$parsedSource["apps"] = $$createField3_0($$parsedSource["apps"]);
@@ -3292,7 +3334,7 @@ export class WorkspaceRunResult {
      * Creates a new WorkspaceRunResult instance from a string or object.
      */
     static createFrom($$source: any = {}): WorkspaceRunResult {
-        const $$createField1_0 = $$createType68;
+        const $$createField1_0 = $$createType70;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("results" in $$parsedSource) {
             $$parsedSource["results"] = $$createField1_0($$parsedSource["results"]);
@@ -3369,64 +3411,66 @@ const $$createType4 = $Create.Array($$createType3);
 const $$createType5 = $Create.Array($Create.Any);
 const $$createType6 = BundleCommand.createFrom;
 const $$createType7 = $Create.Array($$createType6);
-const $$createType8 = BundleEnvVar.createFrom;
-const $$createType9 = $Create.Array($$createType8);
-const $$createType10 = BundleTemplate.createFrom;
+const $$createType8 = EnvProvider.createFrom;
+const $$createType9 = $Create.Nullable($$createType8);
+const $$createType10 = BundleEnvVar.createFrom;
 const $$createType11 = $Create.Array($$createType10);
-const $$createType12 = BundleCommandList.createFrom;
-const $$createType13 = $Create.Map($Create.Any, $$createType12);
-const $$createType14 = EnvVarOption.createFrom;
-const $$createType15 = $Create.Array($$createType14);
-const $$createType16 = BundleSharedSet.createFrom;
+const $$createType12 = BundleTemplate.createFrom;
+const $$createType13 = $Create.Array($$createType12);
+const $$createType14 = BundleCommandList.createFrom;
+const $$createType15 = $Create.Map($Create.Any, $$createType14);
+const $$createType16 = EnvVarOption.createFrom;
 const $$createType17 = $Create.Array($$createType16);
-const $$createType18 = ConfigSetCommandDiff.createFrom;
+const $$createType18 = BundleSharedSet.createFrom;
 const $$createType19 = $Create.Array($$createType18);
-const $$createType20 = ConfigSet.createFrom;
-const $$createType21 = ConfigSetEnvDiff.createFrom;
-const $$createType22 = $Create.Array($$createType21);
-const $$createType23 = ConfigSetTemplateDiff.createFrom;
+const $$createType20 = ConfigSetCommandDiff.createFrom;
+const $$createType21 = $Create.Array($$createType20);
+const $$createType22 = ConfigSet.createFrom;
+const $$createType23 = ConfigSetEnvDiff.createFrom;
 const $$createType24 = $Create.Array($$createType23);
-const $$createType25 = ConfigSetCommandListDiff.createFrom;
+const $$createType25 = ConfigSetTemplateDiff.createFrom;
 const $$createType26 = $Create.Array($$createType25);
-const $$createType27 = CopyParts.createFrom;
-const $$createType28 = $Create.Nullable($$createType27);
-const $$createType29 = EnvVar.createFrom;
-const $$createType30 = $Create.Array($$createType29);
-const $$createType31 = Template.createFrom;
+const $$createType27 = ConfigSetCommandListDiff.createFrom;
+const $$createType28 = $Create.Array($$createType27);
+const $$createType29 = CopyParts.createFrom;
+const $$createType30 = $Create.Nullable($$createType29);
+const $$createType31 = EnvVar.createFrom;
 const $$createType32 = $Create.Array($$createType31);
-const $$createType33 = RunConfig.createFrom;
-const $$createType34 = $Create.Nullable($$createType33);
-const $$createType35 = $Create.Nullable($$createType15);
-const $$createType36 = GitWorktree.createFrom;
-const $$createType37 = $Create.Array($$createType36);
-const $$createType38 = GitLocalBranch.createFrom;
+const $$createType33 = Template.createFrom;
+const $$createType34 = $Create.Array($$createType33);
+const $$createType35 = RunConfig.createFrom;
+const $$createType36 = $Create.Nullable($$createType35);
+const $$createType37 = $Create.Nullable($$createType17);
+const $$createType38 = GitWorktree.createFrom;
 const $$createType39 = $Create.Array($$createType38);
-const $$createType40 = WorktreeLinkState.createFrom;
+const $$createType40 = GitLocalBranch.createFrom;
 const $$createType41 = $Create.Array($$createType40);
-const $$createType42 = ImportTemplateResult.createFrom;
-const $$createType43 = $Create.Nullable($$createType42);
-const $$createType44 = PackageScript.createFrom;
-const $$createType45 = $Create.Array($$createType44);
-const $$createType46 = ListeningProcess.createFrom;
+const $$createType42 = WorktreeLinkState.createFrom;
+const $$createType43 = $Create.Array($$createType42);
+const $$createType44 = ImportTemplateResult.createFrom;
+const $$createType45 = $Create.Nullable($$createType44);
+const $$createType46 = PackageScript.createFrom;
 const $$createType47 = $Create.Array($$createType46);
-const $$createType48 = RunCommand.createFrom;
+const $$createType48 = ListeningProcess.createFrom;
 const $$createType49 = $Create.Array($$createType48);
-const $$createType50 = RunCommandInput.createFrom;
+const $$createType50 = RunCommand.createFrom;
 const $$createType51 = $Create.Array($$createType50);
-const $$createType52 = SharedUsage.createFrom;
+const $$createType52 = RunCommandInput.createFrom;
 const $$createType53 = $Create.Array($$createType52);
-const $$createType54 = $Create.Array($Create.Any);
-const $$createType55 = SharedEnvVar.createFrom;
-const $$createType56 = $Create.Array($$createType55);
-const $$createType57 = ProcessState.createFrom;
+const $$createType54 = SharedUsage.createFrom;
+const $$createType55 = $Create.Array($$createType54);
+const $$createType56 = $Create.Array($Create.Any);
+const $$createType57 = SharedEnvVar.createFrom;
 const $$createType58 = $Create.Array($$createType57);
-const $$createType59 = BundleWorkspace.createFrom;
-const $$createType60 = BundleApp.createFrom;
-const $$createType61 = $Create.Array($$createType60);
-const $$createType62 = WorkspaceBundle.createFrom;
-const $$createType63 = $Create.Nullable($$createType62);
-const $$createType64 = $Create.Map($Create.Any, $Create.Any);
-const $$createType65 = WorkspaceImportApp.createFrom;
-const $$createType66 = $Create.Array($$createType65);
-const $$createType67 = WorkspaceRunAppResult.createFrom;
+const $$createType59 = ProcessState.createFrom;
+const $$createType60 = $Create.Array($$createType59);
+const $$createType61 = BundleWorkspace.createFrom;
+const $$createType62 = BundleApp.createFrom;
+const $$createType63 = $Create.Array($$createType62);
+const $$createType64 = WorkspaceBundle.createFrom;
+const $$createType65 = $Create.Nullable($$createType64);
+const $$createType66 = $Create.Map($Create.Any, $Create.Any);
+const $$createType67 = WorkspaceImportApp.createFrom;
 const $$createType68 = $Create.Array($$createType67);
+const $$createType69 = WorkspaceRunAppResult.createFrom;
+const $$createType70 = $Create.Array($$createType69);

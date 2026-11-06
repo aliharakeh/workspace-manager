@@ -8,10 +8,10 @@ import "encoding/json"
 const (
 	// WorkspaceBundleFormat identifies a workspace bundle file.
 	WorkspaceBundleFormat = "workspace-manager/workspace"
-	// WorkspaceBundleVersion is the newest bundle layout this build reads. Version 2
-	// added shared config; an export without any is still written as version 1 so
-	// older builds keep reading it.
-	WorkspaceBundleVersion = 2
+	// WorkspaceBundleVersion is the newest layout this build reads. Version 2
+	// added shared config; version 3 adds environment providers. Exports use the
+	// oldest layout that carries their content.
+	WorkspaceBundleVersion = 3
 	// WorkspaceBundleBaseVersion is the layout without shared config.
 	WorkspaceBundleBaseVersion = 1
 )
@@ -63,8 +63,9 @@ type BundleWorkspace struct {
 
 // BundleSharedSet is a workspace shared config set with its variables.
 type BundleSharedSet struct {
-	Name string         `json:"name"`
-	Vars []BundleEnvVar `json:"vars"`
+	EnvProvider *EnvProvider   `json:"env_provider,omitempty"`
+	Name        string         `json:"name"`
+	Vars        []BundleEnvVar `json:"vars"`
 }
 
 type BundleApp struct {
@@ -85,9 +86,10 @@ type BundleApp struct {
 }
 
 type BundleConfigSet struct {
-	Name      string           `json:"name"`
-	EnvVars   []BundleEnvVar   `json:"env_vars"`
-	Templates []BundleTemplate `json:"templates"`
+	EnvProvider *EnvProvider     `json:"env_provider,omitempty"`
+	Name        string           `json:"name"`
+	EnvVars     []BundleEnvVar   `json:"env_vars"`
+	Templates   []BundleTemplate `json:"templates"`
 	// Commands holds the setup, dev, build and prod lists, by kind.
 	Commands map[string]BundleCommandList `json:"commands"`
 	// SharedSet names the workspace shared set this config set is linked to, and
