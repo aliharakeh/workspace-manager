@@ -10,6 +10,9 @@ func (r *Registry) envProvider() {
 		Shared bool  `json:"shared"`
 		ID     int64 `json:"id"`
 	}) (types.Ok, error) { return r.Ops.EnvProviderRun(in.Shared, in.ID) }))
+	r.handle(api.MethodEnvProviderStop, typed(func(in struct{}) (types.Ok, error) {
+		return r.Ops.EnvProviderStop()
+	}))
 	r.handle(api.MethodEnvProviderGet, typed(func(in struct {
 		Shared bool  `json:"shared"`
 		ID     int64 `json:"id"`

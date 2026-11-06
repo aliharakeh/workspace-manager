@@ -34,6 +34,7 @@ export function EnvProviderEditor({
   const [timeout, setTimeoutValue] = useState(30)
   const [busy, setBusy] = useState(true)
   const [loaded, setLoaded] = useState(false)
+  const [running, setRunning] = useState(false)
   useEffect(() => {
     let active = true
     api.envProvider
@@ -75,6 +76,7 @@ export function EnvProviderEditor({
   }
   async function runNow() {
     setBusy(true)
+    setRunning(true)
     try {
       await api.envProvider.run(shared, setId)
       toast.success(
@@ -83,7 +85,15 @@ export function EnvProviderEditor({
     } catch (e) {
       toast.error(String(e))
     } finally {
+      setRunning(false)
       setBusy(false)
+    }
+  }
+  async function stopNow() {
+    try {
+      await api.envProvider.stop()
+    } catch (e) {
+      toast.error(String(e))
     }
   }
   function changeOpen(value: boolean) {
@@ -104,13 +114,19 @@ export function EnvProviderEditor({
   }
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Button
-        variant="outline"
-        disabled={busy || !loaded || !savedCommand}
-        onClick={() => void runNow()}
-      >
-        {busy && loaded ? "Running…" : "Run script now"}
-      </Button>
+      {busy && loaded && running ? (
+        <Button variant="outline" onClick={() => void stopNow()}>
+          Stop script
+        </Button>
+      ) : (
+        <Button
+          variant="outline"
+          disabled={busy || !loaded || !savedCommand}
+          onClick={() => void runNow()}
+        >
+          Run script now
+        </Button>
+      )}
       <Dialog open={open} onOpenChange={changeOpen}>
         <DialogTrigger
           render={
@@ -156,7 +172,8 @@ export function EnvProviderEditor({
                   aria-describedby={id + "directory-help"}
                 />
                 <FieldDescription id={id + "directory-help"}>
-                  Absolute path to the folder where the shared script runs.
+                  Optional. Absolute, or relative to the project folder of the
+                  first linked app. Empty uses that folder.
                 </FieldDescription>
               </Field>
             )}

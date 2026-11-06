@@ -87,6 +87,7 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
 export const api = {
     envProvider: {
         run: (shared: boolean, id: number) => Go.EnvProviderRun(shared, id),
+        stop: () => Go.EnvProviderStop(),
         get: (shared: boolean, id: number) => Go.EnvProviderGet(shared, id),
         save: (shared: boolean, id: number, body: { command: string; directory: string; timeout: number }) => Go.EnvProviderSave(shared, id, new types.EnvProvider(body)),
     },

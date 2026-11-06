@@ -596,6 +596,11 @@ func (a *App) EnvProviderSave(shared bool, id int64, body types.EnvProvider) (ty
 	return call[types.Ok](a.link, api.MethodEnvProviderSave, m{"shared": shared, "id": id, "body": body})
 }
 
+// EnvProviderStop stops the dynamic script that is running, if any.
+func (a *App) EnvProviderStop() (types.Ok, error) {
+	return call[types.Ok](a.link, api.MethodEnvProviderStop, m{})
+}
+
 func (a *App) EnvProviderRun(shared bool, id int64) (types.Ok, error) {
 	return call[types.Ok](a.link, api.MethodEnvProviderRun, m{"shared": shared, "id": id})
 }

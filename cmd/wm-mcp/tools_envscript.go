@@ -23,23 +23,26 @@ func envScriptTool() mcpTool {
 	return mcpTool{
 		Name: "wm_env_script",
 		Description: "The dynamic environment script of an app config set or of a workspace shared set: a command that prints one JSON object of strings, merged into the runtime environment of every start. " +
-			"get reads it, set saves it (omitted fields keep their stored value), clear disables it, run executes it now with the saved configuration. " +
+			"get reads it, set saves it (omitted fields keep their stored value), clear disables it, run executes it now with the saved configuration, stop ends the script that is running (no target needed; a script also stops by itself at its timeout). " +
 			"Target an app config set with app/set, or a shared set with shared (+ workspace). " +
 			"A script never runs on start or reload: run the shared script first, then the app script. Results stay in the daemon's memory and are never returned or stored. " +
-			"App scripts run in the app's project folder; a shared script needs an absolute directory. Keep credentials out of the command.",
+			"App scripts run in the app's project folder; a shared script runs in its directory (absolute, or relative to the first linked app's folder; empty = that folder). Keep credentials out of the command.",
 		Schema: schema("Dynamic environment script", map[string]any{
-			"action":    map[string]any{"type": "string", "description": "get, set, clear, run", "enum": []string{"get", "set", "clear", "run"}},
+			"action":    map[string]any{"type": "string", "description": "get, set, clear, run, stop", "enum": []string{"get", "set", "clear", "run", "stop"}},
 			"app":       strProp(appRefDesc + " (app config set)"),
 			"set":       strProp(setRefDesc + " (app config set; works on any set without activating it)"),
 			"configSet": strProp("alias of set"),
 			"shared":    strProp("shared config set id or name: targets the shared set's script instead of an app config set"),
 			"workspace": strProp("workspace id or name (shared sets only; omit when the app or the only workspace tells it)"),
 			"command":   strProp("the script command, run with cmd.exe on Windows and sh elsewhere, no interactive input (set)"),
-			"directory": strProp("working directory (set); required and absolute for a shared script, ignored for an app script"),
+			"directory": strProp("working directory (set); shared script only: absolute, or relative to the first linked app folder; empty = that folder"),
 			"timeout":   numProp("timeout in seconds, 1 to 600, 30 by default (set)"),
 		}, "action"),
 		Handler: func(args map[string]any) (any, error) {
 			action := argStr(args, "action")
+			if action == "stop" {
+				return daoCall(api.MethodEnvProviderStop, map[string]any{})
+			}
 			shared := argStr(args, "shared") != ""
 			var id int64
 			if shared {

@@ -138,7 +138,7 @@ func TestResolveSharedThenLocal(t *testing.T) {
 	cancelCtx, cancel := context.WithCancel(ctx)
 	cancel()
 	_, err = runEnvProvider(cancelCtx, types.EnvProvider{Command: localCommand, Timeout: 5}, dir, nil)
-	if err == nil || !strings.Contains(err.Error(), "cancelled") {
+	if err == nil || !strings.Contains(err.Error(), "stopped") {
 		t.Fatalf("cancellation: %v", err)
 	}
 }
@@ -248,5 +248,46 @@ func TestEnvProviderTimeout(t *testing.T) {
 	}
 	if time.Since(start) > 10*time.Second {
 		t.Fatal("timeout did not terminate provider tree promptly")
+	}
+}
+
+func TestEnvProviderStop(t *testing.T) {
+	ctx := context.Background()
+	d := newBlueprintTestDB(t)
+	ws, _ := d.CreateWorkspaceT(ctx, "ws", nil, nil)
+	app, err := d.CreateAppT(ctx, ws.ID, "app", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	set, _ := d.ResolveActive(ctx, app.ID)
+	t.Setenv("WM_PROVIDER_HELPER", "1")
+	t.Setenv("WM_PROVIDER_SLEEP", "1")
+	command := fmt.Sprintf(`"%s" -test.run=^TestEnvProviderHelper$`, os.Args[0])
+	if err = d.SaveEnvProvider(ctx, false, set.ID, types.EnvProvider{Command: command, Timeout: 60}); err != nil {
+		t.Fatal(err)
+	}
+	providers := NewEnvProviders(d)
+	if providers.Stop() {
+		t.Fatal("Stop reported a script while none was running")
+	}
+	done := make(chan error, 1)
+	go func() { done <- providers.Run(ctx, false, set.ID) }()
+	deadline := time.Now().Add(5 * time.Second)
+	for !providers.Stop() {
+		if time.Now().After(deadline) {
+			t.Fatal("script never started")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "stopped") {
+			t.Fatalf("expected a stopped script: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Stop did not end the script promptly")
+	}
+	if len(providers.Values(false, set.ID)) != 0 {
+		t.Fatal("a stopped script saved values")
 	}
 }

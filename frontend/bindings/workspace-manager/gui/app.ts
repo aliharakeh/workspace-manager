@@ -234,6 +234,15 @@ export function EnvProviderSave(shared: boolean, id: number, body: types$0.EnvPr
     });
 }
 
+/**
+ * EnvProviderStop stops the dynamic script that is running, if any.
+ */
+export function EnvProviderStop(): $CancellablePromise<types$0.Ok> {
+    return $Call.ByID(3418765241).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
 export function EnvVarsCreate(appID: number, body: types$0.EnvVarCreateInput): $CancellablePromise<types$0.EnvVar> {
     return $Call.ByID(979613646, appID, body).then(($result: any) => {
         return $$createType14($result);

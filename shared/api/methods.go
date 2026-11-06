@@ -6,6 +6,7 @@ package api
 // Method names are "group.operation". Each one matches a server handler.
 const (
 	MethodEnvProviderRun  = "envProvider.run"
+	MethodEnvProviderStop = "envProvider.stop"
 	MethodEnvProviderGet  = "envProvider.get"
 	MethodEnvProviderSave = "envProvider.save"
 	// Server lifecycle and streams.
@@ -150,6 +151,7 @@ var Methods = []Method{
 	// Dynamic environment scripts: agents may read, save and run them through
 	// wm_env_script. Results stay in daemon memory and are never returned.
 	{Name: MethodEnvProviderRun, Agent: true},
+	{Name: MethodEnvProviderStop, Agent: true},
 	{Name: MethodEnvProviderGet, Agent: true},
 	{Name: MethodEnvProviderSave, Agent: true},
 	{Name: MethodHello, Agent: true},

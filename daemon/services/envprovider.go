@@ -50,8 +50,11 @@ func runEnvProvider(ctx context.Context, p types.EnvProvider, dir string, env ma
 	cmd.Stdout = &out
 	cmd.Stderr = io.Discard
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("script timed out after %d seconds", timeout)
+		}
 		if ctx.Err() != nil {
-			return nil, fmt.Errorf("script cancelled or timed out")
+			return nil, fmt.Errorf("script stopped")
 		}
 		return nil, fmt.Errorf("script failed or exceeded output limit")
 	}

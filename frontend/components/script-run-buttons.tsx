@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { CloudDownloadIcon, ZapIcon } from "lucide-react"
+import { CloudDownloadIcon, SquareIcon, ZapIcon } from "lucide-react"
 import { toast } from "sonner"
 import { api, onDataChanged } from "@/lib/api"
 import { Button } from "@/components/ui/button"
@@ -61,6 +61,14 @@ export function ScriptRunButton({
     ? "Run the script of the linked shared config set and refresh its variables"
     : "Run this config set's script and refresh its variables"
 
+  async function stop() {
+    try {
+      await api.envProvider.stop()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   async function run() {
     setBusy(true)
     try {
@@ -75,9 +83,10 @@ export function ScriptRunButton({
     }
   }
 
+  // While running, the same button stops the script.
   const click = (event: { stopPropagation: () => void }) => {
     event.stopPropagation()
-    void run()
+    void (busy ? stop() : run())
   }
 
   if (!iconOnly) {
@@ -85,13 +94,12 @@ export function ScriptRunButton({
       <Button
         variant="outline"
         size="sm"
-        disabled={busy}
         onClick={click}
-        title={hint}
+        title={busy ? "Stop the running script" : hint}
         className={className}
       >
-        <Icon data-icon="inline-start" />
-        {busy ? "Running…" : label}
+        {busy ? <SquareIcon data-icon="inline-start" /> : <Icon data-icon="inline-start" />}
+        {busy ? "Stop script" : label}
       </Button>
     )
   }
@@ -103,16 +111,15 @@ export function ScriptRunButton({
             type="button"
             variant="outline"
             size="icon-sm"
-            aria-label={label}
-            disabled={busy}
+            aria-label={busy ? "Stop script" : label}
             onClick={click}
             className={className}
           />
         }
       >
-        <Icon className={cn(busy && "animate-pulse")} />
+        {busy ? <SquareIcon className="animate-pulse" /> : <Icon />}
       </TooltipTrigger>
-      <TooltipContent>{busy ? "Running…" : label}</TooltipContent>
+      <TooltipContent>{busy ? "Running… click to stop" : label}</TooltipContent>
     </Tooltip>
   )
 }

@@ -2,7 +2,6 @@ package ops
 
 import (
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 	"workspace-manager/daemon/db"
@@ -32,9 +31,6 @@ func (o *Ops) EnvProviderSave(shared bool, id int64, p types.EnvProvider) (types
 	if p.Timeout < 1 || p.Timeout > 600 {
 		return types.Ok{}, fmt.Errorf("Timeout must be between 1 and 600 seconds")
 	}
-	if p.Command != "" && shared && !filepath.IsAbs(p.Directory) {
-		return types.Ok{}, fmt.Errorf("Shared script requires an absolute working directory")
-	}
 	if err := o.DB.SaveEnvProvider(o.Ctx(), shared, id, p); err != nil {
 		return types.Ok{}, err
 	}
@@ -47,6 +43,11 @@ func (o *Ops) EnvProviderSave(shared bool, id int64, p types.EnvProvider) (types
 		o.changed("envVar", s.AppID)
 	}
 	return types.Ok{Ok: true}, nil
+}
+
+// EnvProviderStop stops the dynamic script that is running, if any.
+func (o *Ops) EnvProviderStop() (types.Ok, error) {
+	return types.Ok{Ok: o.Runner.Providers.Stop()}, nil
 }
 
 func (o *Ops) EnvProviderRun(shared bool, id int64) (types.Ok, error) {
