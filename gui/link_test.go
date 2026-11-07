@@ -11,16 +11,16 @@ import (
 	"workspace-manager/shared/api/types"
 )
 
-// TestAppTalksToTheDaemon builds wmd, lets the App start it on demand in a fresh
+// TestAppTalksToTheDaemon builds the combined executable, lets the App start it on demand in a fresh
 // data folder, and drives the bound methods through it: data calls, a GUI-only
 // call, and git, which runs in this process but reads the app from the daemon.
 func TestAppTalksToTheDaemon(t *testing.T) {
-	exe := filepath.Join(t.TempDir(), "wmd")
+	exe := filepath.Join(t.TempDir(), "workspace-manager")
 	if runtime.GOOS == "windows" {
 		exe += ".exe"
 	}
-	if out, err := exec.Command("go", "build", "-o", exe, "../cmd/wmd").CombinedOutput(); err != nil {
-		t.Fatalf("build wmd: %v\n%s", err, out)
+	if out, err := exec.Command("go", "build", "-o", exe, "..").CombinedOutput(); err != nil {
+		t.Fatalf("build workspace-manager: %v\n%s", err, out)
 	}
 	t.Setenv("WM_DAEMON", exe)
 	t.Setenv("WM_DATA_DIR", t.TempDir())

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"time"
 
 	"workspace-manager/shared/api"
@@ -128,9 +127,8 @@ func (c *Client) Done() <-chan struct{} { return c.conn.Done() }
 // Close disconnects.
 func (c *Client) Close() error { return c.conn.Close() }
 
-// StartDaemon returns a function that launches wmd detached, so it outlives the
-// client that started it. The binary is looked up next to the current
-// executable first, then on PATH. The daemon gets the client's data folder, so
+// StartDaemon launches this executable in daemon mode, detached so it outlives
+// the client that started it. The daemon gets the client's data folder, so
 // WM_DATA_DIR isolates both ends of the connection.
 func StartDaemon() func() error {
 	return func() error {
@@ -150,22 +148,11 @@ func StartDaemon() func() error {
 	}
 }
 
-// findDaemon locates the wmd binary: WM_DAEMON if set (for dev builds), next to
-// this executable, then on PATH.
-// The sibling wins, because that is the build shipped with this client.
+// findDaemon uses this executable in daemon mode. WM_DAEMON overrides it for tests
+// or development; the override must also accept the daemon argument.
 func findDaemon() (string, error) {
 	if p := os.Getenv("WM_DAEMON"); p != "" {
 		return p, nil
 	}
-	self, err := os.Executable()
-	if err == nil {
-		candidate := filepath.Join(filepath.Dir(self), "wmd"+exeSuffix())
-		if _, statErr := os.Stat(candidate); statErr == nil {
-			return candidate, nil
-		}
-	}
-	if p, lookErr := exec.LookPath("wmd" + exeSuffix()); lookErr == nil {
-		return p, nil
-	}
-	return "", api.Errf(api.KindUnavailable, "wmd was not found next to this binary or on PATH")
+	return os.Executable()
 }

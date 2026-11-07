@@ -1,7 +1,7 @@
 # Architecture map
 
 Workspace Manager has one owner of persistent data and running processes: the
-`wmd` daemon. Desktop, editor and agent clients reach it through the same RPC
+`workspace-manager daemon` process. Desktop, editor and agent clients reach it through the same RPC
 contract. Start with the directory that owns the behavior you want to change.
 
 ## Where to look
@@ -12,7 +12,7 @@ contract. Start with the directory that owns the behavior you want to change.
 | Desktop connection, events and bound methods | `gui/` |
 | Git and worktree operations | `gui/git/` |
 | React UI and host adapter | `frontend/components/`, `frontend/hooks/`, `frontend/host.ts` |
-| Daemon startup and connection lifecycle | `cmd/wmd/`, `daemon/` |
+| Daemon startup and connection lifecycle | `daemon/start.go`, `daemon/` |
 | RPC permissions, parameter decoding and private-value filtering | `daemon/handlers/` |
 | Validation, data writes and change notifications | `daemon/ops/` |
 | Running apps, terminals, templates and blueprints | `daemon/services/` |
@@ -20,13 +20,14 @@ contract. Start with the directory that owns the behavior you want to change.
 | Method registry, payloads and events | `shared/api/` |
 | RPC transport and client startup/handshake | `shared/rpc/`, `shared/client/` |
 | Operating-system integration | `shared/native/` |
-| Agent tool definitions and stdio MCP protocol | `cmd/wm-mcp/` |
+| Agent tool definitions and stdio MCP protocol | `mcp/` |
 
 ## Follow a request
 
 For a desktop data operation, follow the frontend API adapter to `gui/bind.go`,
 then the daemon handler, operation/service and database helper. MCP tools and
-editor clients call daemon methods directly. Only the daemon opens SQLite.
+editor clients call daemon methods directly. Only the daemon opens SQLite, after acquiring the data-folder singleton lock.
+The GUI and each stdio MCP client run as separate processes from the same executable.
 
 Operations publish `dataChanged` after writes. Runner and blueprint services
 publish their own events. The desktop relays these to the frontend; editor
@@ -49,7 +50,7 @@ domains does not require a new interface or another persistence layer.
 
 ## MCP files
 
-`main.go` and `mcp.go` handle startup and the stdio protocol. `daemon.go` holds
+The root `main.go` dispatches modes; `mcp/main.go` and `mcp/mcp.go` handle MCP startup and the stdio protocol. `daemon.go` holds
 the daemon connection, argument helpers and reference resolution. `tools.go`
 defines the tool type, schema builders and the explicit tool registry.
 

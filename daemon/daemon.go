@@ -4,24 +4,24 @@
 package daemon
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"net"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
-	"workspace-manager/shared/api"
-	"workspace-manager/shared/rpc"
 	"workspace-manager/daemon/db"
 	"workspace-manager/daemon/handlers"
-	"workspace-manager/shared/native"
 	"workspace-manager/daemon/ops"
+	"workspace-manager/shared/api"
+	"workspace-manager/shared/native"
+	"workspace-manager/shared/rpc"
 )
 
 // Version identifies the server build; clients compare it on connect.
@@ -37,12 +37,11 @@ type Daemon struct {
 	ops    *ops.Ops
 	server *rpc.Server
 	logger *os.File
-	lock   *os.File
 
-	mu    sync.Mutex
-	last  time.Time
-	stop  chan struct{}
-	once  sync.Once
+	mu   sync.Mutex
+	last time.Time
+	stop chan struct{}
+	once sync.Once
 }
 
 // New prepares the server: database, operations, AI and the method table.
@@ -53,7 +52,6 @@ func New(database *db.DB, logw *os.File) (*Daemon, error) {
 		d.broadcast(api.EventRunner, appID, event)
 	}, native.Notify)
 	d.ops.Pub = d
-
 
 	d.server = rpc.NewServer(d.hello, d.permit)
 	reg := &handlers.Registry{Ops: d.ops}
@@ -143,18 +141,22 @@ func (d *Daemon) Stop() {
 // Run serves until ctx is cancelled, Stop is called, or it is idle with
 // nothing running.
 func (d *Daemon) Run(ctx context.Context) error {
+	lock, err := acquireLock(api.LockPath())
+	if err != nil {
+		return err
+	}
+	defer releaseLock(lock)
+	return d.run(ctx)
+}
+
+// run serves while the caller holds the data-folder lock.
+func (d *Daemon) run(ctx context.Context) error {
 	if v := os.Getenv("WM_DAEMON_IDLE"); v != "" {
 		if secs, err := time.ParseDuration(v); err == nil && secs > 0 {
 			IdleExit = secs
 		}
 	}
 	socket := api.SocketPath()
-	lock, err := acquireLock(api.LockPath())
-	if err != nil {
-		return err
-	}
-	d.lock = lock
-	defer releaseLock(lock)
 
 	ln, err := rpc.Listen(socket)
 	if err != nil {

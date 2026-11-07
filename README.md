@@ -17,7 +17,7 @@ view stays in sync and your apps keep running when you close the window.
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-000000?style=for-the-badge&logo=bun&logoColor=white)](https://bun.sh/)
 [![SQLite](https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://sqlite.org/)
-[![MCP](https://img.shields.io/badge/MCP-server-6E56CF?style=for-the-badge)](cmd/wm-mcp/README.md)
+[![MCP](https://img.shields.io/badge/MCP-server-6E56CF?style=for-the-badge)](mcp/README.md)
 
 </div>
 
@@ -27,7 +27,7 @@ view stays in sync and your apps keep running when you close the window.
 flowchart LR
     APP(["🖥️ Desktop app"]) --> D
     AI(["🤖 Coding agents (MCP)"]) --> D
-    D{{"🧩 wmd daemon"}} --> DB[("🗄️ SQLite")]
+    D{{"🧩 daemon mode"}} --> DB[("🗄️ SQLite")]
     D --> R(["▶️ runner + terminals"])
     D --> B(["🪄 blueprints"])
     APP --> G(["🌿 git"])
@@ -52,12 +52,12 @@ One setup, two ways in. Change something in any of them and the others update li
 | | Client | Best when you want to | Learn more |
 |:---:|---|---|---|
 | 🖥️ | **Desktop app** | See every workspace at once, follow live terminals, manage branches and worktrees, draft blueprints with AI. | this page |
-| 🤖 | **MCP server** | Let Claude Code or any MCP agent list your apps, tweak config, and start or stop them, with secrets you've marked private kept out of its sight. | [cmd/wm-mcp/](cmd/wm-mcp/README.md) |
+| 🤖 | **MCP server** | Let Claude Code or any MCP agent list your apps, tweak config, and start or stop them, with secrets you've marked private kept out of its sight. | [mcp/](mcp/README.md) |
 
 ## 🧩 One daemon behind it all
 
-A small background program, `wmd`, owns your data and runs your apps. Every client
-starts it on demand, so there is nothing to launch by hand.
+The same executable runs in background `daemon` mode to own your data and run your apps.
+Every client starts it on demand, so there is nothing to launch by hand.
 
 - **Your apps outlive your windows.** Close the app and your servers keep running. Open any client later and pick up the live output where it left off.
 - **Everything stays in sync.** A change made in one client shows up in the others as it happens.
@@ -87,11 +87,10 @@ the domain file conventions.
 
 | Path | Role |
 |---|---|
-| `main.go` | The Wails entry point |
+| `main.go` | Dispatches GUI (default), `mcp` and `daemon` modes before starting Wails |
 | `gui` | The desktop app's Go side: the surface the frontend calls, its link to the daemon, file dialogs; `ai` and `git` live below it |
-| `cmd/wmd` | The background daemon |
-| `cmd/wm-mcp` | MCP server so coding agents can drive the daemon ([details](cmd/wm-mcp/README.md)) |
-| `daemon` | What `wmd` runs: `db`, `ops`, `services` (runner, templates, blueprints), `handlers` |
+| `mcp` | MCP server so coding agents can drive the daemon ([details](mcp/README.md)) |
+| `daemon` | Background startup and `db`, `ops`, `services` (runner, templates, blueprints), `handlers` |
 | `shared` | What every side uses: `api` (types and the method list), `rpc`, `client`, `native` |
 | `frontend/` | The React UI |
 | `build/` | Wails build assets; `build/bin` is the output |
@@ -107,7 +106,7 @@ From the repo root:
 ```bash
 go build ./...
 go test ./...
-wails3 task dev            # Wails + Vite (port 5174); builds wmd too
+wails3 task dev            # Wails + Vite (port 5174)
 .\build.ps1                # everything -> build/bin
 wails3 generate bindings -ts -clean=true # regenerate frontend/bindings
 ```
@@ -116,9 +115,7 @@ wails3 generate bindings -ts -clean=true # regenerate frontend/bindings
 
 | File | What it is |
 |---|---|
-| `workspace-manager.exe` | The desktop app |
-| `wmd.exe` | The daemon (keep it next to the app and the MCP server) |
-| `wm-mcp.exe` | The MCP server for coding agents |
+| `workspace-manager.exe` | GUI by default; `mcp` for agents; `daemon` for the shared backend |
 
 From `frontend/` (run `bun install` once):
 

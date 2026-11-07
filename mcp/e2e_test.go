@@ -1,7 +1,8 @@
-package main
+package mcp
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,28 +13,35 @@ import (
 	"testing"
 	"time"
 
+	"workspace-manager/shared/api"
 	"workspace-manager/shared/api/types"
+	"workspace-manager/shared/client"
 )
 
-// TestStartsDaemonAndServesTools runs the real wm-mcp binary against a fresh
-// data folder with no daemon running: the first tool call must start wmd (found
-// next to wm-mcp) and answer through it.
+// TestStartsDaemonAndServesTools exercises the combined executable, including
+// Windows GUI-subsystem stdio and auto-starting the same binary as the daemon.
 func TestStartsDaemonAndServesTools(t *testing.T) {
 	bin := t.TempDir()
 	suffix := ""
 	if runtime.GOOS == "windows" {
 		suffix = ".exe"
 	}
-	for _, pkg := range []string{"wmd", "wm-mcp"} {
-		out, err := exec.Command("go", "build", "-o", filepath.Join(bin, pkg+suffix), "../"+pkg).CombinedOutput()
-		if err != nil {
-			t.Fatalf("build %s: %v\n%s", pkg, err, out)
-		}
+	exe := filepath.Join(bin, "workspace-manager"+suffix)
+	build := []string{"build", "-tags", "production", "-o", exe}
+	if runtime.GOOS == "windows" {
+		build = append(build, "-ldflags=-H windowsgui")
 	}
+	build = append(build, "..")
+	if out, err := exec.Command("go", build...).CombinedOutput(); err != nil {
+		t.Fatalf("build workspace-manager: %v\n%s", err, out)
+	}
+
 	data := t.TempDir()
 
-	cmd := exec.Command(filepath.Join(bin, "wm-mcp"+suffix))
-	cmd.Env = append(os.Environ(), "WM_DATA_DIR="+data)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	t.Cleanup(cancel)
+	cmd := exec.CommandContext(ctx, exe, "mcp")
+	cmd.Env = append(os.Environ(), "WM_DATA_DIR="+data, "WM_DAEMON=")
 	stdin, _ := cmd.StdinPipe()
 	stdout, _ := cmd.StdoutPipe()
 	if err := cmd.Start(); err != nil {
@@ -46,6 +54,20 @@ func TestStartsDaemonAndServesTools(t *testing.T) {
 		})
 		_ = stdin.Close()
 		_ = cmd.Wait()
+		// server.stop replies before exiting; wait for the detached Windows image
+		// to be released before TempDir tries to remove it.
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			err := os.Remove(exe)
+			if err == nil || os.IsNotExist(err) {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Errorf("daemon did not release executable: %v", err)
+				break
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
 	})
 	out := bufio.NewReader(stdout)
 
@@ -62,16 +84,77 @@ func TestStartsDaemonAndServesTools(t *testing.T) {
 		t.Errorf("tools/list exposes git: %v", list)
 	}
 
-	// The first data call starts the daemon.
+	// Race GUI and MCP auto-starts against a fresh folder. They must converge on
+	// the same daemon, preserve both writes and deliver changes to the GUI.
+	t.Setenv("WM_DATA_DIR", data)
+	t.Setenv("WM_DAEMON", exe)
+	type connected struct {
+		c   *client.Client
+		err error
+	}
+	guiReady := make(chan connected, 1)
+	go func() {
+		c, err := client.Dial(client.Options{Kind: "gui", Start: client.StartDaemon()})
+		guiReady <- connected{c, err}
+	}()
+
 	create := mcpCall(t, stdin, out, 3, "wm_call", map[string]any{
 		"method": "workspaces.create", "params": map[string]any{"name": "mcp-ws"},
 	})
 	if !strings.Contains(create, "mcp-ws") {
 		t.Fatalf("workspaces.create: %s", create)
 	}
+	gui := <-guiReady
+	if gui.err != nil {
+		t.Fatalf("GUI concurrent startup: %v", gui.err)
+	}
+	defer gui.c.Close()
+	var workspaces []types.Workspace
+	if err := gui.c.Call(api.MethodWorkspacesList, nil, &workspaces); err != nil || len(workspaces) != 1 || workspaces[0].Name != "mcp-ws" {
+		t.Fatalf("GUI cannot see MCP write: %+v, %v", workspaces, err)
+	}
+	events, err := gui.c.SubscribeRaw(api.SubscribeInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ws types.Workspace
+	if err := gui.c.Call(api.MethodWorkspacesCreate, types.WorkspaceCreateInput{Name: "gui-ws"}, &ws); err != nil {
+		t.Fatal(err)
+	}
 	overview := mcpCall(t, stdin, out, 4, "wm_overview", map[string]any{})
 	if !strings.Contains(overview, "mcp-ws") {
 		t.Fatalf("wm_overview misses the workspace: %s", overview)
+	}
+
+	if !strings.Contains(overview, "gui-ws") {
+		t.Fatalf("MCP cannot see GUI write: %s", overview)
+	}
+	mcpCall(t, stdin, out, 6, "wm_call", map[string]any{
+		"method": "workspaces.create", "params": map[string]any{"name": "event-ws"},
+	})
+	deadline := time.After(5 * time.Second)
+	found := false
+	for !found {
+		select {
+		case raw := <-events:
+			var ev struct {
+				Type api.EventType   `json:"type"`
+				Data json.RawMessage `json:"data"`
+			}
+			if json.Unmarshal(raw, &ev) != nil || ev.Type != api.EventDataChanged {
+				continue
+			}
+			var change api.DataChanged
+			if json.Unmarshal(ev.Data, &change) == nil && change.Entity == "workspace" {
+				for _, id := range change.IDs {
+					if id != ws.ID {
+						found = true
+					}
+				}
+			}
+		case <-deadline:
+			t.Fatal("GUI missed MCP workspace change event")
+		}
 	}
 
 	// Choose a config set on the run itself, leaving the app's active set alone.
@@ -159,12 +242,12 @@ func TestStartsDaemonAndServesTools(t *testing.T) {
 		t.Fatalf("a partial update lost the command: %+v", script)
 	}
 	call("wm_env_script", map[string]any{"action": "set", "workspace": "mcp-ws", "shared": "dev", "command": "node shared.js", "directory": t.TempDir()}, nil)
-	relative := send(stdin, out, 13, "tools/call", map[string]any{
-		"name": "wm_env_script", "arguments": map[string]any{"action": "set", "workspace": "mcp-ws", "shared": "dev", "directory": "relative"},
-	})
-	if !strings.Contains(toJSON(relative), `"isError":true`) {
-		t.Fatal("a shared script accepted a relative directory")
+	call("wm_env_script", map[string]any{"action": "set", "workspace": "mcp-ws", "shared": "dev", "directory": "relative"}, nil)
+	call("wm_env_script", map[string]any{"action": "get", "workspace": "mcp-ws", "shared": "dev"}, &script)
+	if script.Directory != "relative" {
+		t.Fatalf("shared script lost its relative directory: %+v", script)
 	}
+
 	call("wm_env_script", map[string]any{"action": "clear"}, &script)
 	call("wm_env_script", map[string]any{"action": "get"}, &script)
 	if script.Command != "" {

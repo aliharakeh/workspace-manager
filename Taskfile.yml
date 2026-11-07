@@ -30,7 +30,6 @@ tasks:
 
   build:go:
     cmds:
-      - go build -ldflags="-s -w{{if eq OS "windows"}} -H windowsgui{{end}}" -o {{.BIN_DIR}}/wmd{{.EXE}} ./cmd/wmd
       - task: build:resources
       - go build {{if ne .DEV "true"}}-tags production -trimpath -ldflags="-s -w{{if eq OS "windows"}} -H windowsgui{{end}}"{{else}}-buildvcs=false -gcflags=all="-l"{{end}} -o {{.BIN_DIR}}/{{.APP_NAME}}{{.EXE}} .
 
@@ -51,7 +50,6 @@ tasks:
     platforms: [windows]
     cmds:
       - task: build
-      - go build -ldflags="-s -w" -o {{.BIN_DIR}}/wm-mcp.exe ./cmd/wm-mcp
       - wails3 generate webview2bootstrapper -dir build/windows/installer
       - task: installer
 

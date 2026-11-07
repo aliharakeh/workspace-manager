@@ -3,8 +3,8 @@
 Uses Go 1.26+ and Wails v3.0.0-beta.34. Install the matching CLI with
 `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.34`.
 
-One Go module at the repo root with two programs: the Wails desktop app (the
-GUI, `main.go`) and the background daemon `wmd` (`cmd/wmd`). The daemon owns the
+One Go module and executable with three modes: the Wails desktop app (default),
+`workspace-manager mcp` and `workspace-manager daemon`. The daemon owns the
 database, the process runner and the blueprints. The GUI is its client; it also
 runs git, the file dialogs and the path from terminal output to the
 screen. The React frontend lives in `frontend/`.
@@ -13,9 +13,9 @@ screen. The React frontend lives in `frontend/`.
 
 | Path | Role |
 |---|---|
-| `main.go` | Wails entry point only (Wails needs the main package at the repo root): embeds the frontend and runs `gui.App`. |
-| `cmd/wmd` | The daemon's entry point: opens the database, runs the server. |
-| `cmd/wm-mcp` | The MCP server (stdio) for external coding agents. An `agent` client of the daemon; starts it on demand. See its README. |
+| `main.go` | Dispatches modes before Wails initialization; embeds the frontend and runs `gui.App` by default. |
+| `daemon/start.go` | Locks the data folder, opens the database and runs the server. |
+| `mcp` | The MCP server (stdio) for external coding agents. An `agent` client of the daemon; starts it on demand. See its README. |
 | `gui` | The desktop app's Go side. `app.go` (the `App` struct, event relay), `link.go` (`Link`, the connection to `wmd`: dials, auto-starts it, resubscribes), `bind.go` (the Wails-bound surface; data, runner and blueprint methods proxy to the daemon, the rest runs here), `events.go`, `dialog.go` (Wails events and file pickers). |
 | `gui/git` | Git and worktrees: `git.go`, `worktreelinks.go` (the git plumbing) and `operations.go` (the Git panel's operations, reading what they need from the daemon through a `Backend`). |
 | `daemon` | Daemon lifecycle: data-folder lock, socket, idle exit, `hello`, method permissions. |
@@ -27,7 +27,7 @@ screen. The React frontend lives in `frontend/`.
 | `shared/rpc`, `shared/client` | The wire protocol (server and connection ends) and the dial/handshake/auto-start client. |
 | `shared/native` | OS helpers: process, ports, editor, folder, browser, notifications, PTY (`pty*.go`). |
 | `frontend/` | The React UI (Vite, TypeScript, Bun). `bindings/` is generated. |
-| `build/` | Wails build assets (icons, installer); `build/bin` is the output (`workspace-manager.exe`, `wmd.exe`, `wm-mcp.exe`). |
+| `build/` | Wails build assets (icons, installer); `build/bin` is the output (`workspace-manager.exe`, with GUI/MCP/daemon modes). |
 
 ## Who does what
 
@@ -61,10 +61,10 @@ screen. The React frontend lives in `frontend/`.
   agents. Private env vars and templates allow value/content-only
   replacements and deletion, but not renaming or making public. A client that omits its
   kind is an agent, the least-privileged kind, never the GUI. Any new secret-like value needs the same
-  treatment in `daemon/handlers`. `wm-mcp` is the agent client; the GUI is the other.
+  treatment in `daemon/handlers`. `workspace-manager mcp` is the agent client; the GUI is the other.
 - **Lifecycle.** The daemon takes a lock in the data folder, so there is one
   instance per data folder. `Link` starts it on demand (`client.StartDaemon`
-  finds `wmd` next to the app, in `WM_DAEMON`, or on PATH). It exits after ten
+  launches the same executable in `daemon` mode, or uses `WM_DAEMON`). It exits after ten
   idle minutes with no client connected and nothing running. **Quitting the GUI
   does not stop the apps it started**: the daemon, and the runs, keep going
   while any run is active. `WM_DATA_DIR` moves both ends to another data folder,
@@ -88,7 +88,7 @@ screen. The React frontend lives in `frontend/`.
   (`frontend/components/terminal.tsx`) and catches up on a late open with
   `RunnerOutput`.
 - **No AI in the GUI.** The desktop app has no AI features; external agents use
-  `wm-mcp`. `configSets.applyChanges` stays in the daemon (GUI-only) but nothing
+  `workspace-manager mcp`. `configSets.applyChanges` stays in the daemon (GUI-only) but nothing
   in the GUI calls it now.
 
 ## Rules
@@ -99,7 +99,7 @@ screen. The React frontend lives in `frontend/`.
   method in `gui/bind.go` that calls it through `call[...]`. The daemon refuses to
   start if a method has no handler, or a handler has no method, so nothing can
   drift. Param struct tags in the handler must match the map keys `bind.go` sends.
-- Adding an MCP tool: implement it in the matching `cmd/wm-mcp/tools_<domain>.go` file and register it in `allTools` in `tools.go`. Each tool calls daemon methods. `wm_call` derives its allowlist from `api.AgentMethods()`, so a new method only needs `Agent: true` to be reachable; GUI-only methods (settings, git support, `configSets.applyChanges`, resizes) are not. Map typed errors with `api.KindOf`.
+- Adding an MCP tool: implement it in the matching `mcp/tools_<domain>.go` file and register it in `allTools` in `tools.go`. Each tool calls daemon methods. `wm_call` derives its allowlist from `api.AgentMethods()`, so a new method only needs `Agent: true` to be reachable; GUI-only methods (settings, git support, `configSets.applyChanges`, resizes) are not. Map typed errors with `api.KindOf`.
 - Adding a GUI-only operation (git, dialogs): put it in `gui/git` or
   `gui/bind.go`; it reaches data only through daemon calls, never the database.
 - Changing the bound surface: edit `gui/bind.go`, then run `wails3 generate bindings -ts -clean=true`
@@ -180,22 +180,18 @@ go build ./...
 go test ./...
 go vet ./...
 sqlc generate                  # after schema/query edits
-wails3 task dev                # Vite on port 5174; builds wmd too
-wails3 build                   # -> build/bin/workspace-manager.exe + wmd.exe
+wails3 task dev                # Vite on port 5174
+wails3 build                   # -> build/bin/workspace-manager.exe (all three modes)
 wails3 generate bindings -ts -clean=true # after changing bind.go (frontend/bindings)
-.\build.ps1                    # wmd.exe + wails3 build + size listing
+.\build.ps1                    # wails3 build + size listing
 ```
 
-`wmd` must sit next to the app (or `wm-mcp`), or be named by `WM_DAEMON`, or be on PATH. For
-`wails3 task dev`, the build task creates it next to the app. To use another daemon:
+Clients auto-start the current executable with `daemon`. `WM_DAEMON` can override
+that executable for development; the override must accept the `daemon` argument.
 
-```bash
-go build -o build/bin/wmd.exe ./cmd/wmd
-WM_DAEMON=$PWD/build/bin/wmd.exe wails3 task dev
-```
-
-A stale `wmd` keeps running after you rebuild it; stop it (`wmd.exe` in the task
-manager, or the `server.stop` call) so the next launch uses the new build.
+A stale daemon keeps running after a rebuild. Stop it through `server.stop` so
+the next launch uses the new build. Older installations may still have a running
+`wmd.exe`; stop that before switching to the unified executable.
 
 From `frontend/`: `bun install`, `bun run dev`, `bun run build`,
 `bun run lint`, `bun run typecheck`.

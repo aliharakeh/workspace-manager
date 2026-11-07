@@ -1,10 +1,10 @@
-# wm-mcp: the workspace-manager MCP server
+# Workspace Manager MCP server
 
 An MCP server over stdio that lets any coding agent drive workspace-manager:
 list workspaces and apps, read and edit config, run apps, scaffold from
 blueprints. Git, worktrees, settings and the AI are GUI-only and not exposed to agents.
 
-It talks to the `wmd` daemon through `shared/client` and starts the daemon on
+Run `workspace-manager mcp`. It talks to the background daemon through `shared/client` and starts the daemon on
 demand, so there is nothing to run by hand. It identifies as an `agent` client:
 AI methods stay unavailable and values with `private` stay private,
 exactly as for any external agent.
@@ -43,15 +43,15 @@ renamable or made public.
 
 For source changes, `tools.go` holds the registry and schema builders;
 `tools_<domain>.go` holds each tool's schema and handler. See the
-[architecture map](../../docs/architecture.md) for the surrounding layers.
+[architecture map](../docs/architecture.md) for the surrounding layers.
 
 From the repo root:
 
 ```bash
-go build -o build/bin/wm-mcp ./cmd/wm-mcp
+wails3 build
 ```
 
-`.\build.ps1` builds it alongside the daemon and the GUI into `build/bin`; `wm-mcp` finds `wmd` next to itself (or via `WM_DAEMON`, or PATH).
+`.\build.ps1` produces `build/bin/workspace-manager.exe`. It provides GUI, MCP and daemon modes; MCP starts the same executable in `daemon` mode on demand.
 
 ## Configure a client
 
@@ -60,12 +60,12 @@ Point any MCP client at the binary:
 ```json
 {
   "mcpServers": {
-    "workspace-manager": { "command": "C:/path/to/wm-mcp.exe" }
+    "workspace-manager": { "command": "C:/path/to/workspace-manager.exe", "args": ["mcp"] }
   }
 }
 ```
 
-Claude Code: `claude mcp add workspace-manager -- C:/path/to/wm-mcp.exe`
+Claude Code: `claude mcp add workspace-manager -- C:/path/to/workspace-manager.exe mcp`
 
 Environment is inherited, so the server uses your normal data folder. Set
 `WM_DATA_DIR` to isolate it (same variable as the daemon and the GUI), or

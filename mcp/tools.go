@@ -1,4 +1,4 @@
-package main
+package mcp
 
 // tool is one MCP tool: a name, a description and a JSON-Schema input.
 type mcpTool struct {

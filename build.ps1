@@ -1,14 +1,9 @@
 #!/usr/bin/env pwsh
-# Builds everything into build/bin: the app, its daemon, and the MCP server.
-# The app and wm-mcp start wmd.exe from the folder they live in, so those three must stay together.
+# Builds the GUI, MCP server and daemon modes into one executable.
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
 New-Item -ItemType Directory -Force build/bin | Out-Null
-
-# The MCP server talks over stdio, so it stays a console program.
-go build -ldflags "-s -w" -o build/bin/wm-mcp.exe ./cmd/wm-mcp
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 wails3 build
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
