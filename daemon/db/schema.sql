@@ -187,3 +187,9 @@ CREATE TABLE IF NOT EXISTS env_providers (
   config text NOT NULL,
   CHECK ((app_set_id IS NULL) != (shared_set_id IS NULL))
 );
+-- Only the latest run per app is retained, separately from terminal scrollback.
+CREATE TABLE IF NOT EXISTS runner_diagnostics (
+    app_id INTEGER PRIMARY KEY REFERENCES apps(id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL,
+    snapshot TEXT NOT NULL
+);

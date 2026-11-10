@@ -17,17 +17,10 @@ export type GitPanelProps = {
   active: boolean
   /** Bumped when another client writes this app's git state, to reload it. */
   dataEpoch: number
-  /** The app's active config set: the default for a worktree with none chosen. */
+  /** The app's active config set: used by every GUI launch. */
   activeConfigSetId: number | null
   status: StatusEvent | null
   onStatus: (status: StatusEvent) => void
-}
-
-/** Config set chosen per worktree path, remembered per app on this machine. */
-type ChosenSets = Record<string, number>
-
-function chosenSetsKey(appId: number) {
-  return `git-worktree-sets:${appId}`
 }
 
 function fetchGitState(appId: number) {
@@ -36,16 +29,6 @@ function fetchGitState(appId: number) {
     api.configSets.list(appId) as Promise<ConfigSet[]>,
     api.git.linksGet(appId),
   ])
-}
-
-function readChosenSets(appId: number): ChosenSets {
-  try {
-    const raw = localStorage.getItem(chosenSetsKey(appId))
-    const parsed: unknown = raw ? JSON.parse(raw) : null
-    return parsed && typeof parsed === "object" ? (parsed as ChosenSets) : {}
-  } catch {
-    return {}
-  }
 }
 
 export function useGitPanel({
@@ -61,13 +44,6 @@ export function useGitPanel({
   const [links, setLinks] = useState<string[]>([])
   const [linksOpen, setLinksOpen] = useState(false)
   const [linking, setLinking] = useState(false)
-  const [chosen, setChosen] = useState(() => readChosenSets(appId))
-  // The panel is reused across apps: reload the remembered choices on a switch.
-  const [chosenFor, setChosenFor] = useState(appId)
-  if (chosenFor !== appId) {
-    setChosenFor(appId)
-    setChosen(readChosenSets(appId))
-  }
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(false)
   const [pruning, setPruning] = useState(false)
@@ -117,26 +93,8 @@ export function useGitPanel({
     }
   }
 
-  // The config set a worktree runs with: its remembered choice while that set
-  // still exists, else the app's active set.
-  function setFor(w: GitWorktree): number {
-    const id = chosen[w.path]
-    if (id && sets.some((s) => s.id === id)) return id
-    return activeConfigSetId ?? sets[0]?.id ?? 0
-  }
-
   function setName(id: number | undefined) {
     return sets.find((s) => s.id === id)?.name
-  }
-
-  function chooseSet(w: GitWorktree, id: number) {
-    const next = { ...chosen, [w.path]: id }
-    setChosen(next)
-    try {
-      localStorage.setItem(chosenSetsKey(appId), JSON.stringify(next))
-    } catch {
-      // Not remembered; the choice still applies until the panel reloads.
-    }
   }
 
   // Load when the tab opens first, on an app switch, and after another client
@@ -195,9 +153,9 @@ export function useGitPanel({
   async function handleStart(w: GitWorktree, kind: CommandKind, label: string) {
     setStarting(true)
     try {
-      onStatus(await api.git.worktreeStart(appId, w.path, kind, setFor(w)))
+      onStatus(await api.git.worktreeStart(appId, w.path, kind, 0))
       toast.success(
-        `${label} started in ${w.branch || w.path} with ${setName(setFor(w)) ?? "the active set"}`
+        `${label} started in ${w.branch || w.path} with ${setName(activeConfigSetId ?? undefined) ?? "the active set"}`
       )
     } catch (err) {
       toast.error(
@@ -459,9 +417,7 @@ export function useGitPanel({
     setRejected,
     running,
     load,
-    setFor,
     setName,
-    chooseSet,
     handleFetch,
     handlePrune,
     handleStart,

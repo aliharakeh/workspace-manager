@@ -85,6 +85,7 @@ const (
 	MethodRunnerStatus          = "runner.status"
 	MethodRunnerWorkspaceStatus = "runner.workspaceStatus"
 	MethodRunnerOutput          = "runner.output"
+	MethodRunnerDiagnostics     = "runner.diagnostics"
 	MethodRunnerResize          = "runner.resize"
 	MethodRunnerRun             = "runner.run"
 	MethodRunnerDev             = "runner.dev"
@@ -224,6 +225,7 @@ var Methods = []Method{
 	{Name: MethodRunnerStatus, Agent: true},
 	{Name: MethodRunnerWorkspaceStatus, Agent: true},
 	{Name: MethodRunnerOutput, Agent: true},
+	{Name: MethodRunnerDiagnostics, Agent: true},
 	{Name: MethodRunnerResize, Agent: false},
 	{Name: MethodRunnerRun, Agent: true},
 	{Name: MethodRunnerDev, Agent: true},

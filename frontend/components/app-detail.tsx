@@ -104,7 +104,11 @@ export function AppDetail({
             </p>
           ) : null}
           <div className="mt-3">
-            <ConfigSetSwitcher app={app} onAppChange={handleAppChange} />
+            <ConfigSetSwitcher
+              app={app}
+              onAppChange={handleAppChange}
+              runningConfigSetId={running ? status?.configSetId : undefined}
+            />
           </div>
           {readyUrls.length > 0 ? (
             <div className="mt-3 flex flex-wrap gap-2">
@@ -138,7 +142,6 @@ export function AppDetail({
           />
           <AppRunControls
             appId={app.id}
-            activeConfigSetId={app.active_config_set_id ?? null}
             running={running}
             kind={status?.kind}
             onStatus={handleStatus}

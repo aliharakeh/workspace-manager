@@ -337,3 +337,12 @@ SELECT id FROM config_sets WHERE shared_set_id = ?;
 
 -- name: ListLinkedSharedSetIDs :many
 SELECT DISTINCT shared_set_id FROM config_sets WHERE shared_set_id IS NOT NULL ORDER BY shared_set_id;
+-- name: BeginRunnerDiagnostics :exec
+INSERT INTO runner_diagnostics (app_id, session_id, snapshot) VALUES (?, ?, ?)
+ON CONFLICT(app_id) DO UPDATE SET session_id = excluded.session_id, snapshot = excluded.snapshot;
+
+-- name: SaveRunnerDiagnostics :exec
+UPDATE runner_diagnostics SET snapshot = ? WHERE app_id = ? AND session_id = ?;
+
+-- name: GetRunnerDiagnostics :one
+SELECT snapshot FROM runner_diagnostics WHERE app_id = ?;

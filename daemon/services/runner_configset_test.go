@@ -87,6 +87,19 @@ func TestRunnerExplicitConfigSet(t *testing.T) {
 	if status.ConfigSetID != selected.ID {
 		t.Fatal("reload lost the explicitly selected config set")
 	}
+	// GUI reload uses the active set even when MCP started the previous run
+	// with an explicit override.
+	if _, err := d.UpsertRunConfig(ctx, active.ID, types.KindDev, nil, []types.RunCommandInput{{Command: "echo active"}}); err != nil {
+		t.Fatal(err)
+	}
+	status, err = runner.ReloadActive(ctx, app.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wait()
+	if status.ConfigSetID != active.ID {
+		t.Fatal("GUI reload retained the MCP override")
+	}
 	other, err := d.CreateAppT(ctx, ws.ID, "other", t.TempDir())
 	if err != nil {
 		t.Fatal(err)

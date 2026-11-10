@@ -9,6 +9,22 @@ import (
 	"context"
 )
 
+const beginRunnerDiagnostics = `-- name: BeginRunnerDiagnostics :exec
+INSERT INTO runner_diagnostics (app_id, session_id, snapshot) VALUES (?, ?, ?)
+ON CONFLICT(app_id) DO UPDATE SET session_id = excluded.session_id, snapshot = excluded.snapshot
+`
+
+type BeginRunnerDiagnosticsParams struct {
+	AppID     int64  `json:"app_id"`
+	SessionID string `json:"session_id"`
+	Snapshot  string `json:"snapshot"`
+}
+
+func (q *Queries) BeginRunnerDiagnostics(ctx context.Context, arg BeginRunnerDiagnosticsParams) error {
+	_, err := q.db.ExecContext(ctx, beginRunnerDiagnostics, arg.AppID, arg.SessionID, arg.Snapshot)
+	return err
+}
+
 const createApp = `-- name: CreateApp :one
 INSERT INTO apps (workspace_id, name, project_path, sort_order)
 VALUES (
@@ -757,6 +773,17 @@ func (q *Queries) GetRunConfigByConfigSet(ctx context.Context, arg GetRunConfigB
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getRunnerDiagnostics = `-- name: GetRunnerDiagnostics :one
+SELECT snapshot FROM runner_diagnostics WHERE app_id = ?
+`
+
+func (q *Queries) GetRunnerDiagnostics(ctx context.Context, appID int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getRunnerDiagnostics, appID)
+	var snapshot string
+	err := row.Scan(&snapshot)
+	return snapshot, err
 }
 
 const getSetting = `-- name: GetSetting :one
@@ -1542,6 +1569,21 @@ type SaveAppEnvProviderParams struct {
 
 func (q *Queries) SaveAppEnvProvider(ctx context.Context, arg SaveAppEnvProviderParams) error {
 	_, err := q.db.ExecContext(ctx, saveAppEnvProvider, arg.AppSetID, arg.Config)
+	return err
+}
+
+const saveRunnerDiagnostics = `-- name: SaveRunnerDiagnostics :exec
+UPDATE runner_diagnostics SET snapshot = ? WHERE app_id = ? AND session_id = ?
+`
+
+type SaveRunnerDiagnosticsParams struct {
+	Snapshot  string `json:"snapshot"`
+	AppID     int64  `json:"app_id"`
+	SessionID string `json:"session_id"`
+}
+
+func (q *Queries) SaveRunnerDiagnostics(ctx context.Context, arg SaveRunnerDiagnosticsParams) error {
+	_, err := q.db.ExecContext(ctx, saveRunnerDiagnostics, arg.Snapshot, arg.AppID, arg.SessionID)
 	return err
 }
 

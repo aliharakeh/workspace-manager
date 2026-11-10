@@ -6,6 +6,7 @@ type mcpTool struct {
 	Description string
 	Schema      map[string]any
 	Handler     func(args map[string]any) (any, error)
+	Structured  bool
 }
 
 // schema builds a JSON-Schema object node.
@@ -44,6 +45,8 @@ func allTools() []mcpTool {
 		sharedTool(),
 		templateTool(),
 		runTool(),
+		waitTool(),
+		diagnosticsTool(),
 		blueprintTool(),
 		portsTool(),
 		fileTool(),

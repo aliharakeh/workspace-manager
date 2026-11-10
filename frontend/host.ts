@@ -1,5 +1,7 @@
 import type {
     ConfigSetDetail,
+    DiagnosticsQuery,
+    DiagnosticsResult,
     RunConfig,
     App,
     BlueprintInput,
@@ -291,6 +293,8 @@ export const api = {
         build: (appId: number, configSetId = 0) => call(() => Go.RunnerBuild(appId, configSetId) as Promise<StatusEvent>),
         setup: (appId: number, configSetId = 0) => call(() => Go.RunnerSetup(appId, configSetId) as Promise<StatusEvent>),
         stop: (appId: number) => call(() => Go.RunnerStop(appId) as Promise<StatusEvent>),
+        diagnostics: (query: DiagnosticsQuery) =>
+            call(() => Go.RunnerDiagnostics(types.DiagnosticsQuery.createFrom(query)) as Promise<DiagnosticsResult>),
         reload: (appId: number) => call(() => Go.RunnerReload(appId) as Promise<StatusEvent>),
         startWorkspace: (workspaceId: number, excludeAppIds: number[], sequential: boolean) =>
             call(() => Go.RunnerStartWorkspace(workspaceId, excludeAppIds, sequential)),

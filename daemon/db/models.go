@@ -91,6 +91,12 @@ type RunConfig struct {
 	UpdatedAt   string `json:"updated_at"`
 }
 
+type RunnerDiagnostic struct {
+	AppID     int64  `json:"app_id"`
+	SessionID string `json:"session_id"`
+	Snapshot  string `json:"snapshot"`
+}
+
 type Template struct {
 	ID          int64  `json:"id"`
 	ConfigSetID int64  `json:"config_set_id"`

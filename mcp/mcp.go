@@ -38,8 +38,9 @@ type toolContent struct {
 }
 
 type toolResult struct {
-	Content []toolContent `json:"content"`
-	IsError bool          `json:"isError,omitempty"`
+	Content           []toolContent `json:"content"`
+	IsError           bool          `json:"isError,omitempty"`
+	StructuredContent any           `json:"structuredContent,omitempty"`
 }
 
 func serve() error {
@@ -132,6 +133,9 @@ func handle(req rpcRequest) rpcResponse {
 		out := toolResult{Content: []toolContent{{Type: "text", Text: text}}}
 		if err != nil {
 			out.IsError = true
+		}
+		if tool.Structured && err == nil {
+			out.StructuredContent = res
 		}
 		return ok(out)
 	case "resources/list":

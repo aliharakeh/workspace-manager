@@ -66,7 +66,10 @@ func stripANSI(s string) string {
 // lineTap turns raw terminal output into plain-text lines (for ready-URL
 // detection) without touching the output itself.
 type lineTap struct {
-	pending string
+	pending   string
+	truncated bool
+	// Diagnostics keep the error prefix of oversized lines; URL detection keeps the tail.
+	keepStart bool
 }
 
 // feed adds a chunk and returns the lines it completed.
@@ -75,12 +78,25 @@ func (t *lineTap) feed(chunk []byte) []string {
 	cut := strings.LastIndexAny(t.pending, "\r\n")
 	if cut < 0 {
 		if len(t.pending) > maxTermLine {
-			t.pending = t.pending[len(t.pending)-maxTermLine:]
+			if t.keepStart {
+				t.pending = t.pending[:maxTermLine]
+			} else {
+				t.pending = t.pending[len(t.pending)-maxTermLine:]
+			}
+			t.truncated = true
 		}
 		return nil
 	}
 	complete, rest := t.pending[:cut+1], t.pending[cut+1:]
 	t.pending = rest
+	if len(t.pending) > maxTermLine {
+		if t.keepStart {
+			t.pending = t.pending[:maxTermLine]
+		} else {
+			t.pending = t.pending[len(t.pending)-maxTermLine:]
+		}
+		t.truncated = true
+	}
 	return plainLines(complete)
 }
 

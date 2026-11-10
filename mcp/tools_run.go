@@ -11,7 +11,7 @@ import (
 func runTool() mcpTool {
 	return mcpTool{
 		Name:        "wm_run",
-		Description: "Run, build and stop apps; check runner status; read terminal output. Select a configSet for each start without changing the app's active set. An app runs one session at a time.",
+		Description: "Run, build and stop apps; check runner status; read recent terminal output. Use wm_wait for completion or ready URLs, and wm_diagnostics for detected errors/warnings without downloading logs. Select a configSet for each start without changing the app's active set. An app runs one session at a time.",
 		Schema: schema("Runner", map[string]any{
 			"action":     map[string]any{"type": "string", "description": "dev, prod, build, setup, stop, reload, status, logs (run is a legacy alias for dev); startAll and stopAll act on every app of a workspace", "enum": []string{"dev", "prod", "run", "build", "setup", "stop", "reload", "status", "logs", "startAll", "stopAll"}},
 			"app":        strProp(appRefDesc),

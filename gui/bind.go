@@ -253,6 +253,11 @@ func (a *App) RunnerOutput(appID, commandID int64) types.RunnerOutput {
 	return out
 }
 
+// RunnerDiagnostics reads retained problems without transferring terminal scrollback.
+func (a *App) RunnerDiagnostics(query types.DiagnosticsQuery) (types.DiagnosticsResult, error) {
+	return call[types.DiagnosticsResult](a.link, api.MethodRunnerDiagnostics, query)
+}
+
 // RunnerResize sets the terminal size of a running command.
 func (a *App) RunnerResize(appID, commandID int64, cols, rows int) types.Ok {
 	out, _ := call[types.Ok](a.link, api.MethodRunnerResize, m{"appID": appID, "commandID": commandID, "cols": cols, "rows": rows})

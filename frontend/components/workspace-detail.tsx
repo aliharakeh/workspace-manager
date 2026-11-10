@@ -392,7 +392,6 @@ function SortableAppCard({
             />
             <AppRunControls
               appId={app.id}
-              activeConfigSetId={app.active_config_set_id ?? null}
               running={running}
               kind={status?.kind}
               onStatus={onStatus}

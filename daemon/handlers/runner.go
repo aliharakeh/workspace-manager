@@ -32,6 +32,7 @@ func (r *Registry) scripts() {
 
 func (r *Registry) runner() {
 	o := r.Ops
+	r.handle(api.MethodRunnerDiagnostics, typed(o.RunnerDiagnostics))
 
 	r.handle(api.MethodRunnerStatus, typed(func(in struct {
 		AppID int64 `json:"appID"`
@@ -92,9 +93,16 @@ func (r *Registry) runner() {
 	}) (types.StatusEvent, error) {
 		return o.RunnerStop(in.AppID)
 	}))
-	r.handle(api.MethodRunnerReload, typed(func(in struct {
-		AppID int64 `json:"appID"`
-	}) (types.StatusEvent, error) {
+	r.handle(api.MethodRunnerReload, withKind(func(kind string, raw Params) (any, error) {
+		in, err := decode[struct {
+			AppID int64 `json:"appID"`
+		}](raw)
+		if err != nil {
+			return nil, err
+		}
+		if kind == ClientGUI {
+			return o.Runner.ReloadActive(o.Ctx(), in.AppID)
+		}
 		return o.RunnerReload(in.AppID)
 	}))
 }

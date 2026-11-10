@@ -542,3 +542,48 @@ export type SharedLinkInput = {
     /** Let a shared variable overwrite an own variable with the same key. */
     replace: boolean
 }
+
+
+export type Diagnostic = {
+    id: number
+    commandId: number
+    severity: string
+    source: string
+    message: string
+    file?: string
+    line?: number
+    column?: number
+    count: number
+    firstSeen: number
+    lastSeen: number
+    revision: number
+    context?: string
+    contextTruncated: boolean
+}
+
+export type DiagnosticsQuery = {
+    appID: number
+    sessionId?: string
+    commandId?: number
+    severity?: string
+    cursor?: number
+    limit?: number
+    id?: number
+}
+
+export type DiagnosticsResult = {
+    appId: number
+    sessionId: string
+    configSetId: number
+    kind: string
+    items: Diagnostic[]
+    errorGroups: number
+    warningGroups: number
+    occurrences: number
+    nextCursor: number
+    hasMore: boolean
+    dropped: number
+    inputTruncated: boolean
+    persistenceError?: string
+    detection: string
+}

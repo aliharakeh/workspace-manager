@@ -165,6 +165,9 @@ func TestStartsDaemonAndServesTools(t *testing.T) {
 		if !ok || result["isError"] == true {
 			t.Fatalf("%s: %v", name, resp)
 		}
+		if (name == "wm_diagnostics" || name == "wm_wait") && result["structuredContent"] == nil {
+			t.Fatalf("%s omitted structuredContent", name)
+		}
 		if target != nil {
 			content := result["content"].([]any)[0].(map[string]any)["text"].(string)
 			if err := json.Unmarshal([]byte(content), target); err != nil {
@@ -275,13 +278,10 @@ func TestStartsDaemonAndServesTools(t *testing.T) {
 		if status.ConfigSetID != active.ID || !status.Running {
 			t.Fatalf("%s used the wrong config set: %+v", kind, status)
 		}
-		deadline := time.Now().Add(20 * time.Second)
-		for status.Running {
-			if time.Now().After(deadline) {
-				t.Fatalf("%s did not finish", kind)
-			}
-			time.Sleep(20 * time.Millisecond)
-			call("wm_run", map[string]any{"action": "status"}, &status)
+		var finished waitResult
+		call("wm_wait", map[string]any{"sessionId": status.SessionID, "until": "exit", "timeoutSeconds": 20}, &finished)
+		if finished.Reason != "completed" || finished.Status.Running {
+			t.Fatalf("%s did not complete: %+v", kind, finished)
 		}
 		var current types.App
 		call("wm_call", map[string]any{"method": "apps.get", "params": map[string]any{"id": app.ID}}, &current)
@@ -290,6 +290,98 @@ func TestStartsDaemonAndServesTools(t *testing.T) {
 		}
 	}
 
+	// Diagnostics collect process output and runner failures without raw logs.
+	failing := "echo error: diagnostic-marker; exit 1"
+	if runtime.GOOS == "windows" {
+		failing = "echo error: diagnostic-marker & exit /b 1"
+	}
+	call("wm_config", map[string]any{"action": "save_commands", "set": "selected", "kind": "dev", "commands": []any{map[string]any{"command": failing}}}, nil)
+	var failedRun types.StatusEvent
+	call("wm_run", map[string]any{"action": "dev", "configSet": "selected"}, &failedRun)
+	deadlineRun := time.Now().Add(20 * time.Second)
+	for failedRun.Running {
+		if time.Now().After(deadlineRun) {
+			t.Fatal("diagnostic run did not finish")
+		}
+		time.Sleep(20 * time.Millisecond)
+		call("wm_run", map[string]any{"action": "status"}, &failedRun)
+	}
+	var diagnostics types.DiagnosticsResult
+	var failedWait waitResult
+	call("wm_wait", map[string]any{"sessionId": failedRun.SessionID, "until": "exit"}, &failedWait)
+	if failedWait.Reason != "failed" {
+		t.Fatalf("failed run reported as complete: %+v", failedWait)
+	}
+	call("wm_diagnostics", map[string]any{}, &diagnostics)
+	if diagnostics.SessionID != failedRun.SessionID || diagnostics.ErrorGroups < 2 {
+		t.Fatalf("diagnostics: %+v", diagnostics)
+	}
+	marker := int64(0)
+	for _, item := range diagnostics.Items {
+		if strings.Contains(item.Message, "diagnostic-marker") {
+			marker = item.ID
+		}
+	}
+	if marker == 0 {
+		t.Fatal("process error was not captured")
+	}
+	call("wm_diagnostics", map[string]any{"id": marker, "sessionId": diagnostics.SessionID}, &diagnostics)
+	if len(diagnostics.Items) != 1 || !strings.Contains(diagnostics.Items[0].Context, "diagnostic-marker") {
+		t.Fatal("diagnostic detail omitted context")
+	}
+	// The same reload method selects the active set for GUI callers, even
+	// after MCP ran with an explicit set. Agent reload behavior is unchanged.
+	call("wm_config", map[string]any{"action": "save_commands", "set": "gui", "kind": "dev", "commands": []any{map[string]any{"command": "echo gui-active"}}}, nil)
+	var guiReload types.StatusEvent
+	if err := gui.c.Call(api.MethodRunnerReload, map[string]any{"appID": app.ID}, &guiReload); err != nil {
+		t.Fatal(err)
+	}
+	if guiReload.ConfigSetID != guiSet.ID {
+		t.Fatalf("GUI reload retained MCP override: %+v", guiReload)
+	}
+	for guiReload.Running {
+		if time.Now().After(deadlineRun) {
+			t.Fatal("GUI reload did not finish")
+		}
+		time.Sleep(20 * time.Millisecond)
+		call("wm_run", map[string]any{"action": "status"}, &guiReload)
+	}
+	// Parallel servers become ready independently. Waiting for all must return
+	// both attributed URLs, while timeout/selected waits leave the servers running.
+	frontendCommand := "echo Local: http://localhost:3101/; sleep 6"
+	backendCommand := "sleep 1; echo Local: http://localhost:3102/; sleep 5"
+	if runtime.GOOS == "windows" {
+		frontendCommand = "echo Local: http://localhost:3101/ & ping -n 7 127.0.0.1 > nul"
+		backendCommand = "ping -n 2 127.0.0.1 > nul & echo Local: http://localhost:3102/ & ping -n 6 127.0.0.1 > nul"
+	}
+	call("wm_config", map[string]any{"action": "save_commands", "set": "selected", "kind": "dev", "mode": "parallel", "commands": []any{
+		map[string]any{"command": frontendCommand, "label": "frontend"}, map[string]any{"command": backendCommand, "label": "backend"},
+	}}, nil)
+	var parallel types.StatusEvent
+	call("wm_run", map[string]any{"action": "dev", "configSet": "selected"}, &parallel)
+	var waited waitResult
+	call("wm_wait", map[string]any{"sessionId": parallel.SessionID, "timeoutSeconds": 10}, &waited)
+	if waited.Reason != "ready" || len(waited.URLs) != 2 || !waited.Status.Running {
+		t.Fatalf("parallel readiness: %+v", waited)
+	}
+	for _, url := range waited.URLs {
+		if url.CommandID == 0 || (url.Label != "frontend" && url.Label != "backend") {
+			t.Fatalf("URL attribution: %+v", url)
+		}
+	}
+	call("wm_wait", map[string]any{"sessionId": parallel.SessionID, "commandIds": []int64{parallel.Processes[1].CommandID}, "timeoutSeconds": 2}, &waited)
+	if waited.Reason != "ready" || len(waited.URLs) != 1 || waited.URLs[0].Label != "backend" {
+		t.Fatalf("selected readiness: %+v", waited)
+	}
+	call("wm_wait", map[string]any{"sessionId": parallel.SessionID, "until": "exit", "timeoutSeconds": 1}, &waited)
+	if waited.Reason != "timeout" || !waited.Status.Running {
+		t.Fatalf("wait killed or failed to await parallel servers: %+v", waited)
+	}
+	call("wm_run", map[string]any{"action": "stop"}, nil)
+	call("wm_wait", map[string]any{"sessionId": parallel.SessionID, "until": "exit"}, &waited)
+	if waited.Reason != "stopped" || len(waited.URLs) != 0 {
+		t.Fatalf("stopped servers: %+v", waited)
+	}
 	// GUI-only methods are refused to an agent.
 	res := send(stdin, out, 5, "tools/call", map[string]any{
 		"name": "wm_call", "arguments": map[string]any{"method": "settings.get"},

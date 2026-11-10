@@ -86,6 +86,10 @@ func (o *Ops) RunnerOutput(appID, commandID int64) types.RunnerOutput {
 	return o.Runner.GetOutput(appID, commandID)
 }
 
+func (o *Ops) RunnerDiagnostics(query types.DiagnosticsQuery) (types.DiagnosticsResult, error) {
+	return o.Runner.Diagnostics(query)
+}
+
 // RunnerResize sets the terminal size of a running command.
 func (o *Ops) RunnerResize(appID, commandID int64, cols, rows int) types.Ok {
 	o.Runner.Resize(appID, commandID, cols, rows)

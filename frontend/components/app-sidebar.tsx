@@ -415,7 +415,6 @@ export function AppSidebar({
                                   <AppRunControls
                                     className="shrink-0"
                                     appId={app.id}
-                                    activeConfigSetId={app.active_config_set_id ?? null}
                                     running={running}
                                     kind={kind}
                                     onStatus={onStatus}

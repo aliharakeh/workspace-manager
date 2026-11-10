@@ -52,8 +52,9 @@ type session struct {
 	lastLogAt atomic.Int64
 	// outputs holds the recent terminal output of each command, for a UI that
 	// opens after the command started.
-	outMu   sync.Mutex
-	outputs map[int64]*termBuffer
+	outMu       sync.Mutex
+	outputs     map[int64]*termBuffer
+	diagnostics *runDiagnostics
 }
 
 // subject names what the session executes, for notifications.
@@ -125,6 +126,8 @@ func (r *Runner) statusEvent(s *session, errMsg string) types.StatusEvent {
 	}
 	if errMsg != "" {
 		ev.Error = errMsg
+	} else if s.hadError {
+		ev.Error = "Run failed; inspect diagnostics for details"
 	}
 	return ev
 }
@@ -250,6 +253,7 @@ func (r *Runner) spawnCommand(s *session, cmd types.RunCommand, cwd string, env 
 		return 1
 	}
 	fail := func(err error) int {
+		s.diagnostics.failure(cmd.ID, "Failed to start: "+err.Error())
 		processState.Status = "error"
 		code := int64(1)
 		processState.ExitCode = &code
@@ -286,6 +290,7 @@ func (r *Runner) spawnCommand(s *session, cmd types.RunCommand, cwd string, env 
 	exitCode, waitErr := proc.Stream(func(p []byte) {
 		s.lastLogAt.Store(time.Now().UnixNano())
 		r.emitOutput(s, cmd.ID, p)
+		s.diagnostics.feed(cmd.ID, p, false)
 		for _, line := range tap.feed(p) {
 			r.noteReadyURL(s, cmd.ID, line)
 		}
@@ -293,6 +298,7 @@ func (r *Runner) spawnCommand(s *session, cmd types.RunCommand, cwd string, env 
 	for _, line := range tap.flush() {
 		r.noteReadyURL(s, cmd.ID, line)
 	}
+	s.diagnostics.feed(cmd.ID, nil, true)
 
 	r.mu.Lock()
 	delete(s.children, cmd.ID)
@@ -313,6 +319,7 @@ func (r *Runner) spawnCommand(s *session, cmd types.RunCommand, cwd string, env 
 	} else {
 		processState.Status = "error"
 		s.hadError = true
+		s.diagnostics.failure(cmd.ID, fmt.Sprintf("Process failed with code %d", exitCode))
 		r.systemLog(s, cmd.ID, fmt.Sprintf("Process failed with code %d", exitCode))
 		r.maybeNotify(s, NotifyError, s.subject()+" failed",
 			fmt.Sprintf("%s exited with code %d", processState.Label, exitCode))
@@ -323,10 +330,19 @@ func (r *Runner) spawnCommand(s *session, cmd types.RunCommand, cwd string, env 
 
 func (r *Runner) runSession(s *session) {
 	ctx := s.ctx
-	defer s.cancel()
+	defer func() {
+		s.cancel()
+		if s.diagnostics != nil {
+			s.diagnostics.persist()
+		}
+	}()
 	app, err := r.db.GetAppT(ctx, s.appID)
 	if err != nil {
 		s.running = false
+		if ctx.Err() == nil {
+			s.hadError = true
+			s.diagnostics.failure(0, "App not found: "+err.Error())
+		}
 		r.emit(s, r.statusEvent(s, "App not found"))
 		return
 	}
@@ -346,6 +362,7 @@ func (r *Runner) runSession(s *session) {
 		s.running = false
 		s.hadError = true
 		msg := err.Error()
+		s.diagnostics.failure(0, "Environment or template apply failed: "+msg)
 		cmdID := int64(0)
 		if len(s.processes) > 0 {
 			cmdID = s.processes[0].CommandID
@@ -365,6 +382,8 @@ func (r *Runner) runSession(s *session) {
 	config, err := r.db.GetRunConfigByConfigSetT(ctx, s.setID, s.kind)
 	if err != nil {
 		s.running = false
+		s.diagnostics.failure(cmdID, err.Error())
+		s.hadError = true
 		r.emit(s, r.statusEvent(s, err.Error()))
 		return
 	}
@@ -384,7 +403,10 @@ func (r *Runner) runSession(s *session) {
 			r.stopIdleWatcher(s)
 			r.clearReadyURLs(s)
 			if !s.restored {
-				_ = RestoreTemplates(context.Background(), r.db, s.appID, s.setID, s.dir, s.id)
+				if err := RestoreTemplates(context.Background(), r.db, s.appID, s.setID, s.dir, s.id); err != nil {
+					s.hadError = true
+					s.diagnostics.failure(cmdID, "Template restore failed: "+err.Error())
+				}
 				s.restored = true
 				r.systemLog(s, cmdID, "Original files restored")
 			}
@@ -454,7 +476,7 @@ func (r *Runner) createSession(ctx context.Context, appID int64, kind, dir, work
 	}
 	sessionCtx, cancel := context.WithCancel(context.Background())
 	return &session{ctx: sessionCtx, cancel: cancel,
-		id:          fmt.Sprintf("%d-%d", appID, time.Now().UnixMilli()),
+		id:          fmt.Sprintf("%d-%d", appID, time.Now().UnixNano()),
 		appID:       appID,
 		kind:        kind,
 		dir:         dir,
@@ -551,9 +573,16 @@ func (r *Runner) StartIn(ctx context.Context, appID int64, kind, dir, worktree s
 		r.mu.Unlock()
 		return types.StatusEvent{}, err
 	}
+	s.diagnostics, err = newRunDiagnostics(r.db, s)
+	if err != nil {
+		s.cancel()
+		r.mu.Unlock()
+		return types.StatusEvent{}, err
+	}
 	r.sessions[appID] = s
 	r.mu.Unlock()
 	r.emit(s, r.statusEvent(s, ""))
+	go s.diagnostics.persistLoop(s.ctx)
 	go r.runSession(s)
 	return r.statusEvent(s, ""), nil
 }
@@ -590,7 +619,10 @@ func (r *Runner) Stop(ctx context.Context, appID int64) (types.StatusEvent, erro
 		}
 	}
 	if !s.restored {
-		_ = RestoreTemplates(ctx, r.db, appID, s.setID, s.dir, s.id)
+		if err := RestoreTemplates(ctx, r.db, appID, s.setID, s.dir, s.id); err != nil {
+			s.hadError = true
+			s.diagnostics.failure(0, "Template restore failed: "+err.Error())
+		}
 		s.restored = true
 		cmdID := int64(0)
 		if len(s.processes) > 0 {
@@ -603,6 +635,15 @@ func (r *Runner) Stop(ctx context.Context, appID int64) (types.StatusEvent, erro
 }
 
 func (r *Runner) Reload(ctx context.Context, appID int64) (types.StatusEvent, error) {
+	return r.reload(ctx, appID, false)
+}
+
+// ReloadActive is the GUI's reload: use the active set, keeping the worktree and kind.
+func (r *Runner) ReloadActive(ctx context.Context, appID int64) (types.StatusEvent, error) {
+	return r.reload(ctx, appID, true)
+}
+
+func (r *Runner) reload(ctx context.Context, appID int64, useActive bool) (types.StatusEvent, error) {
 	r.mu.Lock()
 	existing := r.sessions[appID]
 	running := existing != nil && existing.running
@@ -617,6 +658,9 @@ func (r *Runner) Reload(ctx context.Context, appID int64) (types.StatusEvent, er
 	if existing != nil && (existing.worktree != "" || existing.explicitSet) {
 		dir, worktree, setID = existing.dir, existing.worktree, existing.setID
 	}
+	if useActive {
+		setID = 0
+	}
 	r.mu.Unlock()
 	if running {
 		if _, err := r.Stop(ctx, appID); err != nil {
@@ -629,7 +673,11 @@ func (r *Runner) Reload(ctx context.Context, appID int64) (types.StatusEvent, er
 func (r *Runner) StopAll(ctx context.Context) {
 	r.mu.Lock()
 	ids := make([]int64, 0, len(r.sessions))
+	var diagnostics []*runDiagnostics
 	for id, s := range r.sessions {
+		if s.diagnostics != nil {
+			diagnostics = append(diagnostics, s.diagnostics)
+		}
 		if s.running {
 			ids = append(ids, id)
 		}
@@ -637,5 +685,9 @@ func (r *Runner) StopAll(ctx context.Context) {
 	r.mu.Unlock()
 	for _, id := range ids {
 		_, _ = r.Stop(ctx, id)
+	}
+	// Include finished runs; shutdown must flush before the database closes.
+	for _, diagnostic := range diagnostics {
+		diagnostic.persist()
 	}
 }

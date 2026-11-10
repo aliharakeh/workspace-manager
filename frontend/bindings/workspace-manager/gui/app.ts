@@ -532,12 +532,21 @@ export function RunnerDev(appID: number, configSetID: number): $CancellablePromi
 }
 
 /**
+ * RunnerDiagnostics reads retained problems without transferring terminal scrollback.
+ */
+export function RunnerDiagnostics(query: types$0.DiagnosticsQuery): $CancellablePromise<types$0.DiagnosticsResult> {
+    return $Call.ByID(3995980329, query).then(($result: any) => {
+        return $$createType34($result);
+    });
+}
+
+/**
  * RunnerOutput returns the recent terminal output of one command of the app's
  * current run, so a terminal opened late can catch up before live events.
  */
 export function RunnerOutput(appID: number, commandID: number): $CancellablePromise<types$0.RunnerOutput> {
     return $Call.ByID(1465742974, appID, commandID).then(($result: any) => {
-        return $$createType34($result);
+        return $$createType35($result);
     });
 }
 
@@ -585,7 +594,7 @@ export function RunnerSetup(appID: number, configSetID: number): $CancellablePro
  */
 export function RunnerStartWorkspace(workspaceID: number, excludeAppIds: number[], sequential: boolean): $CancellablePromise<types$0.WorkspaceRunResult> {
     return $Call.ByID(3259332018, workspaceID, excludeAppIds, sequential).then(($result: any) => {
-        return $$createType35($result);
+        return $$createType36($result);
     });
 }
 
@@ -609,25 +618,25 @@ export function RunnerStop(appID: number): $CancellablePromise<types$0.StatusEve
  */
 export function RunnerStopWorkspace(workspaceID: number, excludeAppIds: number[]): $CancellablePromise<types$0.WorkspaceRunResult> {
     return $Call.ByID(2202146016, workspaceID, excludeAppIds).then(($result: any) => {
-        return $$createType35($result);
+        return $$createType36($result);
     });
 }
 
 export function RunnerWorkspaceStatus(workspaceID: number): $CancellablePromise<types$0.StatusEvent[]> {
     return $Call.ByID(4100079690, workspaceID).then(($result: any) => {
-        return $$createType36($result);
+        return $$createType37($result);
     });
 }
 
 export function SettingsGet(): $CancellablePromise<{ [_ in string]?: string }> {
     return $Call.ByID(1511629644).then(($result: any) => {
-        return $$createType37($result);
+        return $$createType38($result);
     });
 }
 
 export function SettingsSet(key: string, value: string): $CancellablePromise<{ [_ in string]?: string }> {
     return $Call.ByID(3626487008, key, value).then(($result: any) => {
-        return $$createType37($result);
+        return $$createType38($result);
     });
 }
 
@@ -643,7 +652,7 @@ export function SharedLinksRefresh(): $CancellablePromise<types$0.Ok> {
 
 export function SharedSetsCreate(workspaceID: number, name: string): $CancellablePromise<types$0.SharedSet> {
     return $Call.ByID(3187242701, workspaceID, name).then(($result: any) => {
-        return $$createType38($result);
+        return $$createType39($result);
     });
 }
 
@@ -655,25 +664,25 @@ export function SharedSetsDelete(id: number): $CancellablePromise<types$0.Ok> {
 
 export function SharedSetsGet(id: number): $CancellablePromise<types$0.SharedSetDetail> {
     return $Call.ByID(953401223, id).then(($result: any) => {
-        return $$createType39($result);
+        return $$createType40($result);
     });
 }
 
 export function SharedSetsList(workspaceID: number): $CancellablePromise<types$0.SharedSet[]> {
     return $Call.ByID(40331249, workspaceID).then(($result: any) => {
-        return $$createType40($result);
+        return $$createType41($result);
     });
 }
 
 export function SharedSetsRename(id: number, name: string): $CancellablePromise<types$0.SharedSet> {
     return $Call.ByID(878909475, id, name).then(($result: any) => {
-        return $$createType38($result);
+        return $$createType39($result);
     });
 }
 
 export function SharedVarsCreate(setID: number, body: types$0.EnvVarCreateInput): $CancellablePromise<types$0.SharedEnvVar> {
     return $Call.ByID(3670542654, setID, body).then(($result: any) => {
-        return $$createType41($result);
+        return $$createType42($result);
     });
 }
 
@@ -685,13 +694,13 @@ export function SharedVarsDelete(id: number): $CancellablePromise<types$0.Ok> {
 
 export function SharedVarsUpdate(id: number, body: types$0.EnvVarUpdateInput): $CancellablePromise<types$0.SharedEnvVar> {
     return $Call.ByID(1105385603, id, body).then(($result: any) => {
-        return $$createType41($result);
+        return $$createType42($result);
     });
 }
 
 export function TemplatesCreate(appID: number, body: types$0.TemplateCreateInput): $CancellablePromise<types$0.Template> {
     return $Call.ByID(844021060, appID, body).then(($result: any) => {
-        return $$createType42($result);
+        return $$createType43($result);
     });
 }
 
@@ -703,13 +712,13 @@ export function TemplatesDelete(id: number): $CancellablePromise<types$0.Ok> {
 
 export function TemplatesList(appID: number): $CancellablePromise<types$0.Template[]> {
     return $Call.ByID(2529618472, appID).then(($result: any) => {
-        return $$createType43($result);
+        return $$createType44($result);
     });
 }
 
 export function TemplatesUpdate(id: number, body: types$0.TemplateUpdateInput): $CancellablePromise<types$0.Template> {
     return $Call.ByID(1358543553, id, body).then(($result: any) => {
-        return $$createType42($result);
+        return $$createType43($result);
     });
 }
 
@@ -719,7 +728,7 @@ export function TemplatesUpdate(id: number, body: types$0.TemplateUpdateInput): 
  */
 export function WorkspaceExportToFile(id: number, options: types$0.WorkspaceExportOptions): $CancellablePromise<types$0.WorkspaceExportFileResult> {
     return $Call.ByID(537302683, id, options).then(($result: any) => {
-        return $$createType44($result);
+        return $$createType45($result);
     });
 }
 
@@ -729,13 +738,13 @@ export function WorkspaceExportToFile(id: number, options: types$0.WorkspaceExpo
  */
 export function WorkspaceImportOpenFile(): $CancellablePromise<types$0.WorkspaceBundleFileResult> {
     return $Call.ByID(1921470785).then(($result: any) => {
-        return $$createType45($result);
+        return $$createType46($result);
     });
 }
 
 export function WorkspacesCreate(body: types$0.WorkspaceCreateInput): $CancellablePromise<types$0.Workspace> {
     return $Call.ByID(1332358383, body).then(($result: any) => {
-        return $$createType46($result);
+        return $$createType47($result);
     });
 }
 
@@ -750,7 +759,7 @@ export function WorkspacesDelete(id: number): $CancellablePromise<types$0.Ok> {
  */
 export function WorkspacesExport(id: number, options: types$0.WorkspaceExportOptions): $CancellablePromise<types$0.WorkspaceBundle> {
     return $Call.ByID(338141909, id, options).then(($result: any) => {
-        return $$createType47($result);
+        return $$createType48($result);
     });
 }
 
@@ -760,13 +769,13 @@ export function WorkspacesExport(id: number, options: types$0.WorkspaceExportOpt
  */
 export function WorkspacesImport(bundle: types$0.WorkspaceBundle, options: types$0.WorkspaceImportOptions): $CancellablePromise<types$0.WorkspaceImportResult> {
     return $Call.ByID(116512934, bundle, options).then(($result: any) => {
-        return $$createType48($result);
+        return $$createType49($result);
     });
 }
 
 export function WorkspacesList(): $CancellablePromise<types$0.Workspace[]> {
     return $Call.ByID(3223674127).then(($result: any) => {
-        return $$createType49($result);
+        return $$createType50($result);
     });
 }
 
@@ -784,13 +793,13 @@ export function WorkspacesReorder(ids: number[]): $CancellablePromise<types$0.Ok
  */
 export function WorkspacesSetPinned(id: number, pinned: boolean): $CancellablePromise<types$0.Workspace> {
     return $Call.ByID(1556789591, id, pinned).then(($result: any) => {
-        return $$createType46($result);
+        return $$createType47($result);
     });
 }
 
 export function WorkspacesUpdate(id: number, body: types$0.WorkspaceUpdateInput): $CancellablePromise<types$0.Workspace> {
     return $Call.ByID(3148039126, id, body).then(($result: any) => {
-        return $$createType46($result);
+        return $$createType47($result);
     });
 }
 
@@ -800,7 +809,7 @@ export function WorkspacesUpdate(id: number, body: types$0.WorkspaceUpdateInput)
  */
 export function WorktreeLinksGet(appID: number): $CancellablePromise<string[]> {
     return $Call.ByID(3783427755, appID).then(($result: any) => {
-        return $$createType50($result);
+        return $$createType51($result);
     });
 }
 
@@ -810,7 +819,7 @@ export function WorktreeLinksGet(appID: number): $CancellablePromise<string[]> {
  */
 export function WorktreeLinksSave(appID: number, paths: string[]): $CancellablePromise<string[]> {
     return $Call.ByID(457359292, appID, paths).then(($result: any) => {
-        return $$createType50($result);
+        return $$createType51($result);
     });
 }
 
@@ -849,20 +858,21 @@ const $$createType30 = types$0.PortsListResult.createFrom;
 const $$createType31 = types$0.ReadyUrlPattern.createFrom;
 const $$createType32 = $Create.Array($$createType31);
 const $$createType33 = types$0.RunConfig.createFrom;
-const $$createType34 = types$0.RunnerOutput.createFrom;
-const $$createType35 = types$0.WorkspaceRunResult.createFrom;
-const $$createType36 = $Create.Array($$createType27);
-const $$createType37 = $Create.Map($Create.Any, $Create.Any);
-const $$createType38 = types$0.SharedSet.createFrom;
-const $$createType39 = types$0.SharedSetDetail.createFrom;
-const $$createType40 = $Create.Array($$createType38);
-const $$createType41 = types$0.SharedEnvVar.createFrom;
-const $$createType42 = types$0.Template.createFrom;
-const $$createType43 = $Create.Array($$createType42);
-const $$createType44 = types$0.WorkspaceExportFileResult.createFrom;
-const $$createType45 = types$0.WorkspaceBundleFileResult.createFrom;
-const $$createType46 = types$0.Workspace.createFrom;
-const $$createType47 = types$0.WorkspaceBundle.createFrom;
-const $$createType48 = types$0.WorkspaceImportResult.createFrom;
-const $$createType49 = $Create.Array($$createType46);
-const $$createType50 = $Create.Array($Create.Any);
+const $$createType34 = types$0.DiagnosticsResult.createFrom;
+const $$createType35 = types$0.RunnerOutput.createFrom;
+const $$createType36 = types$0.WorkspaceRunResult.createFrom;
+const $$createType37 = $Create.Array($$createType27);
+const $$createType38 = $Create.Map($Create.Any, $Create.Any);
+const $$createType39 = types$0.SharedSet.createFrom;
+const $$createType40 = types$0.SharedSetDetail.createFrom;
+const $$createType41 = $Create.Array($$createType39);
+const $$createType42 = types$0.SharedEnvVar.createFrom;
+const $$createType43 = types$0.Template.createFrom;
+const $$createType44 = $Create.Array($$createType43);
+const $$createType45 = types$0.WorkspaceExportFileResult.createFrom;
+const $$createType46 = types$0.WorkspaceBundleFileResult.createFrom;
+const $$createType47 = types$0.Workspace.createFrom;
+const $$createType48 = types$0.WorkspaceBundle.createFrom;
+const $$createType49 = types$0.WorkspaceImportResult.createFrom;
+const $$createType50 = $Create.Array($$createType47);
+const $$createType51 = $Create.Array($Create.Any);

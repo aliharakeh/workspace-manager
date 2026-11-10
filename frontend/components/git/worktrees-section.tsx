@@ -3,14 +3,6 @@ import { OpenFolderButton } from "@/components/open-folder-button"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { appStateLabel } from "@/lib/app-state"
 import type { CommandKind } from "@/lib/types"
@@ -46,7 +38,6 @@ type WorktreesSectionModel = Pick<
   | "activeConfigSetId"
   | "status"
   | "info"
-  | "sets"
   | "links"
   | "setLinksOpen"
   | "linking"
@@ -63,9 +54,7 @@ type WorktreesSectionModel = Pick<
   | "setBulkWithBranches"
   | "running"
   | "load"
-  | "setFor"
   | "setName"
-  | "chooseSet"
   | "handlePrune"
   | "handleStart"
   | "handleLink"
@@ -82,7 +71,6 @@ export function WorktreesSection({ model }: { model: WorktreesSectionModel }) {
     activeConfigSetId,
     status,
     info,
-    sets,
     links,
     setLinksOpen,
     linking,
@@ -99,9 +87,7 @@ export function WorktreesSection({ model }: { model: WorktreesSectionModel }) {
     setBulkWithBranches,
     running,
     load,
-    setFor,
     setName,
-    chooseSet,
     handlePrune,
     handleStart,
     handleLink,
@@ -120,9 +106,8 @@ export function WorktreesSection({ model }: { model: WorktreesSectionModel }) {
             <Badge variant="secondary">{worktrees.length}</Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            Setup, Run and Build use this app's config, with the config set
-            picked per worktree, inside that worktree. Setup first links the
-            shared files.
+            Setup, Dev, Build and Prod use this app's active config set inside
+            the worktree. Setup first links the shared files.
           </p>
         </div>
         <div className="ml-auto flex flex-wrap justify-end gap-2">
@@ -248,35 +233,6 @@ export function WorktreesSection({ model }: { model: WorktreesSectionModel }) {
                 </div>
                 {!w.current && !w.bare && !w.prunable ? (
                   <div className="flex flex-wrap items-center gap-2">
-                    <Select
-                      items={sets.map((s) => ({
-                        value: String(s.id),
-                        label: s.name,
-                      }))}
-                      value={setFor(w) ? String(setFor(w)) : null}
-                      onValueChange={(value) => {
-                        if (value != null) chooseSet(w, Number(value))
-                      }}
-                      disabled={runningIn(w) || sets.length === 0}
-                    >
-                      <SelectTrigger
-                        size="sm"
-                        className="w-40"
-                        aria-label={`Config set for ${w.path}`}
-                      >
-                        <SelectValue placeholder="Config set" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {sets.map((s) => (
-                            <SelectItem key={s.id} value={String(s.id)}>
-                              {s.name}
-                              {s.id === activeConfigSetId ? " (active)" : ""}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
                     {(w.shared_links ?? links).length ? (
                       <IconAction
                         label="Link shared files"
@@ -299,7 +255,7 @@ export function WorktreesSection({ model }: { model: WorktreesSectionModel }) {
                         <IconAction
                           key={kind}
                           label={`${label} in this worktree`}
-                          disabled={starting || running || !setFor(w)}
+                          disabled={starting || running || !activeConfigSetId}
                           onClick={() => void handleStart(w, kind, label)}
                         >
                           <Icon />

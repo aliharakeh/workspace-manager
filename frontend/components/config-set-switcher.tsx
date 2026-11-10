@@ -63,11 +63,13 @@ import { PartsPicker } from "./config-sets/parts-picker"
 type ConfigSetSwitcherProps = {
   app: App
   onAppChange: (app: App) => void
+  runningConfigSetId?: number
 }
 
 export function ConfigSetSwitcher({
   app,
   onAppChange,
+  runningConfigSetId,
 }: ConfigSetSwitcherProps) {
   const [sets, setSets] = useState<ConfigSet[]>([])
   const [loading, setLoading] = useState(true)
@@ -349,10 +351,18 @@ export function ConfigSetSwitcher({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        {runningConfigSetId != null ? (
+          <p className="text-xs text-muted-foreground" role="status">
+            Running with {sets.find((set) => set.id === runningConfigSetId)?.name ??
+              `config set ${runningConfigSetId}`}.
+            {runningConfigSetId !== app.active_config_set_id
+              ? " The active set applies to the next start or reload."
+              : ""}
+          </p>
+        ) : null}
         <p className="text-xs text-muted-foreground">
-          Each set bundles its own env vars, templates, run and build commands —
-          use one per environment (e.g. dev, staging, prod). Switch the active
-          set, or copy selected items between sets.
+          The active set supplies env vars, templates, and Setup, Dev, Build and
+          Prod commands. Switching sets applies to the next start or reload.
         </p>
       </div>
 
