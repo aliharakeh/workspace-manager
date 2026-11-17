@@ -54,6 +54,9 @@ func seedWorkspace(t *testing.T) (*ops.Ops, *recorder, types.Workspace, string) 
 		must(t, err)
 		_, err = o.DB.UpsertRunConfig(o.Ctx(), set.ID, types.KindSetup, nil, []types.RunCommandInput{{Command: "npm i"}})
 		must(t, err)
+		runName, ready, mode := "Quality checks", false, "sequential"
+		_, err = o.RunConfigSave(app.ID, set.ID, "custom-checks", types.RunConfigSaveInput{Name: &runName, DetectReady: &ready, Mode: &mode, Commands: []types.RunCommandInput{{Command: "echo lint"}, {Command: "echo tests"}}})
+		must(t, err)
 		_, err = o.ConfigSetsCreate(app.ID, types.ConfigSetCreateInput{Name: "staging", Activate: &shown})
 		must(t, err)
 		_, err = o.WorktreeLinksSave(app.ID, []string{"node_modules"})
@@ -76,7 +79,7 @@ func TestExportImportRoundTrip(t *testing.T) {
 	must(t, o.DB.SetAppExcludeFromStartAllT(o.Ctx(), seeded[1].ID, true))
 	bundle, err := o.WorkspacesExport(ws.ID, types.WorkspaceExportOptions{Secrets: types.SecretsInclude}, true)
 	must(t, err)
-	if bundle.Format != types.WorkspaceBundleFormat || bundle.Version != 1 || bundle.Secrets != types.SecretsInclude {
+	if bundle.Format != types.WorkspaceBundleFormat || bundle.Version != 4 || bundle.Secrets != types.SecretsInclude {
 		t.Fatalf("bad header: %+v", bundle)
 	}
 	if len(bundle.Apps) != 2 || bundle.Apps[0].Path != "api" || bundle.Apps[0].Absolute {
@@ -145,8 +148,20 @@ func TestExportImportRoundTrip(t *testing.T) {
 		if d.SetupConfig == nil || d.SetupConfig.Mode != "sequential" || len(d.SetupConfig.Commands) != 1 {
 			t.Errorf("setup: %+v", d.SetupConfig)
 		}
-		if d.BuildConfig == nil || d.ProdConfig == nil {
-			t.Errorf("all four command lists should exist")
+		found := false
+		for _, cfg := range d.RunConfigs {
+			if cfg.Kind == "custom-checks" {
+				found = true
+				if cfg.Name != "Quality checks" || cfg.DetectReady || cfg.Mode != "sequential" || len(cfg.Commands) != 2 || cfg.Commands[1].Command != "echo tests" {
+					t.Fatalf("custom configuration did not round trip: %+v", cfg)
+				}
+			}
+		}
+		if !found {
+			t.Fatal("custom configuration missing from import")
+		}
+		if d.BuildConfig != nil || d.ProdConfig != nil {
+			t.Errorf("import must not create unconfigured command lists")
 		}
 	}
 	links, _ := o.WorktreeLinksGet(apps[0].ID)

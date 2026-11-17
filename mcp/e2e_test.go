@@ -177,6 +177,18 @@ func TestStartsDaemonAndServesTools(t *testing.T) {
 	}
 	var app types.App
 	call("wm_app", map[string]any{"action": "create", "name": "demo", "workspace": "mcp-ws", "path": t.TempDir()}, &app)
+	var note types.Note
+	call("wm_notes", map[string]any{"action": "save", "title": "Release", "content": "Context", "items": []any{map[string]any{"text": "Ship", "done": true}, map[string]any{"text": "Verify", "done": false}}}, &note)
+	var notes []types.Note
+	call("wm_notes", map[string]any{"action": "list"}, &notes)
+	if len(notes) != 1 || notes[0].Title != "Release" || len(notes[0].Items) != 2 || !notes[0].Items[0].Done || notes[0].Items[1].Done {
+		t.Fatalf("MCP lost note title or checklist completion: %+v", notes)
+	}
+	call("wm_notes", map[string]any{"action": "delete", "id": note.ID}, nil)
+	call("wm_notes", map[string]any{"action": "list"}, &notes)
+	if len(notes) != 0 {
+		t.Fatalf("MCP did not delete note: %+v", notes)
+	}
 	var secret types.EnvVar
 	call("wm_env", map[string]any{"action": "set", "key": "SECRET", "value": "original-secret", "private": true}, &secret)
 	if secret.Value != "" || !secret.Private {

@@ -221,6 +221,16 @@ func (a *App) PackageScriptsList(appID int64) (types.PackageScripts, error) {
 	return call[types.PackageScripts](a.link, api.MethodPackageScriptsList, m{"appID": appID})
 }
 
+func (a *App) RunConfigList(appID, configSetID int64) ([]types.RunConfig, error) {
+	return call[[]types.RunConfig](a.link, api.MethodRunConfigList, m{"appID": appID, "configSetID": configSetID})
+}
+func (a *App) RunConfigDelete(appID int64, kind string) (types.Ok, error) {
+	return call[types.Ok](a.link, api.MethodRunConfigDelete, m{"appID": appID, "kind": kind})
+}
+func (a *App) RunnerStart(appID int64, kind string, configSetID int64) (types.StatusEvent, error) {
+	return call[types.StatusEvent](a.link, api.MethodRunnerStart, m{"appID": appID, "kind": kind, "configSetID": configSetID})
+}
+
 // RunConfigGet returns the active config set's dev, prod, build or setup commands.
 func (a *App) RunConfigGet(appID int64, kind string) (types.RunConfig, error) {
 	return call[types.RunConfig](a.link, api.MethodRunConfigGet, m{"appID": appID, "kind": kind})
@@ -608,4 +618,17 @@ func (a *App) EnvProviderStop() (types.Ok, error) {
 
 func (a *App) EnvProviderRun(shared bool, id int64) (types.Ok, error) {
 	return call[types.Ok](a.link, api.MethodEnvProviderRun, m{"shared": shared, "id": id})
+}
+
+func (a *App) NotesList(appID int64) ([]types.Note, error) {
+	return call[[]types.Note](a.link, api.MethodNotesList, m{"appID": appID})
+}
+func (a *App) NotesSave(appID, id int64, body types.NoteSaveInput) (types.Note, error) {
+	return call[types.Note](a.link, api.MethodNotesSave, m{"appID": appID, "id": id, "body": body})
+}
+func (a *App) NotesDelete(appID, id int64) (types.Ok, error) {
+	return call[types.Ok](a.link, api.MethodNotesDelete, m{"appID": appID, "id": id})
+}
+func (a *App) NotesImage(appID, id int64) (string, error) {
+	return call[string](a.link, api.MethodNotesImage, m{"appID": appID, "id": id})
 }

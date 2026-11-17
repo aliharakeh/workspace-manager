@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"fmt"
 	"sync"
 
 	"workspace-manager/shared/api/types"
@@ -34,7 +35,32 @@ func (o *Ops) RunnerStartWorkspace(workspaceID int64, excludeAppIDs []int64, seq
 			continue
 		}
 		start := func(i int, id int64) {
-			if _, err := o.RunnerRun(id); err != nil {
+			configs, err := o.RunConfigList(id, 0)
+			kind := ""
+			for _, c := range configs {
+				if len(c.Commands) > 0 && kind == "" {
+					kind = c.Kind
+				}
+			}
+			for _, c := range configs {
+				if len(c.Commands) > 0 && c.DetectReady {
+					kind = c.Kind
+					break
+				}
+			}
+			for _, c := range configs {
+				if len(c.Commands) > 0 && c.Kind == types.KindDev {
+					kind = c.Kind
+					break
+				}
+			}
+			if err == nil && kind == "" {
+				err = fmt.Errorf("No run configuration has commands")
+			}
+			if err == nil {
+				_, err = o.RunnerStart(id, kind, 0)
+			}
+			if err != nil {
 				results[i].Status, results[i].Message = types.WorkspaceRunError, err.Error()
 				return
 			}

@@ -9,9 +9,10 @@ const (
 	// WorkspaceBundleFormat identifies a workspace bundle file.
 	WorkspaceBundleFormat = "workspace-manager/workspace"
 	// WorkspaceBundleVersion is the newest layout this build reads. Version 2
-	// added shared config; version 3 adds environment providers. Exports use the
+	// added shared config; version 3 adds environment providers; version 4 adds
+	// named run configurations and readiness behavior. Exports use the
 	// oldest layout that carries their content.
-	WorkspaceBundleVersion = 3
+	WorkspaceBundleVersion = 4
 	// WorkspaceBundleBaseVersion is the layout without shared config.
 	WorkspaceBundleBaseVersion = 1
 )
@@ -90,7 +91,7 @@ type BundleConfigSet struct {
 	Name        string           `json:"name"`
 	EnvVars     []BundleEnvVar   `json:"env_vars"`
 	Templates   []BundleTemplate `json:"templates"`
-	// Commands holds the setup, dev, build and prod lists, by kind.
+	// Commands holds named configurations by stable key.
 	Commands map[string]BundleCommandList `json:"commands"`
 	// SharedSet names the workspace shared set this config set is linked to, and
 	// SharedKeys the variables it takes from it. They are not repeated in EnvVars.
@@ -163,8 +164,10 @@ func legacyPrivate(private, includeInAI *bool) bool {
 }
 
 type BundleCommandList struct {
-	Mode     string          `json:"mode"`
-	Commands []BundleCommand `json:"commands"`
+	Name        string          `json:"name,omitempty"`
+	DetectReady *bool           `json:"detect_ready,omitempty"`
+	Mode        string          `json:"mode"`
+	Commands    []BundleCommand `json:"commands"`
 }
 
 type BundleCommand struct {

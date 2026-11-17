@@ -5,10 +5,11 @@ package ops
 
 import (
 	"context"
+	"sync"
 
-	"workspace-manager/shared/api/types"
 	"workspace-manager/daemon/db"
 	"workspace-manager/daemon/services"
+	"workspace-manager/shared/api/types"
 )
 
 // Publisher pushes server events to clients. The daemon wires it to the RPC
@@ -24,6 +25,7 @@ type Publisher interface {
 
 // Ops is the server-side API surface.
 type Ops struct {
+	notesMu    sync.Mutex
 	DB         *db.DB
 	Runner     *services.Runner
 	Blueprints *services.BlueprintRunner

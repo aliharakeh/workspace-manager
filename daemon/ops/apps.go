@@ -67,6 +67,20 @@ func (o *Ops) WorkspacesUpdate(id int64, body types.WorkspaceUpdateInput) (types
 }
 
 func (o *Ops) WorkspacesDelete(id int64) (types.Ok, error) {
+	o.notesMu.Lock()
+	defer o.notesMu.Unlock()
+	apps, err := o.DB.ListAppsByWorkspaceT(o.Ctx(), id)
+	if err != nil {
+		return types.Ok{}, err
+	}
+	ids := make([]int64, 0, len(apps))
+	for _, app := range apps {
+		ids = append(ids, app.ID)
+	}
+	images, err := o.noteImagesForApps(ids)
+	if err != nil {
+		return types.Ok{}, err
+	}
 	n, err := o.DB.DeleteWorkspace(o.Ctx(), id)
 	if err != nil {
 		return types.Ok{}, err
@@ -75,6 +89,9 @@ func (o *Ops) WorkspacesDelete(id int64) (types.Ok, error) {
 		return types.Ok{}, fmt.Errorf("Workspace not found")
 	}
 	o.changed("workspace", id)
+	if err := removeNoteImages(images); err != nil {
+		return types.Ok{}, fmt.Errorf("workspace deleted but note image cleanup failed: %w", err)
+	}
 	return types.Ok{Ok: true}, nil
 }
 
@@ -148,6 +165,12 @@ func (o *Ops) AppsReorder(workspaceID int64, ids []int64) (types.Ok, error) {
 }
 
 func (o *Ops) AppsDelete(id int64) (types.Ok, error) {
+	o.notesMu.Lock()
+	defer o.notesMu.Unlock()
+	images, err := o.noteImagesForApps([]int64{id})
+	if err != nil {
+		return types.Ok{}, err
+	}
 	n, err := o.DB.DeleteApp(o.Ctx(), id)
 	if err != nil {
 		return types.Ok{}, err
@@ -156,6 +179,9 @@ func (o *Ops) AppsDelete(id int64) (types.Ok, error) {
 		return types.Ok{}, fmt.Errorf("App not found")
 	}
 	o.changed("app", id)
+	if err := removeNoteImages(images); err != nil {
+		return types.Ok{}, fmt.Errorf("app deleted but note image cleanup failed: %w", err)
+	}
 	return types.Ok{Ok: true}, nil
 }
 

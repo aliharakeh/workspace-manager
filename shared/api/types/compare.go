@@ -47,6 +47,7 @@ type ConfigSetCommandDiff struct {
 
 // ConfigSetCommandListDiff compares the command list of one kind.
 type ConfigSetCommandListDiff struct {
+	Name      string                 `json:"name"`
 	Kind      string                 `json:"kind"`
 	LeftMode  string                 `json:"left_mode"`
 	RightMode string                 `json:"right_mode"`

@@ -141,12 +141,19 @@ screen. The React frontend lives in `frontend/`.
   export without shared config stays version 1). Shared writes announce
   `sharedSet` (workspace id) plus `envVar` for the apps they touched; the UI
   listens to `sharedSet` in `App.tsx`. `wm_shared` edits the shared config over MCP.
-- A config set holds four command lists of the same shape: **setup**, **dev**,
-  **build** and **prod**, told apart by `run_configs.kind`. Existing `run`
-  commands migrate to `dev`; `runner.run` remains a legacy alias for dev. An app
-  has one runner session at a time (`runner.dev`/`prod`/`build`/`setup` fail
-  while any is going) because all apply and restore templates; a build or setup
-  skips ready-URL and idle detection.
+- A config set holds any number of **named run configurations**, each containing
+  sequential or parallel commands. `run_configs.kind` is a stable key (legacy
+  `dev`/`prod`/`build`/`setup` or a custom key), independent of the editable `name`.
+  `detect_ready` controls ready-URL and idle detection. New apps/sets start empty.
+  `runConfig.list`/`get`/`save`/`delete` manage them; `runner.start` takes the key.
+  Legacy runner methods remain aliases for their original keys. One session per
+  app still protects template apply/restore. The named-run migration preserves
+  ids and commands and writes `backups/run-configs-before-named-*.json` beside the
+  database before upgrading. Bundle version 4 carries names and readiness;
+  older bundles still import. `CopyParts.run_configs` selects whole configurations
+  by key; old per-kind command selectors remain supported. Workspace Start all
+  prefers a populated `dev`, then a readiness-enabled configuration, then the
+  first configuration with commands.
 - Apps are listed by `apps.sort_order` (per workspace), not by name: new apps
   go last and `apps.reorder` rewrites the order. The UI must not re-sort apps
   by name.

@@ -114,6 +114,8 @@ CREATE TABLE IF NOT EXISTS run_configs (
   id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
   config_set_id integer NOT NULL,
   kind text DEFAULT 'dev' NOT NULL,
+  name text DEFAULT '' NOT NULL,
+  detect_ready integer DEFAULT false NOT NULL,
   mode text DEFAULT 'parallel' NOT NULL,
   created_at text DEFAULT (datetime('now')) NOT NULL,
   updated_at text DEFAULT (datetime('now')) NOT NULL,
@@ -193,3 +195,15 @@ CREATE TABLE IF NOT EXISTS runner_diagnostics (
     session_id TEXT NOT NULL,
     snapshot TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS notes (
+  id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+  app_id integer NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  content text NOT NULL DEFAULT '',
+  items text NOT NULL DEFAULT '[]',
+  image text NOT NULL DEFAULT '',
+  created_at text NOT NULL DEFAULT (datetime('now')),
+  updated_at text NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_notes_app_id ON notes(app_id);

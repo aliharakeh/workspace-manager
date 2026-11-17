@@ -19,14 +19,14 @@ type App struct {
 	ActiveConfigSetName *string `json:"active_config_set_name"`
 	// ExcludeFromStartAll leaves the app out of its workspace's "Start all".
 	ExcludeFromStartAll bool   `json:"exclude_from_start_all"`
-	CreatedAt           string  `json:"created_at"`
-	UpdatedAt           string  `json:"updated_at"`
+	CreatedAt           string `json:"created_at"`
+	UpdatedAt           string `json:"updated_at"`
 }
 
 type ConfigSet struct {
-	ID        int64  `json:"id"`
-	AppID     int64  `json:"app_id"`
-	Name      string `json:"name"`
+	ID    int64  `json:"id"`
+	AppID int64  `json:"app_id"`
+	Name  string `json:"name"`
 	// SharedSetID is the workspace shared set this config set takes variables
 	// from (nil when not linked); SharedSetName is that set's name.
 	SharedSetID   *int64  `json:"shared_set_id"`
@@ -49,7 +49,7 @@ type EnvVar struct {
 	ConfigSetID int64          `json:"config_set_id"`
 	Key         string         `json:"key"`
 	Value       string         `json:"value"`
-	Private bool           `json:"private"`
+	Private     bool           `json:"private"`
 	Options     []EnvVarOption `json:"options"`
 	Selected    string         `json:"selected"`
 	// SharedVarID is set on a row that mirrors a workspace shared variable. Such
@@ -64,7 +64,7 @@ type Template struct {
 	ConfigSetID int64  `json:"config_set_id"`
 	FilePath    string `json:"file_path"`
 	Content     string `json:"content"`
-	Private bool   `json:"private"`
+	Private     bool   `json:"private"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }
@@ -79,10 +79,8 @@ type RunCommand struct {
 	UpdatedAt   string  `json:"updated_at"`
 }
 
-// Kinds of command list: a config set has one RunConfig of each. A dev starts
-// the app for development; a prod starts it as in production; a build builds
-// it; a setup prepares it (install dependencies and the like). They share the
-// app's single runner session.
+// Legacy configuration keys remain supported alongside custom keys.
+// All configurations share the app's single runner session.
 const (
 	KindDev   = "dev"
 	KindProd  = "prod"
@@ -95,11 +93,13 @@ const (
 // (dev and prod), as opposed to a build or setup that just ends.
 func IsServing(kind string) bool { return kind == KindDev || kind == KindProd }
 
-// RunConfig is the command list of one kind (Kind) of a config set.
+// RunConfig is a named command list. Kind is its stable key, independent of Name.
 type RunConfig struct {
 	ID          int64        `json:"id"`
 	ConfigSetID int64        `json:"config_set_id"`
 	Kind        string       `json:"kind"`
+	Name        string       `json:"name"`
+	DetectReady bool         `json:"detect_ready"`
 	Mode        string       `json:"mode"`
 	CreatedAt   string       `json:"created_at"`
 	UpdatedAt   string       `json:"updated_at"`
@@ -108,12 +108,13 @@ type RunConfig struct {
 
 type ConfigSetDetail struct {
 	ConfigSet
-	EnvVars     []EnvVar   `json:"env_vars"`
-	Templates   []Template `json:"templates"`
-	DevConfig   *RunConfig `json:"dev_config"`
-	ProdConfig  *RunConfig `json:"prod_config"`
-	BuildConfig *RunConfig `json:"build_config"`
-	SetupConfig *RunConfig `json:"setup_config"`
+	RunConfigs  []RunConfig `json:"run_configs"`
+	EnvVars     []EnvVar    `json:"env_vars"`
+	Templates   []Template  `json:"templates"`
+	DevConfig   *RunConfig  `json:"dev_config"`
+	ProdConfig  *RunConfig  `json:"prod_config"`
+	BuildConfig *RunConfig  `json:"build_config"`
+	SetupConfig *RunConfig  `json:"setup_config"`
 }
 
 type PackageScript struct {
@@ -131,12 +132,13 @@ type PackageScripts struct {
 }
 
 type CopyParts struct {
-	Env       any `json:"env,omitempty"`
-	Templates any `json:"templates,omitempty"`
-	Dev       any `json:"dev,omitempty"`
-	Prod      any `json:"prod,omitempty"`
-	Build     any `json:"build,omitempty"`
-	Setup     any `json:"setup,omitempty"`
+	RunConfigs any `json:"run_configs,omitempty"`
+	Env        any `json:"env,omitempty"`
+	Templates  any `json:"templates,omitempty"`
+	Dev        any `json:"dev,omitempty"`
+	Prod       any `json:"prod,omitempty"`
+	Build      any `json:"build,omitempty"`
+	Setup      any `json:"setup,omitempty"`
 }
 
 type ReadyUrlPattern struct {
@@ -161,20 +163,22 @@ type ProcessState struct {
 }
 
 type StatusEvent struct {
-	Type      string `json:"type"`
-	SessionID string `json:"sessionId"`
-	AppID     int64  `json:"appId"`
+	ConfigName  string `json:"configName"`
+	DetectReady bool   `json:"detectReady"`
+	Type        string `json:"type"`
+	SessionID   string `json:"sessionId"`
+	AppID       int64  `json:"appId"`
 	// Kind is what the session executes: "dev", "prod", "build" or "setup" (empty before any).
 	Kind string `json:"kind"`
 	// Worktree is the root of the git worktree the session runs in; empty when
 	// it runs in the app's own project path.
 	Worktree string `json:"worktree,omitempty"`
 	// ConfigSetID is the config set the session runs with.
-	ConfigSetID int64 `json:"configSetId,omitempty"`
-	Running   bool           `json:"running"`
-	Processes []ProcessState `json:"processes"`
-	Error     string         `json:"error,omitempty"`
-	Ts        int64          `json:"ts"`
+	ConfigSetID int64          `json:"configSetId,omitempty"`
+	Running     bool           `json:"running"`
+	Processes   []ProcessState `json:"processes"`
+	Error       string         `json:"error,omitempty"`
+	Ts          int64          `json:"ts"`
 }
 
 // LogEvent is a chunk of terminal output of one run command. Data is the raw
@@ -313,11 +317,11 @@ type ConfigSetActivateResult struct {
 }
 
 type EnvVarCreateInput struct {
-	Key         string          `json:"key"`
-	Value       *string         `json:"value"`
-	Private *bool           `json:"private"`
-	Options     *[]EnvVarOption `json:"options"`
-	Selected    *string         `json:"selected"`
+	Key      string          `json:"key"`
+	Value    *string         `json:"value"`
+	Private  *bool           `json:"private"`
+	Options  *[]EnvVarOption `json:"options"`
+	Selected *string         `json:"selected"`
 }
 
 // EnvVarUpdateInput changes a variable. Options replaces the whole list (an
@@ -325,28 +329,30 @@ type EnvVarCreateInput struct {
 // option in use (the first when empty or when options change and it is gone).
 // Value on a variable with options edits the selected option.
 type EnvVarUpdateInput struct {
-	Key         *string         `json:"key"`
-	Value       *string         `json:"value"`
-	Private *bool           `json:"private"`
-	Options     *[]EnvVarOption `json:"options"`
-	Selected    *string         `json:"selected"`
+	Key      *string         `json:"key"`
+	Value    *string         `json:"value"`
+	Private  *bool           `json:"private"`
+	Options  *[]EnvVarOption `json:"options"`
+	Selected *string         `json:"selected"`
 }
 
 type TemplateCreateInput struct {
-	FilePath    string  `json:"file_path"`
-	Content     *string `json:"content"`
-	Private *bool   `json:"private"`
+	FilePath string  `json:"file_path"`
+	Content  *string `json:"content"`
+	Private  *bool   `json:"private"`
 }
 
 type TemplateUpdateInput struct {
-	FilePath    *string `json:"file_path"`
-	Content     *string `json:"content"`
-	Private *bool   `json:"private"`
+	FilePath *string `json:"file_path"`
+	Content  *string `json:"content"`
+	Private  *bool   `json:"private"`
 }
 
 type RunConfigSaveInput struct {
-	Mode     *string           `json:"mode"`
-	Commands []RunCommandInput `json:"commands"`
+	Name        *string           `json:"name"`
+	DetectReady *bool             `json:"detect_ready"`
+	Mode        *string           `json:"mode"`
+	Commands    []RunCommandInput `json:"commands"`
 }
 type ReadyUrlPatternCreateInput struct {
 	Label   string  `json:"label"`

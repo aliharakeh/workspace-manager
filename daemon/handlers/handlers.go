@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"sort"
 
+	"workspace-manager/daemon/ops"
 	"workspace-manager/shared/api"
 	"workspace-manager/shared/rpc"
-	"workspace-manager/daemon/ops"
 )
 
 // Client kinds known to the server. An "agent" client (the MCP server) is not
@@ -25,8 +25,8 @@ const (
 type Registry struct {
 	Ops *ops.Ops
 
-	srv     rpc.Registerer
-	done    map[string]bool
+	srv  rpc.Registerer
+	done map[string]bool
 }
 
 // RegisterAll wires every domain into a server and returns the registry, so
@@ -36,11 +36,12 @@ func (r *Registry) RegisterAll(srv rpc.Registerer) *Registry {
 	r.done = map[string]bool{}
 	r.workspaces()
 	r.apps()
+	r.notes()
 	r.configSets()
 	r.configSetCompare()
 	r.envVars()
 	r.sharedConfig()
- r.envProvider()
+	r.envProvider()
 	r.templates()
 	r.scripts()
 	r.runner()

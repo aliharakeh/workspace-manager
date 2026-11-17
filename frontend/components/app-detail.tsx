@@ -16,7 +16,8 @@ import { appStateLabel } from "@/lib/app-state"
 import { ConfigSetSwitcher } from "@/components/config-set-switcher"
 import { EnvVarsPanel } from "@/components/env-vars-panel"
 import { TemplatesPanel } from "@/components/templates-panel"
-import { CommandConfigPanel } from "@/components/command-config-panel"
+import { RunConfigurationsPanel } from "@/components/run-configurations-panel"
+import { NotesPanel } from "@/components/notes-panel"
 import { LogsPanel } from "@/components/logs-panel"
 import { GitPanel } from "@/components/git-panel"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -61,9 +62,7 @@ export function AppDetail({
   const [panelEpoch, setPanelEpoch] = useState(0)
   const readyUrls = useMemo(() => {
     if (!running) return []
-    return [
-      ...new Set((status?.processes ?? []).flatMap((p) => p.urls ?? [])),
-    ]
+    return [...new Set((status?.processes ?? []).flatMap((p) => p.urls ?? []))]
   }, [running, status?.processes])
 
   function handleStatus(next: StatusEvent) {
@@ -90,7 +89,9 @@ export function AppDetail({
               {app.name}
             </h1>
             <Badge variant={running ? "default" : "outline"}>
-              {appStateLabel(running, status?.kind)}
+              {running && status?.configName
+                ? `Running ${status.configName}`
+                : appStateLabel(running, status?.kind)}
             </Badge>
           </div>
           <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
@@ -140,14 +141,16 @@ export function AppDetail({
             appId={app.id}
             activeConfigSetId={app.active_config_set_id ?? null}
           />
-          <AppRunControls
-            appId={app.id}
-            running={running}
-            kind={status?.kind}
-            onStatus={handleStatus}
-            variant="icon"
-            showSetup
-          />
+          {tab !== "run" ? (
+            <AppRunControls
+              appId={app.id}
+              running={running}
+              kind={status?.kind}
+              onStatus={handleStatus}
+              variant="icon"
+              showSetup
+            />
+          ) : null}
           <Separator orientation="vertical" className="hidden h-8 sm:block" />
           <OpenFolderButton appId={app.id} iconOnly />
           <OpenEditorButton appId={app.id} iconOnly />
@@ -164,7 +167,9 @@ export function AppDetail({
             >
               <PencilIcon />
             </TooltipTrigger>
-            <TooltipContent>Edit the app's name and project path</TooltipContent>
+            <TooltipContent>
+              Edit the app's name and project path
+            </TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger
@@ -192,49 +197,22 @@ export function AppDetail({
         className="min-h-0 flex-1 overflow-hidden"
       >
         <TabsList className="max-w-full shrink-0 flex-wrap justify-start gap-1 rounded-full border border-border/60 bg-muted/70 p-1 group-data-horizontal/tabs:h-auto">
-          <TabsTrigger
-            value="env"
-            className={TAB_TRIGGER}
-          >
+          <TabsTrigger value="env" className={TAB_TRIGGER}>
             Env
           </TabsTrigger>
-          <TabsTrigger
-            value="templates"
-            className={TAB_TRIGGER}
-          >
+          <TabsTrigger value="templates" className={TAB_TRIGGER}>
             Templates
           </TabsTrigger>
-          <TabsTrigger
-            value="setup"
-            className={TAB_TRIGGER}
-          >
-            Setup
+          <TabsTrigger value="run" className={TAB_TRIGGER}>
+            Run config
           </TabsTrigger>
-          <TabsTrigger
-            value="dev"
-            className={TAB_TRIGGER}
-          >
-            Dev
+          <TabsTrigger value="notes" className={TAB_TRIGGER}>
+            Notes
           </TabsTrigger>
-          <TabsTrigger
-            value="build"
-            className={TAB_TRIGGER}
-          >
-            Build
-          </TabsTrigger>
-          <TabsTrigger value="prod" className={TAB_TRIGGER}>
-            Prod
-          </TabsTrigger>
-          <TabsTrigger
-            value="git"
-            className={TAB_TRIGGER}
-          >
+          <TabsTrigger value="git" className={TAB_TRIGGER}>
             Git
           </TabsTrigger>
-          <TabsTrigger
-            value="logs"
-            className={TAB_TRIGGER}
-          >
+          <TabsTrigger value="logs" className={TAB_TRIGGER}>
             Logs
           </TabsTrigger>
         </TabsList>
@@ -250,21 +228,17 @@ export function AppDetail({
         <TabsContent value="templates" className="mt-4 min-h-0 overflow-y-auto">
           <TemplatesPanel key={panelKey} appId={app.id} />
         </TabsContent>
-        <TabsContent value="setup" className="mt-4 min-h-0 overflow-y-auto">
-          <CommandConfigPanel
-            key={panelKey}
+        <TabsContent value="run" className="mt-4 min-h-0 overflow-y-auto">
+          <RunConfigurationsPanel
+            key={envKey}
             appId={app.id}
-            kind="setup"
+            configSetId={app.active_config_set_id ?? 0}
+            status={status}
+            onStatus={handleStatus}
           />
         </TabsContent>
-        <TabsContent value="dev" className="mt-4 min-h-0 overflow-y-auto">
-          <CommandConfigPanel key={panelKey} appId={app.id} kind="dev" />
-        </TabsContent>
-        <TabsContent value="prod" className="mt-4 min-h-0 overflow-y-auto">
-          <CommandConfigPanel key={panelKey} appId={app.id} kind="prod" />
-        </TabsContent>
-        <TabsContent value="build" className="mt-4 min-h-0 overflow-y-auto">
-          <CommandConfigPanel key={panelKey} appId={app.id} kind="build" />
+        <TabsContent value="notes" className="mt-4 min-h-0 overflow-y-auto">
+          <NotesPanel key={app.id} appId={app.id} dataEpoch={dataEpoch} />
         </TabsContent>
         <TabsContent value="git" className="mt-4 min-h-0 overflow-y-auto">
           <GitPanel

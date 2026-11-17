@@ -51,6 +51,7 @@ const APP_DATA_ENTITIES = new Set([
     'template',
     'configSet',
     'runConfig',
+    'note',
     'git',
     'worktreeLinks',
 ])

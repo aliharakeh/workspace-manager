@@ -129,6 +129,26 @@ func CompareDetails(l, r types.ConfigSetDetail, redact bool) types.ConfigSetComp
 	} {
 		out.Commands = append(out.Commands, compareCommands(k.kind, k.l, k.r))
 	}
+	left, right := map[string]*types.RunConfig{}, map[string]*types.RunConfig{}
+	keys := []string{}
+	for i := range l.RunConfigs {
+		c := &l.RunConfigs[i]
+		left[c.Kind] = c
+		keys = append(keys, c.Kind)
+	}
+	for i := range r.RunConfigs {
+		c := &r.RunConfigs[i]
+		right[c.Kind] = c
+		if left[c.Kind] == nil {
+			keys = append(keys, c.Kind)
+		}
+	}
+	if len(l.RunConfigs) > 0 || len(r.RunConfigs) > 0 {
+		out.Commands = nil
+		for _, key := range keys {
+			out.Commands = append(out.Commands, compareCommands(key, left[key], right[key]))
+		}
+	}
 	return out
 }
 
@@ -193,6 +213,15 @@ func compareCommands(kind string, lc, rc *types.RunConfig) types.ConfigSetComman
 		})
 	}
 	res.Status = types.DiffSame
+	if lc != nil {
+		res.Name = lc.Name
+	}
+	if rc != nil {
+		res.Name = rc.Name
+	}
+	if lc != nil && rc != nil && (lc.Name != rc.Name || lc.DetectReady != rc.DetectReady) {
+		res.Status = types.DiffDifferent
+	}
 	if lmode != rmode {
 		res.Status = types.DiffDifferent
 	}

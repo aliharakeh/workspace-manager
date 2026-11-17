@@ -19,12 +19,14 @@ type childProc struct {
 }
 
 type session struct {
-	ctx     context.Context
-	cancel  context.CancelFunc
-	id      string
-	appID   int64
-	appName string
-	kind    string
+	ctx         context.Context
+	cancel      context.CancelFunc
+	id          string
+	appID       int64
+	appName     string
+	kind        string
+	configName  string
+	detectReady bool
 	// dir is where commands run and templates are applied: the app's project
 	// path, or the matching folder of a git worktree (then worktree is that
 	// worktree's root).
@@ -34,6 +36,7 @@ type session struct {
 	setID           int64
 	explicitSet     bool
 	mode            string
+	commands        []types.RunCommand
 	processes       []types.ProcessState
 	children        map[int64]*childProc
 	running         bool
@@ -59,11 +62,8 @@ type session struct {
 
 // subject names what the session executes, for notifications.
 func (s *session) subject() string {
-	switch s.kind {
-	case types.KindBuild:
-		return s.appName + " build"
-	case types.KindSetup:
-		return s.appName + " setup"
+	if s.configName != "" {
+		return s.appName + " — " + s.configName
 	}
 	return s.appName
 }
@@ -121,7 +121,7 @@ func (r *Runner) statusEvent(s *session, errMsg string) types.StatusEvent {
 		}
 	}
 	ev := types.StatusEvent{
-		Type: "status", SessionID: s.id, AppID: s.appID, Kind: s.kind,
+		Type: "status", SessionID: s.id, AppID: s.appID, Kind: s.kind, ConfigName: s.configName, DetectReady: s.detectReady,
 		Worktree: s.worktree, ConfigSetID: s.setID, Running: s.running, Processes: procs, Ts: time.Now().UnixMilli(),
 	}
 	if errMsg != "" {
@@ -145,7 +145,7 @@ func (r *Runner) systemLog(s *session, commandID int64, text string) {
 }
 
 func (r *Runner) noteReadyURL(s *session, commandID int64, line string) {
-	if !s.running || !types.IsServing(s.kind) {
+	if !s.running || !s.detectReady {
 		return
 	}
 	match := MatchReadyURL(context.Background(), r.db, line)
@@ -379,21 +379,10 @@ func (r *Runner) runSession(s *session) {
 	r.systemLog(s, cmdID, "Templates applied")
 
 	env := native.MergeTerminalEnv(envMap)
-	config, err := r.db.GetRunConfigByConfigSetT(ctx, s.setID, s.kind)
-	if err != nil {
-		s.running = false
-		s.diagnostics.failure(cmdID, err.Error())
-		s.hadError = true
-		r.emit(s, r.statusEvent(s, err.Error()))
-		return
-	}
-	var commands []types.RunCommand
-	if config != nil {
-		commands = config.Commands
-	}
+	commands := s.commands
 
 	// Serving commands wait for readiness; build and setup just end.
-	if types.IsServing(s.kind) {
+	if s.detectReady {
 		r.startIdleWatcher(s)
 	}
 
@@ -456,11 +445,11 @@ func (r *Runner) createSession(ctx context.Context, appID int64, kind, dir, work
 	if err != nil {
 		return nil, err
 	}
-	config, err := r.db.GetOrCreateRunConfig(ctx, set.ID, kind)
+	config, err := r.db.GetRunConfigByConfigSetT(ctx, set.ID, kind)
 	if err != nil {
 		return nil, err
 	}
-	if len(config.Commands) == 0 {
+	if config == nil || len(config.Commands) == 0 {
 		return nil, fmt.Errorf("No %s commands configured", kind)
 	}
 	procs := make([]types.ProcessState, 0, len(config.Commands))
@@ -479,11 +468,14 @@ func (r *Runner) createSession(ctx context.Context, appID int64, kind, dir, work
 		id:          fmt.Sprintf("%d-%d", appID, time.Now().UnixNano()),
 		appID:       appID,
 		kind:        kind,
+		configName:  config.Name,
+		detectReady: config.DetectReady,
 		dir:         dir,
 		worktree:    worktree,
 		setID:       set.ID,
 		explicitSet: setID != 0,
 		mode:        config.Mode,
+		commands:    config.Commands,
 		processes:   procs,
 		children:    map[int64]*childProc{},
 		running:     true,
@@ -652,7 +644,7 @@ func (r *Runner) reload(ctx context.Context, appID int64, useActive bool) (types
 	var dir, worktree string
 	var setID int64
 	kind := types.KindDev
-	if existing != nil && types.IsServing(existing.kind) {
+	if existing != nil {
 		kind = existing.kind
 	}
 	if existing != nil && (existing.worktree != "" || existing.explicitSet) {

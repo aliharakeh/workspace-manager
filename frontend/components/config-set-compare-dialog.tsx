@@ -68,12 +68,16 @@ function Side({
   redacted?: boolean
 }) {
   if (redacted) {
-    return <span className="italic text-muted-foreground">hidden</span>
+    return <span className="text-muted-foreground italic">hidden</span>
   }
   if (value === null) return <span className="text-muted-foreground">—</span>
   return (
-    <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-xs">
-      {value === "" ? <span className="text-muted-foreground">(empty)</span> : value}
+    <pre className="max-h-48 overflow-auto font-mono text-xs break-all whitespace-pre-wrap">
+      {value === "" ? (
+        <span className="text-muted-foreground">(empty)</span>
+      ) : (
+        value
+      )}
     </pre>
   )
 }
@@ -104,7 +108,12 @@ function Row({
             className="text-xs text-muted-foreground"
             title="Taken from the workspace's shared config"
           >
-            shared{shared.left && shared.right ? "" : shared.left ? " (left)" : " (right)"}
+            shared
+            {shared.left && shared.right
+              ? ""
+              : shared.left
+                ? " (left)"
+                : " (right)"}
           </span>
         ) : null}
       </div>
@@ -175,9 +184,11 @@ export function ConfigSetCompareDialog({
   const [reload, setReload] = useState(0)
 
   const currentId = current?.id
-  const fallbackId =sets.find((s) => s.id !== current?.id)?.id ?? ""
+  const fallbackId = sets.find((s) => s.id !== current?.id)?.id ?? ""
   const otherId: number | "" =
-    picked !== null && picked !== current?.id && sets.some((s) => s.id === picked)
+    picked !== null &&
+    picked !== current?.id &&
+    sets.some((s) => s.id === picked)
       ? picked
       : fallbackId
   const key = `${current?.id}:${otherId}:${reload}`
@@ -192,7 +203,8 @@ export function ConfigSetCompareDialog({
     api.configSets
       .compare(currentId, otherId)
       .then((r) => {
-        if (!stale) setOutcome({ key, result: r as ConfigSetCompare, error: null })
+        if (!stale)
+          setOutcome({ key, result: r as ConfigSetCompare, error: null })
       })
       .catch((err) => {
         if (stale) return
@@ -211,7 +223,16 @@ export function ConfigSetCompareDialog({
     if (!current || otherId === "") return
     setCopying(true)
     try {
-      await api.configSets.copyFrom(current.id, otherId, parts)
+      await api.configSets.copyFrom(current.id, otherId, {
+        env: false,
+        templates: false,
+        dev: false,
+        prod: false,
+        build: false,
+        setup: false,
+        run_configs: false,
+        ...parts,
+      })
       toast.success(`Replaced ${what} in “${current.name}”`)
       onCopied()
       setReload((n) => n + 1)
@@ -234,8 +255,8 @@ export function ConfigSetCompareDialog({
         <DialogHeader>
           <DialogTitle>Compare “{current?.name}” with…</DialogTitle>
           <DialogDescription>
-            Left is the current set, right is the one you pick. Sets of the
-            same app only.
+            Left is the current set, right is the one you pick. Sets of the same
+            app only.
           </DialogDescription>
         </DialogHeader>
         <div className="flex items-center gap-3">
@@ -274,20 +295,20 @@ export function ConfigSetCompareDialog({
         {result ? (
           <Tabs defaultValue="env" className="min-h-0 flex-1">
             <TabsList>
-              <TabsTrigger value="env">
-                Env ({count(result.env)})
-              </TabsTrigger>
+              <TabsTrigger value="env">Env ({count(result.env)})</TabsTrigger>
               <TabsTrigger value="templates">
                 Templates ({count(result.templates)})
               </TabsTrigger>
               {result.commands.map((c) => (
-                <TabsTrigger key={c.kind} value={c.kind}>
-                  {c.kind[0].toUpperCase() + c.kind.slice(1)} (
-                  {c.status === "same" ? 0 : 1})
+                <TabsTrigger key={c.kind} value={`run-${c.kind}`}>
+                  {c.name || c.kind} ({c.status === "same" ? 0 : 1})
                 </TabsTrigger>
               ))}
             </TabsList>
-            <TabsContent value="env" className="mt-3 max-h-[50vh] overflow-auto">
+            <TabsContent
+              value="env"
+              className="mt-3 max-h-[50vh] overflow-auto"
+            >
               <SectionHeader
                 leftName={leftName}
                 rightName={rightName}
@@ -296,17 +317,19 @@ export function ConfigSetCompareDialog({
                 disabled={count(result.env) === 0}
                 onCopy={() => void copyPart({ env: true }, "env vars")}
               />
-              {result.env.filter((e) => show(e.status)).map((e) => (
-                <Row
-                  key={e.key}
-                  title={e.key}
-                  status={e.status}
-                  left={e.left}
-                  right={e.right}
-                  redacted={e.redacted}
-                  shared={{ left: e.left_shared, right: e.right_shared }}
-                />
-              ))}
+              {result.env
+                .filter((e) => show(e.status))
+                .map((e) => (
+                  <Row
+                    key={e.key}
+                    title={e.key}
+                    status={e.status}
+                    left={e.left}
+                    right={e.right}
+                    redacted={e.redacted}
+                    shared={{ left: e.left_shared, right: e.right_shared }}
+                  />
+                ))}
               {result.env.filter((e) => show(e.status)).length === 0 ? (
                 <p className="py-3 text-xs text-muted-foreground">
                   No differences.
@@ -325,16 +348,18 @@ export function ConfigSetCompareDialog({
                 disabled={count(result.templates) === 0}
                 onCopy={() => void copyPart({ templates: true }, "templates")}
               />
-              {result.templates.filter((t) => show(t.status)).map((t) => (
-                <Row
-                  key={t.file_path}
-                  title={t.file_path}
-                  status={t.status}
-                  left={t.left}
-                  right={t.right}
-                  redacted={t.redacted}
-                />
-              ))}
+              {result.templates
+                .filter((t) => show(t.status))
+                .map((t) => (
+                  <Row
+                    key={t.file_path}
+                    title={t.file_path}
+                    status={t.status}
+                    left={t.left}
+                    right={t.right}
+                    redacted={t.redacted}
+                  />
+                ))}
               {result.templates.filter((t) => show(t.status)).length === 0 ? (
                 <p className="py-3 text-xs text-muted-foreground">
                   No differences.
@@ -344,7 +369,7 @@ export function ConfigSetCompareDialog({
             {result.commands.map((list) => (
               <TabsContent
                 key={list.kind}
-                value={list.kind}
+                value={`run-${list.kind}`}
                 className="mt-3 max-h-[50vh] overflow-auto"
               >
                 <SectionHeader
@@ -355,27 +380,30 @@ export function ConfigSetCompareDialog({
                   disabled={list.status === "same"}
                   onCopy={() =>
                     void copyPart(
-                      { [list.kind]: true } as CopyParts,
-                      `${list.kind} commands`
+                      { run_configs: [list.kind] } as CopyParts,
+                      `${list.name || list.kind} commands`
                     )
                   }
                 />
                 {list.left_mode !== list.right_mode ? (
                   <p className="py-2 text-xs">
-                    Mode: <span className="font-mono">{list.left_mode || "—"}</span>
+                    Mode:{" "}
+                    <span className="font-mono">{list.left_mode || "—"}</span>
                     {" vs "}
                     <span className="font-mono">{list.right_mode || "—"}</span>
                   </p>
                 ) : null}
-                {list.commands.filter((c) => show(c.status)).map((c, i) => (
-                  <Row
-                    key={`${c.label}-${i}`}
-                    title={c.label || `#${i + 1}`}
-                    status={c.status}
-                    left={c.left}
-                    right={c.right}
-                  />
-                ))}
+                {list.commands
+                  .filter((c) => show(c.status))
+                  .map((c, i) => (
+                    <Row
+                      key={`${c.label}-${i}`}
+                      title={c.label || `#${i + 1}`}
+                      status={c.status}
+                      left={c.left}
+                      right={c.right}
+                    />
+                  ))}
                 {list.commands.filter((c) => show(c.status)).length === 0 &&
                 list.left_mode === list.right_mode ? (
                   <p className="py-3 text-xs text-muted-foreground">

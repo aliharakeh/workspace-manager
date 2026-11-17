@@ -37,24 +37,15 @@ export function PartsPicker({
         }
       }}
     >
-      <TabsList className="grid w-full grid-cols-2 group-data-horizontal/tabs:h-auto @sm:grid-cols-3 @2xl:grid-cols-6">
+      <TabsList className="grid w-full grid-cols-2 group-data-horizontal/tabs:h-auto @sm:grid-cols-3 @2xl:grid-cols-3">
         <TabsTrigger value="env" className="h-8 min-w-0">
           Env vars
         </TabsTrigger>
         <TabsTrigger value="templates" className="h-8 min-w-0">
           Templates
         </TabsTrigger>
-        <TabsTrigger value="setup" className="h-8 min-w-0">
-          Setup config
-        </TabsTrigger>
-        <TabsTrigger value="dev" className="h-8 min-w-0">
-          Dev config
-        </TabsTrigger>
-        <TabsTrigger value="build" className="h-8 min-w-0">
-          Build config
-        </TabsTrigger>
-        <TabsTrigger value="prod" className="h-8 min-w-0">
-          Prod config
+        <TabsTrigger value="run_configs" className="h-8 min-w-0">
+          Run configurations
         </TabsTrigger>
       </TabsList>
       <TabsContent value="env" className="mt-3 min-w-0">
@@ -82,54 +73,15 @@ export function PartsPicker({
           onQueryChange={setQuery}
         />
       </TabsContent>
-      <TabsContent value="setup" className="mt-3 min-w-0">
+      <TabsContent value="run_configs" className="mt-3 min-w-0">
         <CategoryPicker
-          items={(detail.setup_config?.commands ?? []).map((c) => ({
-            id: String(c.id),
-            title: c.label ?? c.command,
-            sub: c.label ? c.command : undefined,
+          items={detail.run_configs.map((c) => ({
+            id: c.kind,
+            title: c.name,
+            sub: `${c.commands.length} commands · ${c.mode}`,
           }))}
-          sel={sel.setup}
-          onChange={(setup) => onChange({ ...sel, setup })}
-          query={query}
-          onQueryChange={setQuery}
-        />
-      </TabsContent>
-      <TabsContent value="dev" className="mt-3 min-w-0">
-        <CategoryPicker
-          items={(detail.dev_config?.commands ?? []).map((c) => ({
-            id: String(c.id),
-            title: c.label ?? c.command,
-            sub: c.label ? c.command : undefined,
-          }))}
-          sel={sel.dev}
-          onChange={(dev) => onChange({ ...sel, dev })}
-          query={query}
-          onQueryChange={setQuery}
-        />
-      </TabsContent>
-      <TabsContent value="build" className="mt-3 min-w-0">
-        <CategoryPicker
-          items={(detail.build_config?.commands ?? []).map((c) => ({
-            id: String(c.id),
-            title: c.label ?? c.command,
-            sub: c.label ? c.command : undefined,
-          }))}
-          sel={sel.build}
-          onChange={(build) => onChange({ ...sel, build })}
-          query={query}
-          onQueryChange={setQuery}
-        />
-      </TabsContent>
-      <TabsContent value="prod" className="mt-3 min-w-0">
-        <CategoryPicker
-          items={(detail.prod_config?.commands ?? []).map((c) => ({
-            id: String(c.id),
-            title: c.label ?? c.command,
-            sub: c.label ? c.command : undefined,
-          }))}
-          sel={sel.prod}
-          onChange={(prod) => onChange({ ...sel, prod })}
+          sel={sel.run_configs}
+          onChange={(run_configs) => onChange({ ...sel, run_configs })}
           query={query}
           onQueryChange={setQuery}
         />

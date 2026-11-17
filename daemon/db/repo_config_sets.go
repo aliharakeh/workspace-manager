@@ -65,11 +65,6 @@ func (d *DB) CreateConfigSetT(ctx context.Context, appID int64, name string) (ty
 	if err != nil {
 		return types.ConfigSet{}, UniqueErr(err, "A config set with this name already exists")
 	}
-	for _, kind := range []string{types.KindDev, types.KindProd, types.KindBuild, types.KindSetup} {
-		if _, err := d.GetOrCreateRunConfig(ctx, row.ID, kind); err != nil {
-			return types.ConfigSet{}, err
-		}
-	}
 	return configSetFrom(row), nil
 }
 
@@ -141,5 +136,9 @@ func (d *DB) ConfigSetDetailT(ctx context.Context, set types.ConfigSet) (types.C
 	if err != nil {
 		return types.ConfigSetDetail{}, err
 	}
-	return types.ConfigSetDetail{ConfigSet: set, EnvVars: envVars, Templates: templates, DevConfig: devCfg, ProdConfig: prodCfg, BuildConfig: buildCfg, SetupConfig: setupCfg}, nil
+	configs, err := d.ListRunConfigsT(ctx, set.ID)
+	if err != nil {
+		return types.ConfigSetDetail{}, err
+	}
+	return types.ConfigSetDetail{RunConfigs: configs, ConfigSet: set, EnvVars: envVars, Templates: templates, DevConfig: devCfg, ProdConfig: prodCfg, BuildConfig: buildCfg, SetupConfig: setupCfg}, nil
 }

@@ -9,18 +9,19 @@ import (
 func configTool() mcpTool {
 	return mcpTool{
 		Name:        "wm_config",
-		Description: "Manage config sets and an app's setup/dev/build/prod command lists.",
+		Description: "Manage config sets and custom named run configurations. Configuration keys stay stable across renames.",
 		Schema: schema("Config sets and command lists", map[string]any{
-			"action":     map[string]any{"type": "string", "description": "list, detail, create, rename, activate, copy, delete, get_commands, save_commands, scripts", "enum": []string{"list", "detail", "create", "rename", "activate", "copy", "delete", "get_commands", "save_commands", "scripts"}},
-			"app":        strProp(appRefDesc),
-			"set":        strProp(setRefDesc),
-			"name":       strProp("config set name (create/rename)"),
-			"kind":       strProp("dev, prod, build or setup (get_commands/save_commands; these work on any set, no activation needed)"),
-			"from":       strProp("source config set id or name (create/copy)"),
-			"parts":      strProp("comma list: env,templates,dev,prod,build,setup (create/copy, default all)"),
-			"noActivate": boolProp("do not make the new set active (create)"),
-			"mode":       strProp("parallel or sequential (save_commands)"),
-			"commands":   map[string]any{"type": "array", "description": "command lines in order (save_commands)", "items": map[string]any{"type": "object", "properties": map[string]any{"command": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}}}},
+			"action":       map[string]any{"type": "string", "description": "list, detail, create, rename, activate, copy, delete, list_commands, get_commands, save_commands, delete_commands, scripts", "enum": []string{"list", "detail", "create", "rename", "activate", "copy", "delete", "get_commands", "save_commands", "list_commands", "delete_commands", "scripts"}},
+			"app":          strProp(appRefDesc),
+			"set":          strProp(setRefDesc),
+			"name":         strProp("name for a config set (create/rename) or run configuration (save_commands)"),
+			"detect_ready": boolProp("save_commands: detect ready URLs and idle activity; independent of the configuration name"),
+			"kind":         strProp("stable run configuration key (get_commands/save_commands/delete_commands); arbitrary key for new configurations; list_commands returns keys"),
+			"from":         strProp("source config set id or name (create/copy)"),
+			"parts":        strProp("comma list: env,templates,run_configs (legacy dev,prod,build,setup also supported) (create/copy, default all)"),
+			"noActivate":   boolProp("do not make the new set active (create)"),
+			"mode":         strProp("parallel or sequential (save_commands)"),
+			"commands":     map[string]any{"type": "array", "description": "command lines in order (save_commands)", "items": map[string]any{"type": "object", "properties": map[string]any{"command": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}}}},
 		}, "action"),
 		Handler: func(args map[string]any) (any, error) {
 			action := argStr(args, "action")
@@ -101,6 +102,21 @@ func configTool() mcpTool {
 					return nil, err
 				}
 				return daoCall(api.MethodConfigSetsDelete, map[string]any{"id": set.ID})
+			case "list_commands", "delete_commands":
+				setID, err := setIDArg(app, args)
+				if err != nil {
+					return nil, err
+				}
+				params := map[string]any{"appID": appID, "configSetID": setID}
+				if action == "list_commands" {
+					return daoCall(api.MethodRunConfigList, params)
+				}
+				kind, err := need(args, "kind", "the configuration key")
+				if err != nil {
+					return nil, err
+				}
+				params["kind"] = kind
+				return daoCall(api.MethodRunConfigDelete, params)
 			case "get_commands":
 				kind, err := need(args, "kind", "the command list kind")
 				if err != nil {
@@ -123,6 +139,9 @@ func configTool() mcpTool {
 					return nil, err
 				}
 				var cmds []any
+				if _, ok := args["commands"]; ok {
+					cmds = []any{}
+				}
 				for _, c := range argList(args, "commands") {
 					m, ok := c.(map[string]any)
 					if !ok {
@@ -138,10 +157,14 @@ func configTool() mcpTool {
 					}
 					cmds = append(cmds, entry)
 				}
-				if len(cmds) == 0 {
-					return nil, fmt.Errorf("pass \"commands\": at least one {command, label?}")
-				}
+
 				body := map[string]any{"commands": cmds}
+				if name, ok := argOpt(args, "name"); ok {
+					body["name"] = name
+				}
+				if _, ok := args["detect_ready"]; ok {
+					body["detect_ready"] = argBool(args, "detect_ready", false)
+				}
 				if mode, ok := argOpt(args, "mode"); ok {
 					body["mode"] = mode
 				}
@@ -178,12 +201,12 @@ func setIDArg(app map[string]any, args map[string]any) (int64, error) {
 
 func copyParts(list string) map[string]any {
 	if list == "" {
-		list = "env,templates,dev,prod,build,setup"
+		list = "env,templates,run_configs"
 	}
-	parts := map[string]any{}
+	parts := map[string]any{"env": false, "templates": false, "dev": false, "prod": false, "build": false, "setup": false}
 	for _, p := range splitComma(list) {
 		switch p {
-		case "env", "templates", "dev", "prod", "build", "setup":
+		case "env", "templates", "dev", "prod", "build", "setup", "run_configs":
 			parts[p] = true
 		}
 	}
@@ -191,11 +214,10 @@ func copyParts(list string) map[string]any {
 }
 
 func checkKind(kind string) error {
-	switch kind {
-	case "dev", "prod", "build", "setup":
-		return nil
+	if kind == "" || len(kind) > 128 {
+		return fmt.Errorf("configuration key must be between 1 and 128 characters")
 	}
-	return fmt.Errorf("kind must be dev, prod, build or setup, got %q", kind)
+	return nil
 }
 
 func splitComma(s string) []string {

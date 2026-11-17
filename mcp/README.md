@@ -13,6 +13,14 @@ exactly as for any external agent.
 optional `set` (id or name) and work on any config set of the app; nothing has to
 be activated first. Without `set` they use the active set.
 
+Run configurations can have arbitrary names and stable keys. Use `wm_config`
+with `action: "list_commands"` to list them, `save_commands` with `kind`, `name`,
+`mode`, `detect_ready` and `commands` to create or update one, and
+`delete_commands` to remove one. `wm_run` with `action: "start"` and `kind`
+starts a custom configuration; `configSet` optionally chooses its environment
+set. Legacy dev/prod/build/setup actions still work. Only one configuration
+runs per app at a time; commands within it may run sequentially or in parallel.
+
 A `wm_env` variable can be a choice: `set` it with `options` (`[{label, value}, ...]`)
 and optionally `selected` (a label); the first option is selected by default, and
 `value` always equals the selected option's. Passing `value` alone on a choice edits
@@ -188,3 +196,15 @@ returns the latest status and leaves every process running. Call again with the
 same session id for a longer wait. No raw terminal logs are returned, and the tool
 does not open a browser. It only adds an MCP tool using existing daemon methods;
 no GUI or daemon API binding changes are needed.
+
+### App notes
+
+`wm_notes` lists, saves and deletes app notes, or reads an image as a data URL.
+Every note has a separate required `title`, `content`, and `items` array of
+`{text, done}` objects. `done: true` means completed/crossed out. Notes are shared
+across the app's config sets. Save with `id: 0` to create; existing ids replace
+text and checklist contents. Omit `image_data` to keep the image, send `""` to
+remove it, or send base64 PNG/JPEG/GIF to replace it (5 MB maximum).
+`image_path` points to a managed copy in `<data folder>/images/notes/`.
+The same operations are available via `wm_call` as `notes.list`, `notes.save`,
+`notes.delete` and `notes.image`, with `appID` and (except list) `id`.

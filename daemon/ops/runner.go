@@ -5,16 +5,17 @@ import (
 	"os"
 	"strings"
 
+	"workspace-manager/daemon/db"
+	"workspace-manager/shared/api"
 	"workspace-manager/shared/api/types"
 )
 
 // checkConfigKind rejects unknown command lists.
 func checkConfigKind(kind string) error {
-	switch kind {
-	case types.KindDev, types.KindProd, types.KindBuild, types.KindSetup:
-		return nil
+	if strings.TrimSpace(kind) == "" || len(kind) > 128 {
+		return fmt.Errorf("configuration key must be between 1 and 128 characters")
 	}
-	return fmt.Errorf("kind must be dev, prod, build or setup")
+	return nil
 }
 
 // RunConfigGet returns the config set's (the active one when setID is 0) dev, prod, build or setup commands.
@@ -29,7 +30,14 @@ func (o *Ops) RunConfigGet(appID, setID int64, kind string) (types.RunConfig, er
 	if err != nil {
 		return types.RunConfig{}, err
 	}
-	return o.DB.GetOrCreateRunConfig(o.Ctx(), set.ID, kind)
+	cfg, err := o.DB.GetRunConfigByConfigSetT(o.Ctx(), set.ID, kind)
+	if err != nil {
+		return types.RunConfig{}, err
+	}
+	if cfg != nil {
+		return *cfg, nil
+	}
+	return types.RunConfig{ConfigSetID: set.ID, Kind: kind, Name: db.DefaultRunName(kind), DetectReady: types.IsServing(kind), Mode: db.DefaultMode(kind), Commands: []types.RunCommand{}}, nil
 }
 
 func (o *Ops) RunConfigSave(appID, setID int64, kind string, body types.RunConfigSaveInput) (types.RunConfig, error) {
@@ -41,6 +49,9 @@ func (o *Ops) RunConfigSave(appID, setID int64, kind string, body types.RunConfi
 	}
 	if body.Mode != nil && *body.Mode != "sequential" && *body.Mode != "parallel" {
 		return types.RunConfig{}, fmt.Errorf("mode must be sequential or parallel")
+	}
+	if body.Name != nil && (strings.TrimSpace(*body.Name) == "" || len(strings.TrimSpace(*body.Name)) > 128) {
+		return types.RunConfig{}, api.Errf(api.KindInvalid, "Name must be between 1 and 128 characters")
 	}
 	var cmds []types.RunCommandInput
 	if body.Commands != nil {
@@ -56,12 +67,42 @@ func (o *Ops) RunConfigSave(appID, setID int64, kind string, body types.RunConfi
 	if err != nil {
 		return types.RunConfig{}, err
 	}
-	cfg, err := o.DB.UpsertRunConfig(o.Ctx(), set.ID, kind, body.Mode, cmds)
+	if st := o.Runner.GetStatus(appID); st.Running && st.ConfigSetID == set.ID && st.Kind == kind {
+		return types.RunConfig{}, api.Errf(api.KindConflict, "Stop this configuration before editing it")
+	}
+	body.Commands = cmds
+	cfg, err := o.DB.SaveNamedRun(o.Ctx(), set.ID, kind, body)
 	if err != nil {
 		return types.RunConfig{}, err
 	}
 	o.changed("runConfig", appID)
 	return cfg, nil
+}
+
+func (o *Ops) RunConfigList(appID, setID int64) ([]types.RunConfig, error) {
+	set, err := o.targetSet(appID, setID)
+	if err != nil {
+		return nil, err
+	}
+	return o.DB.ListRunConfigsT(o.Ctx(), set.ID)
+}
+
+func (o *Ops) RunConfigDelete(appID, setID int64, kind string) (types.Ok, error) {
+	if err := checkConfigKind(kind); err != nil {
+		return types.Ok{}, err
+	}
+	set, err := o.targetSet(appID, setID)
+	if err != nil {
+		return types.Ok{}, err
+	}
+	if st := o.Runner.GetStatus(appID); st.Running && st.ConfigSetID == set.ID && st.Kind == kind {
+		return types.Ok{}, api.Errf(api.KindConflict, "Stop this configuration before deleting it")
+	}
+	if err := o.DB.DeleteRunConfig(o.Ctx(), db.DeleteRunConfigParams{ConfigSetID: set.ID, Kind: kind}); err != nil {
+		return types.Ok{}, err
+	}
+	o.changed("runConfig", appID)
+	return types.Ok{Ok: true}, nil
 }
 
 func (o *Ops) RunnerStatus(appID int64) types.StatusEvent {

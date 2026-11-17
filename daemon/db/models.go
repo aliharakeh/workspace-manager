@@ -61,6 +61,17 @@ type EnvVar struct {
 	UpdatedAt   string `json:"updated_at"`
 }
 
+type Note struct {
+	ID        int64  `json:"id"`
+	AppID     int64  `json:"app_id"`
+	Title     string `json:"title"`
+	Content   string `json:"content"`
+	Items     string `json:"items"`
+	Image     string `json:"image"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
 type ReadyUrlPattern struct {
 	ID        int64   `json:"id"`
 	Key       *string `json:"key"`
@@ -86,6 +97,8 @@ type RunConfig struct {
 	ID          int64  `json:"id"`
 	ConfigSetID int64  `json:"config_set_id"`
 	Kind        string `json:"kind"`
+	Name        string `json:"name"`
+	DetectReady int64  `json:"detect_ready"`
 	Mode        string `json:"mode"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`

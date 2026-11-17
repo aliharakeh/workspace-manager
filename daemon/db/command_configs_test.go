@@ -51,8 +51,8 @@ func TestRunConfigMigrationAndCopy(t *testing.T) {
 	if detail.DevConfig == nil || detail.DevConfig.ID != dev.ID || detail.DevConfig.Mode != mode || len(detail.DevConfig.Commands) != 1 || detail.DevConfig.Commands[0].ID != dev.Commands[0].ID {
 		t.Fatalf("dev not preserved: %+v", detail.DevConfig)
 	}
-	if detail.ProdConfig == nil || detail.ProdConfig.Mode != "parallel" || len(detail.ProdConfig.Commands) != 0 {
-		t.Fatalf("prod should start empty: %+v", detail.ProdConfig)
+	if detail.ProdConfig != nil {
+		t.Fatalf("migration must not create prod: %+v", detail.ProdConfig)
 	}
 	if _, err := d.UpsertRunConfig(ctx, source.ID, types.KindProd, nil, []types.RunCommandInput{{Command: "npm start"}}); err != nil {
 		t.Fatal(err)
@@ -71,7 +71,7 @@ func TestRunConfigMigrationAndCopy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(copy.DevConfig.Commands) != 0 || len(copy.ProdConfig.Commands) != 1 || copy.ProdConfig.Commands[0].Command != "npm start" {
+	if copy.DevConfig != nil || len(copy.ProdConfig.Commands) != 1 || copy.ProdConfig.Commands[0].Command != "npm start" {
 		t.Fatalf("prod-only copy: %+v", copy)
 	}
 	if err := d.CopyFrom(ctx, source.ID, target.ID, nil); err != nil {

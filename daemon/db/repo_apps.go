@@ -103,11 +103,6 @@ func (d *DB) CreateAppT(ctx context.Context, workspaceID int64, name, projectPat
 	if err != nil {
 		return types.App{}, err
 	}
-	for _, kind := range []string{types.KindDev, types.KindProd, types.KindBuild, types.KindSetup} {
-		if _, err := q.CreateRunConfig(ctx, CreateRunConfigParams{ConfigSetID: set.ID, Kind: kind, Mode: DefaultMode(kind)}); err != nil {
-			return types.App{}, err
-		}
-	}
 	if _, err := q.SetActiveConfigSet(ctx, SetActiveConfigSetParams{ActiveConfigSetID: &set.ID, ID: app.ID}); err != nil {
 		return types.App{}, err
 	}

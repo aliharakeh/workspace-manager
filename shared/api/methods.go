@@ -5,6 +5,11 @@ package api
 
 // Method names are "group.operation". Each one matches a server handler.
 const (
+	MethodNotesList   = "notes.list"
+	MethodNotesSave   = "notes.save"
+	MethodNotesDelete = "notes.delete"
+	MethodNotesImage  = "notes.image"
+
 	MethodEnvProviderRun  = "envProvider.run"
 	MethodEnvProviderStop = "envProvider.stop"
 	MethodEnvProviderGet  = "envProvider.get"
@@ -78,8 +83,11 @@ const (
 	MethodPackageScriptsList = "packageScripts.list"
 
 	// Run, build and setup command lists.
-	MethodRunConfigGet  = "runConfig.get"
-	MethodRunConfigSave = "runConfig.save"
+	MethodRunConfigList   = "runConfig.list"
+	MethodRunConfigDelete = "runConfig.delete"
+	MethodRunnerStart     = "runner.start"
+	MethodRunConfigGet    = "runConfig.get"
+	MethodRunConfigSave   = "runConfig.save"
 
 	// Runner.
 	MethodRunnerStatus          = "runner.status"
@@ -149,6 +157,10 @@ type Method struct {
 // Methods lists every daemon method. The daemon refuses to start when a method
 // has no handler or a handler has no method, so the two cannot drift apart.
 var Methods = []Method{
+	{Name: MethodNotesList, Agent: true},
+	{Name: MethodNotesSave, Agent: true},
+	{Name: MethodNotesDelete, Agent: true},
+	{Name: MethodNotesImage, Agent: true},
 	// Dynamic environment scripts: agents may read, save and run them through
 	// wm_env_script. Results stay in daemon memory and are never returned.
 	{Name: MethodEnvProviderRun, Agent: true},
@@ -219,6 +231,9 @@ var Methods = []Method{
 
 	{Name: MethodPackageScriptsList, Agent: true},
 
+	{Name: MethodRunConfigList, Agent: true},
+	{Name: MethodRunConfigDelete, Agent: true},
+	{Name: MethodRunnerStart, Agent: true},
 	{Name: MethodRunConfigGet, Agent: true},
 	{Name: MethodRunConfigSave, Agent: true},
 

@@ -46,6 +46,9 @@ func applySchema(sqlDB *sql.DB) error {
 	if _, err := sqlDB.Exec(schemaSQL); err != nil {
 		return err
 	}
+	if err := addNamedRuns(sqlDB); err != nil {
+		return err
+	}
 	if err := splitRunConfig(sqlDB); err != nil {
 		return err
 	}
@@ -63,10 +66,7 @@ func splitRunConfig(sqlDB *sql.DB) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.Exec(`
-		UPDATE run_configs SET kind = 'dev' WHERE kind = 'run';
-		INSERT INTO run_configs (config_set_id, kind, mode)
-		SELECT id, 'prod', 'parallel' FROM config_sets WHERE true
-		ON CONFLICT (config_set_id, kind) DO NOTHING;`); err != nil {
+		UPDATE run_configs SET kind = 'dev' WHERE kind = 'run';`); err != nil {
 		return err
 	}
 	return tx.Commit()

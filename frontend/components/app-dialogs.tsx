@@ -202,7 +202,7 @@ export function DeleteAppDialog({
           <AlertDialogTitle>Delete app?</AlertDialogTitle>
           <AlertDialogDescription>
             This will permanently delete “{app?.name}” and all of its config
-            sets (env vars, templates, and setup, dev, build and prod configs).
+            sets (env vars, templates, and run configurations).
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

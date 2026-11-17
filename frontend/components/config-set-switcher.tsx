@@ -353,8 +353,10 @@ export function ConfigSetSwitcher({
         </div>
         {runningConfigSetId != null ? (
           <p className="text-xs text-muted-foreground" role="status">
-            Running with {sets.find((set) => set.id === runningConfigSetId)?.name ??
-              `config set ${runningConfigSetId}`}.
+            Running with{" "}
+            {sets.find((set) => set.id === runningConfigSetId)?.name ??
+              `config set ${runningConfigSetId}`}
+            .
             {runningConfigSetId !== app.active_config_set_id
               ? " The active set applies to the next start or reload."
               : ""}
@@ -371,9 +373,8 @@ export function ConfigSetSwitcher({
           <DialogHeader>
             <DialogTitle>New config set</DialogTitle>
             <DialogDescription>
-              Each set has its own env vars, templates, and setup, dev, build
-              and prod configs. Optionally copy selected parts from an existing
-              set.
+              Each set has its own env vars, templates, and run configurations.
+              Optionally copy selected parts from an existing set.
             </DialogDescription>
           </DialogHeader>
           <FieldGroup className="min-w-0">
@@ -563,7 +564,7 @@ export function ConfigSetSwitcher({
             <AlertDialogTitle>Delete config set?</AlertDialogTitle>
             <AlertDialogDescription>
               This permanently deletes “{active?.name}” and all of its env vars,
-              templates, and setup, dev, build and prod configs.
+              templates, and run configurations.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

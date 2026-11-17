@@ -1,23 +1,6 @@
-export type AppTab =
-  | "env"
-  | "templates"
-  | "setup"
-  | "dev"
-  | "prod"
-  | "build"
-  | "git"
-  | "logs"
+export type AppTab = "env" | "templates" | "run" | "notes" | "git" | "logs"
 
-export const APP_TABS: AppTab[] = [
-  "env",
-  "templates",
-  "setup",
-  "dev",
-  "prod",
-  "build",
-  "git",
-  "logs",
-]
+export const APP_TABS: AppTab[] = ["env", "templates", "run", "notes", "git", "logs"]
 
 export type Route = {
   workspaceId: number | null
@@ -82,7 +65,9 @@ export function parseRoute(pathname: string, search?: string): Route {
     const app = parseSegment(parts[3]!)
     if (app.id != null) {
       appId = app.id
-      const raw = parts[4] === "run" ? "dev" : parts[4]
+      const raw = ["setup", "dev", "build", "prod"].includes(parts[4] ?? "")
+        ? "run"
+        : parts[4]
       if (raw && (APP_TABS as string[]).includes(raw)) {
         tab = raw as AppTab
       }

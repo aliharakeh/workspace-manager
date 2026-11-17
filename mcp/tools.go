@@ -44,6 +44,7 @@ func allTools() []mcpTool {
 		envScriptTool(),
 		sharedTool(),
 		templateTool(),
+		notesTool(),
 		runTool(),
 		waitTool(),
 		diagnosticsTool(),

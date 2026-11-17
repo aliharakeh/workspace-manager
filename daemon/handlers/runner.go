@@ -7,6 +7,19 @@ import (
 
 func (r *Registry) scripts() {
 	o := r.Ops
+	r.handle(api.MethodRunConfigList, typed(func(in struct {
+		AppID       int64 `json:"appID"`
+		ConfigSetID int64 `json:"configSetID"`
+	}) ([]types.RunConfig, error) {
+		return o.RunConfigList(in.AppID, in.ConfigSetID)
+	}))
+	r.handle(api.MethodRunConfigDelete, typed(func(in struct {
+		AppID       int64  `json:"appID"`
+		ConfigSetID int64  `json:"configSetID"`
+		Kind        string `json:"kind"`
+	}) (types.Ok, error) {
+		return o.RunConfigDelete(in.AppID, in.ConfigSetID, in.Kind)
+	}))
 
 	r.handle(api.MethodPackageScriptsList, typed(func(in struct {
 		AppID int64 `json:"appID"`
@@ -32,6 +45,13 @@ func (r *Registry) scripts() {
 
 func (r *Registry) runner() {
 	o := r.Ops
+	r.handle(api.MethodRunnerStart, typed(func(in struct {
+		AppID       int64  `json:"appID"`
+		ConfigSetID int64  `json:"configSetID"`
+		Kind        string `json:"kind"`
+	}) (types.StatusEvent, error) {
+		return o.RunnerStart(in.AppID, in.Kind, in.ConfigSetID)
+	}))
 	r.handle(api.MethodRunnerDiagnostics, typed(o.RunnerDiagnostics))
 
 	r.handle(api.MethodRunnerStatus, typed(func(in struct {

@@ -32,7 +32,7 @@ func HasAnyPart(parts *types.CopyParts) bool {
 	if parts == nil {
 		return true
 	}
-	return isPartEnabled(parts.Env) || isPartEnabled(parts.Templates) || isPartEnabled(parts.Dev) || isPartEnabled(parts.Prod) || isPartEnabled(parts.Build) || isPartEnabled(parts.Setup)
+	return (parts.RunConfigs != nil && isPartEnabled(parts.RunConfigs)) || isPartEnabled(parts.Env) || isPartEnabled(parts.Templates) || isPartEnabled(parts.Dev) || isPartEnabled(parts.Prod) || isPartEnabled(parts.Build) || isPartEnabled(parts.Setup)
 }
 
 func stringList(v any) (all bool, items []string, skip bool) {
@@ -133,7 +133,33 @@ func (d *DB) CopyFrom(ctx context.Context, sourceID, targetID int64, parts *type
 		tplAll, tplItems, tplSkip = stringList(parts.Templates)
 		cmdParts[types.KindDev], cmdParts[types.KindProd], cmdParts[types.KindBuild], cmdParts[types.KindSetup] = parts.Dev, parts.Prod, parts.Build, parts.Setup
 	}
-	cmdKinds := []string{types.KindDev, types.KindProd, types.KindBuild, types.KindSetup}
+	configs, err := d.ListRunConfigsT(ctx, sourceID)
+	if err != nil {
+		return err
+	}
+	cmdKinds := []string{}
+	cfgs := map[string]types.RunConfig{}
+	for _, cfg := range configs {
+		cmdKinds = append(cmdKinds, cfg.Kind)
+		cfgs[cfg.Kind] = cfg
+	}
+	if parts != nil && parts.RunConfigs != nil {
+		all, keys, skip := stringList(parts.RunConfigs)
+		for _, key := range keys {
+			if _, exists := cfgs[key]; !exists {
+				cmdKinds = append(cmdKinds, key)
+			}
+		}
+		for _, kind := range cmdKinds {
+			cmdParts[kind] = !skip && (all || containsStr(keys, kind))
+		}
+	} else if parts != nil {
+		for _, kind := range cmdKinds {
+			if kind != types.KindDev && kind != types.KindProd && kind != types.KindBuild && kind != types.KindSetup {
+				cmdParts[kind] = false
+			}
+		}
+	}
 	cmdSkip := true
 	for _, kind := range cmdKinds {
 		if _, _, skip := intList(cmdParts[kind]); !skip {
@@ -208,21 +234,21 @@ func (d *DB) CopyFrom(ctx context.Context, sourceID, targetID int64, parts *type
 		if skip {
 			continue
 		}
-		source, err := d.GetRunConfigByConfigSetT(ctx, sourceID, kind)
-		if err != nil {
-			return err
+		sourceCfg, exists := cfgs[kind]
+		if !exists {
+			if err := d.DeleteRunConfig(ctx, DeleteRunConfigParams{ConfigSetID: targetID, Kind: kind}); err != nil {
+				return err
+			}
+			continue
 		}
-		var cmds []types.RunCommandInput
-		mode := DefaultMode(kind)
-		if source != nil {
-			mode = source.Mode
-			for _, c := range source.Commands {
-				if all || containsInt(ids, c.ID) {
-					cmds = append(cmds, types.RunCommandInput{Label: c.Label, Command: c.Command})
-				}
+		cmds := []types.RunCommandInput{}
+		mode := sourceCfg.Mode
+		for _, c := range sourceCfg.Commands {
+			if all || containsInt(ids, c.ID) {
+				cmds = append(cmds, types.RunCommandInput{Label: c.Label, Command: c.Command})
 			}
 		}
-		if _, err := d.UpsertRunConfig(ctx, targetID, kind, &mode, cmds); err != nil {
+		if _, err := d.SaveNamedRun(ctx, targetID, kind, types.RunConfigSaveInput{Name: &sourceCfg.Name, DetectReady: &sourceCfg.DetectReady, Mode: &mode, Commands: cmds}); err != nil {
 			return err
 		}
 	}

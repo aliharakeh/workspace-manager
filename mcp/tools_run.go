@@ -13,9 +13,10 @@ func runTool() mcpTool {
 		Name:        "wm_run",
 		Description: "Run, build and stop apps; check runner status; read recent terminal output. Use wm_wait for completion or ready URLs, and wm_diagnostics for detected errors/warnings without downloading logs. Select a configSet for each start without changing the app's active set. An app runs one session at a time.",
 		Schema: schema("Runner", map[string]any{
-			"action":     map[string]any{"type": "string", "description": "dev, prod, build, setup, stop, reload, status, logs (run is a legacy alias for dev); startAll and stopAll act on every app of a workspace", "enum": []string{"dev", "prod", "run", "build", "setup", "stop", "reload", "status", "logs", "startAll", "stopAll"}},
+			"action":     map[string]any{"type": "string", "description": "start (custom configuration key), dev, prod, build, setup, stop, reload, status, logs (run is a legacy alias for dev); startAll and stopAll act on every app of a workspace", "enum": []string{"start", "dev", "prod", "run", "build", "setup", "stop", "reload", "status", "logs", "startAll", "stopAll"}},
+			"kind":       strProp("start: stable run configuration key, returned by wm_config list_commands"),
 			"app":        strProp(appRefDesc),
-			"configSet":  strProp("config set id or name for dev, prod, run, build or setup; omit for the active set; does not activate it"),
+			"configSet":  strProp("config set id or name for start, dev, prod, run, build or setup; omit for the active set; does not activate it"),
 			"workspace":  strProp("workspace name or id (startAll, stopAll)"),
 			"exclude":    arrProp("apps to leave out, by name or id (startAll, stopAll); apps flagged \"exclude from Start all\" are always left out of startAll", "string"),
 			"sequential": boolProp("startAll: start the apps one after another instead of together"),
@@ -49,7 +50,7 @@ func runTool() mcpTool {
 			}
 			appID := appIDOf(app)
 			switch argStr(args, "action") {
-			case "dev", "prod", "run", "build", "setup":
+			case "start", "dev", "prod", "run", "build", "setup":
 				kind := argStr(args, "action")
 				if kind == "run" {
 					kind = "dev"
@@ -64,6 +65,14 @@ func runTool() mcpTool {
 					method = api.MethodRunnerSetup
 				}
 				params := map[string]any{"appID": appID}
+				if kind == "start" {
+					key, err := need(args, "kind", "the configuration key")
+					if err != nil {
+						return nil, err
+					}
+					params["kind"] = key
+					method = api.MethodRunnerStart
+				}
 				if ref, ok := argOpt(args, "configSet"); ok {
 					set, err := resolveConfigSet(app, ref)
 					if err != nil {

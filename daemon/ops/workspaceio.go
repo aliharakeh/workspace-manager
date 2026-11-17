@@ -17,8 +17,6 @@ import (
 	"workspace-manager/shared/api/types"
 )
 
-var bundleKinds = []string{types.KindSetup, types.KindDev, types.KindBuild, types.KindProd}
-
 // WorkspacesExport bundles a workspace. trusted says whether the caller may
 // receive secrets (the GUI): for any other client, a request for "include" is
 // exported as "placeholder", so private=false values never reach an
@@ -73,7 +71,9 @@ func (o *Ops) WorkspacesExport(id int64, opts types.WorkspaceExportOptions, trus
 			}
 			if p.Command != "" {
 				bs.EnvProvider = &p
-				bundle.Version = 3
+				if bundle.Version < 3 {
+					bundle.Version = 3
+				}
 			}
 		}
 		for _, r := range rows {
@@ -109,6 +109,9 @@ func (o *Ops) WorkspacesExport(id int64, opts types.WorkspaceExportOptions, trus
 				return types.WorkspaceBundle{}, err
 			}
 			cs := bundleConfigSet(d, mode)
+			if len(cs.Commands) > 0 {
+				bundle.Version = 4
+			}
 			if mode == "include" {
 				p, e := o.DB.EnvProvider(o.Ctx(), false, set.ID)
 				if e != nil {
@@ -116,7 +119,9 @@ func (o *Ops) WorkspacesExport(id int64, opts types.WorkspaceExportOptions, trus
 				}
 				if p.Command != "" {
 					cs.EnvProvider = &p
-					bundle.Version = 3
+					if bundle.Version < 3 {
+						bundle.Version = 3
+					}
 				}
 			}
 			ba.ConfigSets = append(ba.ConfigSets, cs)
@@ -183,19 +188,13 @@ func bundleConfigSet(d types.ConfigSetDetail, mode string) types.BundleConfigSet
 			out.Templates = append(out.Templates, types.BundleTemplate{FilePath: t.FilePath, Content: t.Content, Private: t.Private})
 		}
 	}
-	cfgs := map[string]*types.RunConfig{
-		types.KindSetup: d.SetupConfig, types.KindDev: d.DevConfig,
-		types.KindBuild: d.BuildConfig, types.KindProd: d.ProdConfig,
-	}
-	for _, kind := range bundleKinds {
-		list := types.BundleCommandList{Mode: db.DefaultMode(kind), Commands: []types.BundleCommand{}}
-		if c := cfgs[kind]; c != nil {
-			list.Mode = c.Mode
-			for _, cmd := range c.Commands {
-				list.Commands = append(list.Commands, types.BundleCommand{Label: cmd.Label, Command: cmd.Command})
-			}
+	for _, c := range d.RunConfigs {
+		ready := c.DetectReady
+		list := types.BundleCommandList{Name: c.Name, DetectReady: &ready, Mode: c.Mode, Commands: []types.BundleCommand{}}
+		for _, cmd := range c.Commands {
+			list.Commands = append(list.Commands, types.BundleCommand{Label: cmd.Label, Command: cmd.Command})
 		}
-		out.Commands[kind] = list
+		out.Commands[c.Kind] = list
 	}
 	return out
 }
@@ -378,14 +377,23 @@ func importConfigSet(ctx context.Context, q *db.Queries, setID int64, cs types.B
 			return err
 		}
 	}
-	for _, kind := range bundleKinds {
-		list, ok := cs.Commands[kind]
+	for kind, list := range cs.Commands {
 		mode := list.Mode
-		if !ok || mode == "" {
+		if mode == "" {
 			mode = db.DefaultMode(kind)
 		}
 		cfg, err := q.CreateRunConfig(ctx, db.CreateRunConfigParams{ConfigSetID: setID, Kind: kind, Mode: mode})
 		if err != nil {
+			return err
+		}
+		name, ready := list.Name, types.IsServing(kind)
+		if name == "" {
+			name = db.DefaultRunName(kind)
+		}
+		if list.DetectReady != nil {
+			ready = *list.DetectReady
+		}
+		if _, err := q.UpdateRunConfigDetails(ctx, db.UpdateRunConfigDetailsParams{ID: cfg.ID, Name: name, DetectReady: db.BoolInt(ready)}); err != nil {
 			return err
 		}
 		for i, c := range list.Commands {
@@ -437,13 +445,28 @@ func validateBundleApp(a *types.BundleApp) error {
 			seen[p] = true
 			cs.Templates[i].FilePath = p
 		}
+		configNames := map[string]bool{}
 		for kind, l := range cs.Commands {
-			known := false
-			for _, k := range bundleKinds {
-				known = known || k == kind
+			if err := checkConfigKind(kind); err != nil {
+				return err
 			}
-			if !known {
-				return fmt.Errorf("config set %q: unknown command list %q", cs.Name, kind)
+			name := strings.TrimSpace(l.Name)
+			if name == "" {
+				name = db.DefaultRunName(kind)
+			}
+			if len(name) > 128 {
+				return fmt.Errorf("run configuration name is too long")
+			}
+			if configNames[strings.ToLower(name)] {
+				return fmt.Errorf("duplicate run configuration name %q", name)
+			}
+			configNames[strings.ToLower(name)] = true
+			l.Name = name
+			cs.Commands[kind] = l
+			for _, cmd := range l.Commands {
+				if strings.TrimSpace(cmd.Command) == "" {
+					return fmt.Errorf("configuration %q has an empty command", name)
+				}
 			}
 			if l.Mode != "" && l.Mode != "parallel" && l.Mode != "sequential" {
 				return fmt.Errorf("config set %q: unknown mode %q", cs.Name, l.Mode)

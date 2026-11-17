@@ -39,6 +39,7 @@ export type ConfigSet = {
 }
 
 export type ConfigSetDetail = ConfigSet & {
+    run_configs: RunConfig[]
     env_vars: EnvVar[]
     templates: Template[]
     dev_config: RunConfig | null
@@ -53,6 +54,7 @@ export type ConfigSetDetail = ConfigSet & {
  * items: env var keys, template file paths, or source command ids.
  */
 export type CopyParts = {
+    run_configs?: boolean | string[]
     env?: boolean | string[]
     templates?: boolean | string[]
     dev?: boolean | number[]
@@ -90,9 +92,9 @@ export type Template = {
 export type RunMode = 'sequential' | 'parallel'
 
 /**
- * Each config set has setup, dev, build and prod command lists.
+ * Each config set holds any number of named run configurations.
  */
-export type CommandKind = 'dev' | 'prod' | 'build' | 'setup'
+export type CommandKind = string
 
 export type RunCommand = {
     id: number
@@ -104,8 +106,10 @@ export type RunCommand = {
     updated_at: string
 }
 
-/** The command list of one kind of a config set. */
+/** A named command list; kind is its stable key. */
 export type RunConfig = {
+    name: string
+    detect_ready: boolean
     id: number
     config_set_id: number
     kind: CommandKind
@@ -143,6 +147,8 @@ export type ProcessState = {
 }
 
 export type StatusEvent = {
+    configName?: string
+    detectReady?: boolean
     type?: 'status'
     sessionId?: string
     appId: number
@@ -368,7 +374,8 @@ export type ConfigSetCommandDiff = {
 }
 
 export type ConfigSetCommandListDiff = {
-    kind: "setup" | "dev" | "build" | "prod"
+    name: string
+    kind: string
     left_mode: string
     right_mode: string
     status: "same" | "different"
@@ -405,6 +412,8 @@ export type BundleTemplate = {
 }
 
 export type BundleCommandList = {
+    name?: string
+    detect_ready?: boolean
     mode: string
     commands: { label: string | null; command: string }[]
 }
@@ -586,4 +595,22 @@ export type DiagnosticsResult = {
     inputTruncated: boolean
     persistenceError?: string
     detection: string
+}
+
+export type NoteItem = { text: string; done: boolean }
+export type Note = {
+  id: number
+  app_id: number
+  title: string
+  content: string
+  items: NoteItem[]
+  image_path: string
+  created_at: string
+  updated_at: string
+}
+export type NoteSaveInput = {
+  title: string
+  content: string
+  items: NoteItem[]
+  image_data?: string
 }

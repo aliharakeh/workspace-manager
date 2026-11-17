@@ -153,6 +153,15 @@ SELECT * FROM run_configs WHERE config_set_id = ? AND kind = ?;
 -- name: CreateRunConfig :one
 INSERT INTO run_configs (config_set_id, kind, mode) VALUES (?, ?, ?) RETURNING *;
 
+-- name: ListRunConfigs :many
+SELECT * FROM run_configs WHERE config_set_id = ? ORDER BY id;
+
+-- name: UpdateRunConfigDetails :one
+UPDATE run_configs SET name = ?, detect_ready = ?, updated_at = datetime('now') WHERE id = ? RETURNING *;
+
+-- name: DeleteRunConfig :exec
+DELETE FROM run_configs WHERE config_set_id = ? AND kind = ?;
+
 -- name: UpdateRunConfigMode :one
 UPDATE run_configs
 SET mode = ?, updated_at = datetime('now')
@@ -346,3 +355,18 @@ UPDATE runner_diagnostics SET snapshot = ? WHERE app_id = ? AND session_id = ?;
 
 -- name: GetRunnerDiagnostics :one
 SELECT snapshot FROM runner_diagnostics WHERE app_id = ?;
+
+-- name: ListNotes :many
+SELECT * FROM notes WHERE app_id = ? ORDER BY id DESC;
+
+-- name: GetNote :one
+SELECT * FROM notes WHERE id = ? AND app_id = ?;
+
+-- name: CreateNote :one
+INSERT INTO notes(app_id, title, content, items, image) VALUES (?, ?, ?, ?, ?) RETURNING *;
+
+-- name: UpdateNote :one
+UPDATE notes SET title = ?, content = ?, items = ?, image = ?, updated_at = datetime('now') WHERE id = ? AND app_id = ? RETURNING *;
+
+-- name: DeleteNote :execrows
+DELETE FROM notes WHERE id = ? AND app_id = ?;

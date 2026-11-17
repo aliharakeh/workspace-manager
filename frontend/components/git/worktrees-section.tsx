@@ -5,33 +5,27 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { appStateLabel } from "@/lib/app-state"
-import type { CommandKind } from "@/lib/types"
+import { useRunConfigs } from "@/lib/use-run-configs"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   EraserIcon,
   GitBranchIcon,
-  HammerIcon,
   Link2Icon,
   PlayIcon,
   PlusIcon,
   RefreshCwIcon,
-  RocketIcon,
   SquareIcon,
   Trash2Icon,
-  WrenchIcon,
 } from "lucide-react"
 import { BulkBar, IconAction } from "./list-actions"
 import type { GitPanelModel } from "./use-git-panel"
-const START_KINDS: {
-  kind: CommandKind
-  label: string
-  Icon: typeof PlayIcon
-}[] = [
-  { kind: "setup", label: "Setup", Icon: WrenchIcon },
-  { kind: "dev", label: "Dev", Icon: PlayIcon },
-  { kind: "build", label: "Build", Icon: HammerIcon },
-  { kind: "prod", label: "Prod", Icon: RocketIcon },
-]
-
 type WorktreesSectionModel = Pick<
   GitPanelModel,
   | "appId"
@@ -97,6 +91,7 @@ export function WorktreesSection({ model }: { model: WorktreesSectionModel }) {
     removableWorktrees,
     selectedWorktrees,
   } = model
+  const { configs } = useRunConfigs(appId, activeConfigSetId ?? 0)
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -106,8 +101,8 @@ export function WorktreesSection({ model }: { model: WorktreesSectionModel }) {
             <Badge variant="secondary">{worktrees.length}</Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            Setup, Dev, Build and Prod use this app's active config set inside
-            the worktree. Setup first links the shared files.
+            Run any configuration from this app's active config set inside the
+            worktree.
           </p>
         </div>
         <div className="ml-auto flex flex-wrap justify-end gap-2">
@@ -251,16 +246,38 @@ export function WorktreesSection({ model }: { model: WorktreesSectionModel }) {
                         <SquareIcon />
                       </IconAction>
                     ) : (
-                      START_KINDS.map(({ kind, label, Icon }) => (
-                        <IconAction
-                          key={kind}
-                          label={`${label} in this worktree`}
-                          disabled={starting || running || !activeConfigSetId}
-                          onClick={() => void handleStart(w, kind, label)}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={starting || running || !configs.length}
+                            />
+                          }
                         >
-                          <Icon />
-                        </IconAction>
-                      ))
+                          <PlayIcon data-icon="inline-start" />
+                          Run
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                          <DropdownMenuGroup>
+                            <DropdownMenuLabel>
+                              Run in this worktree
+                            </DropdownMenuLabel>
+                            {configs.map((c) => (
+                              <DropdownMenuItem
+                                key={c.kind}
+                                disabled={!c.commands.length}
+                                onClick={() =>
+                                  void handleStart(w, c.kind, c.name)
+                                }
+                              >
+                                {c.name}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
                   </div>
                 ) : null}

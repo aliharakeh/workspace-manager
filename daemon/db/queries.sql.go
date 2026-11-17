@@ -154,6 +154,40 @@ func (q *Queries) CreateEnvVar(ctx context.Context, arg CreateEnvVarParams) (Env
 	return i, err
 }
 
+const createNote = `-- name: CreateNote :one
+INSERT INTO notes(app_id, title, content, items, image) VALUES (?, ?, ?, ?, ?) RETURNING id, app_id, title, content, items, image, created_at, updated_at
+`
+
+type CreateNoteParams struct {
+	AppID   int64  `json:"app_id"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
+	Items   string `json:"items"`
+	Image   string `json:"image"`
+}
+
+func (q *Queries) CreateNote(ctx context.Context, arg CreateNoteParams) (Note, error) {
+	row := q.db.QueryRowContext(ctx, createNote,
+		arg.AppID,
+		arg.Title,
+		arg.Content,
+		arg.Items,
+		arg.Image,
+	)
+	var i Note
+	err := row.Scan(
+		&i.ID,
+		&i.AppID,
+		&i.Title,
+		&i.Content,
+		&i.Items,
+		&i.Image,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createReadyUrlPattern = `-- name: CreateReadyUrlPattern :one
 INSERT INTO ready_url_patterns (key, label, pattern, flags, sort_order)
 VALUES (?, ?, ?, ?, ?)
@@ -224,7 +258,7 @@ func (q *Queries) CreateRunCommand(ctx context.Context, arg CreateRunCommandPara
 }
 
 const createRunConfig = `-- name: CreateRunConfig :one
-INSERT INTO run_configs (config_set_id, kind, mode) VALUES (?, ?, ?) RETURNING id, config_set_id, kind, mode, created_at, updated_at
+INSERT INTO run_configs (config_set_id, kind, mode) VALUES (?, ?, ?) RETURNING id, config_set_id, kind, name, detect_ready, mode, created_at, updated_at
 `
 
 type CreateRunConfigParams struct {
@@ -240,6 +274,8 @@ func (q *Queries) CreateRunConfig(ctx context.Context, arg CreateRunConfigParams
 		&i.ID,
 		&i.ConfigSetID,
 		&i.Kind,
+		&i.Name,
+		&i.DetectReady,
 		&i.Mode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -471,6 +507,23 @@ func (q *Queries) DeleteEnvVar(ctx context.Context, id int64) (int64, error) {
 	return result.RowsAffected()
 }
 
+const deleteNote = `-- name: DeleteNote :execrows
+DELETE FROM notes WHERE id = ? AND app_id = ?
+`
+
+type DeleteNoteParams struct {
+	ID    int64 `json:"id"`
+	AppID int64 `json:"app_id"`
+}
+
+func (q *Queries) DeleteNote(ctx context.Context, arg DeleteNoteParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteNote, arg.ID, arg.AppID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteOwnEnvVarsByConfigSet = `-- name: DeleteOwnEnvVarsByConfigSet :exec
 DELETE FROM env_vars WHERE config_set_id = ? AND shared_var_id IS NULL
 `
@@ -498,6 +551,20 @@ DELETE FROM run_commands WHERE run_config_id = ?
 
 func (q *Queries) DeleteRunCommands(ctx context.Context, runConfigID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteRunCommands, runConfigID)
+	return err
+}
+
+const deleteRunConfig = `-- name: DeleteRunConfig :exec
+DELETE FROM run_configs WHERE config_set_id = ? AND kind = ?
+`
+
+type DeleteRunConfigParams struct {
+	ConfigSetID int64  `json:"config_set_id"`
+	Kind        string `json:"kind"`
+}
+
+func (q *Queries) DeleteRunConfig(ctx context.Context, arg DeleteRunConfigParams) error {
+	_, err := q.db.ExecContext(ctx, deleteRunConfig, arg.ConfigSetID, arg.Kind)
 	return err
 }
 
@@ -731,6 +798,31 @@ func (q *Queries) GetEnvVarByKey(ctx context.Context, arg GetEnvVarByKeyParams) 
 	return i, err
 }
 
+const getNote = `-- name: GetNote :one
+SELECT id, app_id, title, content, items, image, created_at, updated_at FROM notes WHERE id = ? AND app_id = ?
+`
+
+type GetNoteParams struct {
+	ID    int64 `json:"id"`
+	AppID int64 `json:"app_id"`
+}
+
+func (q *Queries) GetNote(ctx context.Context, arg GetNoteParams) (Note, error) {
+	row := q.db.QueryRowContext(ctx, getNote, arg.ID, arg.AppID)
+	var i Note
+	err := row.Scan(
+		&i.ID,
+		&i.AppID,
+		&i.Title,
+		&i.Content,
+		&i.Items,
+		&i.Image,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getReadyUrlPattern = `-- name: GetReadyUrlPattern :one
 SELECT id, "key", label, pattern, flags, sort_order, created_at, updated_at FROM ready_url_patterns WHERE id = ?
 `
@@ -752,7 +844,7 @@ func (q *Queries) GetReadyUrlPattern(ctx context.Context, id int64) (ReadyUrlPat
 }
 
 const getRunConfigByConfigSet = `-- name: GetRunConfigByConfigSet :one
-SELECT id, config_set_id, kind, mode, created_at, updated_at FROM run_configs WHERE config_set_id = ? AND kind = ?
+SELECT id, config_set_id, kind, name, detect_ready, mode, created_at, updated_at FROM run_configs WHERE config_set_id = ? AND kind = ?
 `
 
 type GetRunConfigByConfigSetParams struct {
@@ -768,6 +860,8 @@ func (q *Queries) GetRunConfigByConfigSet(ctx context.Context, arg GetRunConfigB
 		&i.ID,
 		&i.ConfigSetID,
 		&i.Kind,
+		&i.Name,
+		&i.DetectReady,
 		&i.Mode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -1158,6 +1252,42 @@ func (q *Queries) ListLinkedSharedSetIDs(ctx context.Context) ([]*int64, error) 
 	return items, nil
 }
 
+const listNotes = `-- name: ListNotes :many
+SELECT id, app_id, title, content, items, image, created_at, updated_at FROM notes WHERE app_id = ? ORDER BY id DESC
+`
+
+func (q *Queries) ListNotes(ctx context.Context, appID int64) ([]Note, error) {
+	rows, err := q.db.QueryContext(ctx, listNotes, appID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Note{}
+	for rows.Next() {
+		var i Note
+		if err := rows.Scan(
+			&i.ID,
+			&i.AppID,
+			&i.Title,
+			&i.Content,
+			&i.Items,
+			&i.Image,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listReadyUrlPatterns = `-- name: ListReadyUrlPatterns :many
 SELECT id, "key", label, pattern, flags, sort_order, created_at, updated_at FROM ready_url_patterns ORDER BY sort_order ASC, id ASC
 `
@@ -1216,6 +1346,42 @@ func (q *Queries) ListRunCommands(ctx context.Context, runConfigID int64) ([]Run
 			&i.Label,
 			&i.Command,
 			&i.SortOrder,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRunConfigs = `-- name: ListRunConfigs :many
+SELECT id, config_set_id, kind, name, detect_ready, mode, created_at, updated_at FROM run_configs WHERE config_set_id = ? ORDER BY id
+`
+
+func (q *Queries) ListRunConfigs(ctx context.Context, configSetID int64) ([]RunConfig, error) {
+	rows, err := q.db.QueryContext(ctx, listRunConfigs, configSetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RunConfig{}
+	for rows.Next() {
+		var i RunConfig
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConfigSetID,
+			&i.Kind,
+			&i.Name,
+			&i.DetectReady,
+			&i.Mode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -1708,7 +1874,7 @@ const touchRunConfig = `-- name: TouchRunConfig :one
 UPDATE run_configs
 SET updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, config_set_id, kind, mode, created_at, updated_at
+RETURNING id, config_set_id, kind, name, detect_ready, mode, created_at, updated_at
 `
 
 func (q *Queries) TouchRunConfig(ctx context.Context, id int64) (RunConfig, error) {
@@ -1718,6 +1884,8 @@ func (q *Queries) TouchRunConfig(ctx context.Context, id int64) (RunConfig, erro
 		&i.ID,
 		&i.ConfigSetID,
 		&i.Kind,
+		&i.Name,
+		&i.DetectReady,
 		&i.Mode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -1861,6 +2029,42 @@ func (q *Queries) UpdateEnvVar(ctx context.Context, arg UpdateEnvVarParams) (Env
 	return i, err
 }
 
+const updateNote = `-- name: UpdateNote :one
+UPDATE notes SET title = ?, content = ?, items = ?, image = ?, updated_at = datetime('now') WHERE id = ? AND app_id = ? RETURNING id, app_id, title, content, items, image, created_at, updated_at
+`
+
+type UpdateNoteParams struct {
+	Title   string `json:"title"`
+	Content string `json:"content"`
+	Items   string `json:"items"`
+	Image   string `json:"image"`
+	ID      int64  `json:"id"`
+	AppID   int64  `json:"app_id"`
+}
+
+func (q *Queries) UpdateNote(ctx context.Context, arg UpdateNoteParams) (Note, error) {
+	row := q.db.QueryRowContext(ctx, updateNote,
+		arg.Title,
+		arg.Content,
+		arg.Items,
+		arg.Image,
+		arg.ID,
+		arg.AppID,
+	)
+	var i Note
+	err := row.Scan(
+		&i.ID,
+		&i.AppID,
+		&i.Title,
+		&i.Content,
+		&i.Items,
+		&i.Image,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateReadyUrlPattern = `-- name: UpdateReadyUrlPattern :one
 UPDATE ready_url_patterns
 SET label = ?, pattern = ?, flags = ?, updated_at = datetime('now')
@@ -1921,11 +2125,37 @@ func (q *Queries) UpdateReadyUrlPatternSeed(ctx context.Context, arg UpdateReady
 	return err
 }
 
+const updateRunConfigDetails = `-- name: UpdateRunConfigDetails :one
+UPDATE run_configs SET name = ?, detect_ready = ?, updated_at = datetime('now') WHERE id = ? RETURNING id, config_set_id, kind, name, detect_ready, mode, created_at, updated_at
+`
+
+type UpdateRunConfigDetailsParams struct {
+	Name        string `json:"name"`
+	DetectReady int64  `json:"detect_ready"`
+	ID          int64  `json:"id"`
+}
+
+func (q *Queries) UpdateRunConfigDetails(ctx context.Context, arg UpdateRunConfigDetailsParams) (RunConfig, error) {
+	row := q.db.QueryRowContext(ctx, updateRunConfigDetails, arg.Name, arg.DetectReady, arg.ID)
+	var i RunConfig
+	err := row.Scan(
+		&i.ID,
+		&i.ConfigSetID,
+		&i.Kind,
+		&i.Name,
+		&i.DetectReady,
+		&i.Mode,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateRunConfigMode = `-- name: UpdateRunConfigMode :one
 UPDATE run_configs
 SET mode = ?, updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, config_set_id, kind, mode, created_at, updated_at
+RETURNING id, config_set_id, kind, name, detect_ready, mode, created_at, updated_at
 `
 
 type UpdateRunConfigModeParams struct {
@@ -1940,6 +2170,8 @@ func (q *Queries) UpdateRunConfigMode(ctx context.Context, arg UpdateRunConfigMo
 		&i.ID,
 		&i.ConfigSetID,
 		&i.Kind,
+		&i.Name,
+		&i.DetectReady,
 		&i.Mode,
 		&i.CreatedAt,
 		&i.UpdatedAt,

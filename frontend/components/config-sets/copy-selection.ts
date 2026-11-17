@@ -5,10 +5,7 @@ export type CategorySel = { all: boolean; items: string[] }
 export type CopySel = {
   env: CategorySel
   templates: CategorySel
-  dev: CategorySel
-  prod: CategorySel
-  build: CategorySel
-  setup: CategorySel
+  run_configs: CategorySel
 }
 
 function blankCategory(): CategorySel {
@@ -19,10 +16,7 @@ export function blankSel(): CopySel {
   return {
     env: blankCategory(),
     templates: blankCategory(),
-    dev: blankCategory(),
-    prod: blankCategory(),
-    build: blankCategory(),
-    setup: blankCategory(),
+    run_configs: blankCategory(),
   }
 }
 
@@ -31,19 +25,15 @@ function categoryToPart(sel: CategorySel): boolean | string[] {
   return sel.items.length > 0 ? sel.items : false
 }
 
-function runToPart(sel: CategorySel): boolean | number[] {
-  if (sel.all) return true
-  return sel.items.length > 0 ? sel.items.map(Number) : false
-}
-
 export function selToParts(sel: CopySel): CopyParts {
   return {
     env: categoryToPart(sel.env),
     templates: categoryToPart(sel.templates),
-    dev: runToPart(sel.dev),
-    prod: runToPart(sel.prod),
-    build: runToPart(sel.build),
-    setup: runToPart(sel.setup),
+    dev: false,
+    prod: false,
+    build: false,
+    setup: false,
+    run_configs: categoryToPart(sel.run_configs),
   }
 }
 
@@ -56,9 +46,6 @@ export function partsEnabled(parts: CopyParts): boolean {
   return (
     isPartEnabled(parts.env) ||
     isPartEnabled(parts.templates) ||
-    isPartEnabled(parts.dev) ||
-    isPartEnabled(parts.prod) ||
-    isPartEnabled(parts.build) ||
-    isPartEnabled(parts.setup)
+    isPartEnabled(parts.run_configs)
   )
 }

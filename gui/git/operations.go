@@ -49,11 +49,10 @@ func (g *Git) appProjectDir(appID int64) (string, error) {
 }
 
 func checkConfigKind(kind string) error {
-	switch kind {
-	case types.KindDev, types.KindProd, types.KindBuild, types.KindSetup:
-		return nil
+	if strings.TrimSpace(kind) == "" {
+		return fmt.Errorf("select a run configuration")
 	}
-	return fmt.Errorf("kind must be dev, prod, build or setup")
+	return nil
 }
 
 func (g *Git) Info(appID int64) (types.GitInfo, error) {

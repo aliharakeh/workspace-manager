@@ -1,4 +1,5 @@
 import type {
+    NoteSaveInput,
     ConfigSetDetail,
     DiagnosticsQuery,
     DiagnosticsResult,
@@ -87,6 +88,13 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 export const api = {
+    notes: {
+        list: (appId: number) => call(() => Go.NotesList(appId)),
+        save: (appId: number, id: number, body: NoteSaveInput) =>
+            call(() => Go.NotesSave(appId, id, types.NoteSaveInput.createFrom(body))),
+        delete: (appId: number, id: number) => call(() => Go.NotesDelete(appId, id)),
+        image: (appId: number, id: number) => call(() => Go.NotesImage(appId, id)),
+    },
     envProvider: {
         run: (shared: boolean, id: number) => Go.EnvProviderRun(shared, id),
         stop: () => Go.EnvProviderStop(),
@@ -258,14 +266,18 @@ export const api = {
         list: (appId: number) => call(() => Go.PackageScriptsList(appId)),
     },
 
-    /** The active config set's setup, dev, build or prod commands, by `kind`. */
+    /** The active config set's named run configurations, addressed by stable key. */
     runConfig: {
+        list: (appId: number, configSetId = 0) => call(() => Go.RunConfigList(appId, configSetId) as Promise<RunConfig[]>),
+        delete: (appId: number, kind: string) => call(() => Go.RunConfigDelete(appId, kind)),
         get: (appId: number, kind: CommandKind) =>
             call(() => Go.RunConfigGet(appId, kind) as Promise<RunConfig>),
         save: (
             appId: number,
             kind: CommandKind,
             body: {
+                name?: string
+                detect_ready?: boolean
                 mode?: RunMode
                 commands?: Array<{ label?: string | null; command: string }>
             },
@@ -281,6 +293,7 @@ export const api = {
     },
 
     runner: {
+        start: (appId: number, kind: string, configSetId = 0) => call(() => Go.RunnerStart(appId, kind, configSetId) as Promise<StatusEvent>),
         status: (appId: number) => call(() => Go.RunnerStatus(appId) as Promise<StatusEvent>),
         workspaceStatus: (workspaceId: number) =>
             call(() => Go.RunnerWorkspaceStatus(workspaceId) as Promise<StatusEvent[]>),
