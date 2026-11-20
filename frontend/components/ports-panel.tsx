@@ -103,13 +103,14 @@ export function PortsPanel({ active }: PortsPanelProps) {
       <div className="flex min-h-0 flex-1 flex-col gap-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-medium">Listening ports</p>
+            <p className="text-sm font-medium">
+              Listening ports{" "}
+              <span className="font-normal text-muted-foreground">
+                {range.min}–{range.max}
+              </span>
+            </p>
             <Badge variant="secondary">{processes.length}</Badge>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Processes on ports {range.min}–{range.max}. Kill frees a port for
-            other apps.
-          </p>
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

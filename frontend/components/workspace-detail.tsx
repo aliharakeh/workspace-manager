@@ -26,9 +26,9 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { api, handleReadyUrlClick } from "@/lib/api"
-import { isTaskKind } from "@/lib/app-state"
+import { appVisualState } from "@/lib/app-state"
 import type { App, StatusEvent, Workspace } from "@/lib/types"
-import { AppRunControls } from "@/components/app-run-controls"
+import { AppRunControls, AppStateBadge, AppStatusDot } from "@/components/app-run-controls"
 import { AppScriptButtons } from "@/components/script-run-buttons"
 import { ConfigSetPicker } from "@/components/config-set-picker"
 import { OpenEditorButton } from "@/components/open-editor-button"
@@ -155,6 +155,10 @@ export function WorkspaceDetail({
     apps.filter((app) => statusByAppId[app.id]?.running).length -
     buildingCount -
     settingUpCount
+  const failedCount = apps.filter((app) => {
+    const status = statusByAppId[app.id]
+    return !status?.running && !!status?.error
+  }).length
 
   if (apps.length === 0) {
     return (
@@ -199,20 +203,41 @@ export function WorkspaceDetail({
             <Badge variant="outline">
               {apps.length} app{apps.length === 1 ? "" : "s"}
             </Badge>
-            <Badge variant={runningCount > 0 ? "default" : "outline"}>
+            <Badge
+              variant="outline"
+              className={cn(
+                runningCount > 0 &&
+                  "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+              )}
+            >
+              {runningCount > 0 ? <AppStatusDot running /> : null}
               {runningCount} running
             </Badge>
             {buildingCount > 0 ? (
-              <Badge variant="default">{buildingCount} building</Badge>
+              <Badge
+                variant="outline"
+                className="border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-400"
+              >
+                {buildingCount} building
+              </Badge>
             ) : null}
             {settingUpCount > 0 ? (
-              <Badge variant="default">{settingUpCount} setting up</Badge>
+              <Badge
+                variant="outline"
+                className="border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-400"
+              >
+                {settingUpCount} setting up
+              </Badge>
+            ) : null}
+            {failedCount > 0 ? (
+              <Badge
+                variant="outline"
+                className="border-red-500/40 bg-red-500/15 text-red-700 dark:text-red-400"
+              >
+                {failedCount} failed
+              </Badge>
             ) : null}
           </div>
-          <p className="text-sm text-muted-foreground">
-            Overview of apps in this workspace. Open an app for env, templates,
-            and logs. Drag an app by its handle to reorder it.
-          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2 pt-1.5">
           <WorkspaceRunControls
@@ -280,7 +305,7 @@ function SortableAppCard({
   } = useSortable({ id: app.id })
 
   const running = !!status?.running
-  const task = running && isTaskKind(status?.kind)
+  const state = appVisualState(running, status?.kind, status?.error)
   const readyUrls = running
     ? [...new Set((status?.processes ?? []).flatMap((p) => p.urls ?? []))]
     : []
@@ -296,12 +321,17 @@ function SortableAppCard({
     >
       <div
         className={cn(
-          "flex h-full flex-col gap-3 rounded-xl bg-background p-4",
-          !running
-            ? "ring-1 ring-foreground/10"
-            : task
-              ? "ring-2 ring-amber-500"
-              : "ring-2 ring-emerald-500",
+          "relative flex h-full flex-col gap-3 overflow-hidden rounded-xl bg-background p-4",
+          // A colored edge on the left plus a tinted ring and fill make the
+          // state readable at a glance across the grid.
+          "before:absolute before:inset-y-0 before:left-0 before:w-1",
+          state === "running" &&
+            "bg-emerald-500/[0.04] ring-2 ring-emerald-500 before:bg-emerald-500",
+          state === "task" &&
+            "bg-amber-500/[0.04] ring-2 ring-amber-500 before:bg-amber-500",
+          state === "failed" &&
+            "bg-red-500/[0.04] ring-2 ring-red-500/70 before:bg-red-500",
+          state === "idle" && "ring-1 ring-foreground/10",
           isDragging && "shadow-lg"
         )}
       >
@@ -311,8 +341,16 @@ function SortableAppCard({
             className="min-w-0 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => onSelectApp(app.id)}
           >
-            <span className="block truncate text-base font-semibold tracking-tight text-foreground">
-              {app.name}
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-base font-semibold tracking-tight text-foreground">
+                {app.name}
+              </span>
+              <AppStateBadge
+                running={running}
+                kind={status?.kind}
+                configName={status?.configName}
+                error={status?.error}
+              />
             </span>
             <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
               {app.project_path}

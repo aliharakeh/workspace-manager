@@ -391,10 +391,6 @@ export function EnvVarsPanel({
                   </Button>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Read-only here. Change them in the workspace&apos;s shared
-                config and every config set using them follows.
-              </p>
               {filteredShared.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   {sharedVars.length === 0

@@ -10,7 +10,7 @@ import (
 func templateTool() mcpTool {
 	return mcpTool{
 		Name:        "wm_template",
-		Description: "Manage an app's file templates (generated config files) on any config set (the active one by default).",
+		Description: "Manage an app's file templates (generated config files) on any config set (the active one by default). At run start each template is rendered into its file (relative to the app folder): an existing file is replaced and restored when the run stops; a file (or folder) that does not exist yet is created and removed when the run stops.",
 		Schema: schema("File templates", map[string]any{
 			"action":  map[string]any{"type": "string", "description": "list, add, edit, delete", "enum": []string{"list", "add", "edit", "delete"}},
 			"app":     strProp(appRefDesc),

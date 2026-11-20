@@ -89,22 +89,23 @@ export function WorkspaceRunControls({
   return (
     <div className="flex items-center gap-2">
       <Button
-        variant="outline"
+        variant="run"
         size="sm"
         disabled={busy !== null || includedCount === 0}
         onClick={() => void run("start")}
       >
-        <PlayIcon data-icon="inline-start" />
-        Start all
+        <PlayIcon data-icon="inline-start" className="fill-current" />
+        {busy === "start" ? "Starting…" : "Start all"}
       </Button>
       <Button
-        variant="outline"
+        // Red only while there is something to stop.
+        variant={anyRunning ? "stop" : "outline"}
         size="sm"
         disabled={busy !== null || !anyRunning}
         onClick={() => void run("stop")}
       >
-        <SquareIcon data-icon="inline-start" />
-        Stop all
+        <SquareIcon data-icon="inline-start" className="fill-current" />
+        {busy === "stop" ? "Stopping…" : "Stop all"}
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger

@@ -278,7 +278,7 @@ export function CommandConfigPanel({
                         Running {name}
                     </p>
                     <Button
-                        variant="secondary"
+                        variant="stop"
                         disabled={saving}
                         onClick={async () => {
                             setSaving(true)
@@ -291,7 +291,7 @@ export function CommandConfigPanel({
                             }
                         }}
                     >
-                        <SquareIcon data-icon="inline-start" />
+                        <SquareIcon data-icon="inline-start" className="fill-current" />
                         Stop
                     </Button>
                 </div>
@@ -478,11 +478,12 @@ export function CommandConfigPanel({
             </fieldset>
             {!running ? (
                 <Button
+                    variant="run"
                     className="self-start"
                     disabled={saving || anyRunning || commands.length === 0}
                     onClick={() => void handleSave(true)}
                 >
-                    <PlayIcon data-icon="inline-start" />
+                    <PlayIcon data-icon="inline-start" className="fill-current" />
                     Save & run
                 </Button>
             ) : null}

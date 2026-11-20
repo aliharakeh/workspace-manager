@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
-import { appStateLabel } from "@/lib/app-state"
+import { AppStateBadge } from "@/components/app-run-controls"
 import { useRunConfigs } from "@/lib/use-run-configs"
 import {
   DropdownMenu,
@@ -100,10 +100,6 @@ export function WorktreesSection({ model }: { model: WorktreesSectionModel }) {
             <p className="text-sm font-medium">Worktrees</p>
             <Badge variant="secondary">{worktrees.length}</Badge>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Run any configuration from this app's active config set inside the
-            worktree.
-          </p>
         </div>
         <div className="ml-auto flex flex-wrap justify-end gap-2">
           <Button
@@ -211,12 +207,15 @@ export function WorktreesSection({ model }: { model: WorktreesSectionModel }) {
                       <Badge variant="destructive">missing</Badge>
                     ) : null}
                     {runningIn(w) ? (
-                      <Badge variant="outline">
-                        {appStateLabel(true, status?.kind)}
-                        {setName(status?.configSetId)
-                          ? ` · ${setName(status?.configSetId)}`
-                          : ""}
-                      </Badge>
+                      <AppStateBadge
+                        running
+                        kind={status?.kind}
+                        configName={
+                          [status?.configName, setName(status?.configSetId)]
+                            .filter(Boolean)
+                            .join(" · ") || undefined
+                        }
+                      />
                     ) : null}
                   </div>
                   <p
@@ -240,10 +239,11 @@ export function WorktreesSection({ model }: { model: WorktreesSectionModel }) {
                     {runningIn(w) ? (
                       <IconAction
                         label="Stop"
+                        variant="stop"
                         disabled={starting}
                         onClick={() => void handleStop()}
                       >
-                        <SquareIcon />
+                        <SquareIcon className="fill-current" />
                       </IconAction>
                     ) : (
                       <DropdownMenu>
@@ -251,12 +251,12 @@ export function WorktreesSection({ model }: { model: WorktreesSectionModel }) {
                           render={
                             <Button
                               size="sm"
-                              variant="outline"
+                              variant="run"
                               disabled={starting || running || !configs.length}
                             />
                           }
                         >
-                          <PlayIcon data-icon="inline-start" />
+                          <PlayIcon data-icon="inline-start" className="fill-current" />
                           Run
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>

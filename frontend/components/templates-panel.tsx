@@ -378,11 +378,7 @@ export function TemplatesPanel({ appId }: TemplatesPanelProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">
-          Each template targets a project file. Content starts as a copy of that
-          file — add variables, then save.
-        </p>
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <Button disabled={adding} onClick={() => void handleAdd()}>
           {adding ? (
             "Browsing…"

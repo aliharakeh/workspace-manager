@@ -420,10 +420,7 @@ export function NotesPanel({
 
   return (
     <div className="flex flex-col gap-4 pb-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Ideas, references and to-dos for this app.
-        </p>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <Button size="sm" onClick={() => setEditor({ note: null })}>
           <PlusIcon data-icon="inline-start" />
           Add note

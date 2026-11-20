@@ -362,10 +362,6 @@ export function ConfigSetSwitcher({
               : ""}
           </p>
         ) : null}
-        <p className="text-xs text-muted-foreground">
-          The active set supplies env vars, templates, and Setup, Dev, Build and
-          Prod commands. Switching sets applies to the next start or reload.
-        </p>
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

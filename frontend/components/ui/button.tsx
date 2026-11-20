@@ -18,6 +18,10 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
+        // Starts an app (or a run): solid green.
+        run: "bg-emerald-600 text-white shadow-xs hover:bg-emerald-700 focus-visible:border-emerald-600 focus-visible:ring-emerald-600/30 dark:bg-emerald-600 dark:hover:bg-emerald-500",
+        // Stops a running app: solid red.
+        stop: "bg-red-600 text-white shadow-xs hover:bg-red-700 focus-visible:border-red-600 focus-visible:ring-red-600/30 dark:bg-red-600 dark:hover:bg-red-500",
       },
       size: {
         default:

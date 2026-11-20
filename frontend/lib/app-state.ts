@@ -12,3 +12,18 @@ export function appStateLabel(running: boolean, kind?: string) {
   if (kind === "prod") return "Running prod"
   return "Running"
 }
+
+/**
+ * The visual state of an app: running (a run), task (build/setup going),
+ * failed (stopped with an error from its last session) or idle.
+ */
+export type AppVisualState = "running" | "task" | "failed" | "idle"
+
+export function appVisualState(
+  running: boolean,
+  kind?: string,
+  error?: string
+): AppVisualState {
+  if (running) return isTaskKind(kind) ? "task" : "running"
+  return error ? "failed" : "idle"
+}

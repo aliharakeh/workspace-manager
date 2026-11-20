@@ -301,9 +301,6 @@ export function ReadyUrlPatternsPanel({ active }: ReadyUrlPatternsPanelProps) {
           <p className="text-sm font-medium">Log URL patterns</p>
           <Badge variant="secondary">{patterns.length}</Badge>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Detect ready URLs from process logs. First matching pattern wins.
-        </p>
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

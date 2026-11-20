@@ -86,10 +86,6 @@ export function BranchesSection({ model }: { model: BranchesSectionModel }) {
                 : localBranches.length}
             </Badge>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Create, rename and delete local branches. A branch checked out in a
-            worktree cannot be deleted.
-          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <DateRangeFilter

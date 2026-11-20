@@ -137,7 +137,7 @@ export function RunConfigurationsPanel({
             Running {status.configName || status.kind}
           </p>
           <Button
-            variant="secondary"
+            variant="stop"
             disabled={busy}
             onClick={async () => {
               setBusy(true)
@@ -150,7 +150,7 @@ export function RunConfigurationsPanel({
               }
             }}
           >
-            <SquareIcon data-icon="inline-start" />
+            <SquareIcon data-icon="inline-start" className="fill-current" />
             Stop
           </Button>
         </div>

@@ -45,9 +45,6 @@ export function NotificationsPanel() {
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium">System notifications</p>
-        <p className="text-sm text-muted-foreground">
-          Show an OS notification when an app starts, finishes, or fails.
-        </p>
       </div>
 
       <ul className="divide-y overflow-hidden rounded-lg border">

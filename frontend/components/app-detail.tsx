@@ -8,11 +8,10 @@ import {
 import { handleReadyUrlClick } from "@/lib/api"
 import type { App, StatusEvent } from "@/lib/types"
 import type { AppTab } from "@/lib/routes"
-import { AppRunControls } from "@/components/app-run-controls"
+import { AppRunControls, AppStateBadge } from "@/components/app-run-controls"
 import { AppScriptButtons } from "@/components/script-run-buttons"
 import { OpenEditorButton } from "@/components/open-editor-button"
 import { OpenFolderButton } from "@/components/open-folder-button"
-import { appStateLabel } from "@/lib/app-state"
 import { ConfigSetSwitcher } from "@/components/config-set-switcher"
 import { EnvVarsPanel } from "@/components/env-vars-panel"
 import { TemplatesPanel } from "@/components/templates-panel"
@@ -21,7 +20,6 @@ import { NotesPanel } from "@/components/notes-panel"
 import { LogsPanel } from "@/components/logs-panel"
 import { GitPanel } from "@/components/git-panel"
 import { Button, buttonVariants } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -88,11 +86,12 @@ export function AppDetail({
             <h1 className="truncate text-xl font-medium tracking-tight">
               {app.name}
             </h1>
-            <Badge variant={running ? "default" : "outline"}>
-              {running && status?.configName
-                ? `Running ${status.configName}`
-                : appStateLabel(running, status?.kind)}
-            </Badge>
+            <AppStateBadge
+              running={running}
+              kind={status?.kind}
+              configName={status?.configName}
+              error={status?.error}
+            />
           </div>
           <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
             {app.project_path}

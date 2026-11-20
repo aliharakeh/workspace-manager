@@ -7,7 +7,11 @@ import {
   SquareIcon,
 } from "lucide-react"
 import { api } from "@/lib/api"
-import { appStateLabel, isTaskKind } from "@/lib/app-state"
+import {
+  appStateLabel,
+  appVisualState,
+  type AppVisualState,
+} from "@/lib/app-state"
 import type { StatusEvent } from "@/lib/types"
 import { useRunConfigs } from "@/lib/use-run-configs"
 import { Button } from "@/components/ui/button"
@@ -70,8 +74,13 @@ export function AppRunControls({
     >
       <Button
         type="button"
-        variant={compact ? "ghost" : running ? "secondary" : "default"}
+        variant={running ? "stop" : compact ? "ghost" : "run"}
         size={compact ? "icon-xs" : "sm"}
+        className={cn(
+          // In the sidebar an idle app keeps a quiet button with a green icon,
+          // so a list of apps does not turn into a wall of green.
+          compact && !running && "text-emerald-600 dark:text-emerald-500"
+        )}
         title={error ?? label}
         aria-label={label}
         disabled={
@@ -82,9 +91,9 @@ export function AppRunControls({
         onClick={() => void action(running ? "stop" : "run")}
       >
         {running ? (
-          <SquareIcon data-icon="inline-start" />
+          <SquareIcon data-icon="inline-start" className="fill-current" />
         ) : (
-          <PlayIcon data-icon="inline-start" />
+          <PlayIcon data-icon="inline-start" className="fill-current" />
         )}
         {compact ? null : running ? "Stop" : (selected?.name ?? "Run")}
       </Button>
@@ -133,29 +142,90 @@ export function AppRunControls({
   )
 }
 
+const DOT_COLOR: Record<AppVisualState, string> = {
+  running: "bg-emerald-500",
+  task: "bg-amber-500",
+  failed: "bg-red-500",
+  idle: "bg-muted-foreground/35",
+}
+
+/** A small dot for an app's state; it pulses while something is going. */
 export function AppStatusDot({
   running,
   kind,
+  error,
   className,
 }: {
   running: boolean
   kind?: string
+  error?: string
   className?: string
 }) {
-  const label = appStateLabel(running, kind)
+  const state = appVisualState(running, kind, error)
+  const label = state === "failed" ? "Failed" : appStateLabel(running, kind)
   return (
     <span
+      className={cn("relative inline-flex size-2 shrink-0", className)}
+      title={state === "failed" ? error : label}
+      aria-label={label}
+      role="img"
+    >
+      {running ? (
+        <span
+          className={cn(
+            "absolute inset-0 animate-ping rounded-full opacity-60",
+            DOT_COLOR[state]
+          )}
+        />
+      ) : null}
+      <span
+        className={cn("relative size-2 rounded-full", DOT_COLOR[state])}
+      />
+    </span>
+  )
+}
+
+const BADGE_STYLE: Record<AppVisualState, string> = {
+  running:
+    "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  task: "border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  failed: "border-red-500/40 bg-red-500/15 text-red-700 dark:text-red-400",
+  idle: "border-border bg-muted text-muted-foreground",
+}
+
+/** A colored pill with a status dot: Running …, Building, Failed or Idle. */
+export function AppStateBadge({
+  running,
+  kind,
+  configName,
+  error,
+  className,
+}: {
+  running: boolean
+  kind?: string
+  configName?: string
+  error?: string
+  className?: string
+}) {
+  const state = appVisualState(running, kind, error)
+  const label =
+    state === "failed"
+      ? "Failed"
+      : state === "running" && configName
+        ? `Running ${configName}`
+        : appStateLabel(running, kind)
+  return (
+    <span
+      role="status"
+      title={state === "failed" ? error : label}
       className={cn(
-        "size-2 shrink-0 rounded-full",
-        !running
-          ? "bg-muted-foreground/35"
-          : isTaskKind(kind)
-            ? "bg-amber-500"
-            : "bg-emerald-500",
+        "inline-flex h-5 w-fit shrink-0 items-center gap-1.5 rounded-4xl border px-2 text-xs font-medium whitespace-nowrap",
+        BADGE_STYLE[state],
         className
       )}
-      title={label}
-      aria-label={label}
-    />
+    >
+      <AppStatusDot running={running} kind={kind} error={error} />
+      {label}
+    </span>
   )
 }

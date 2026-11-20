@@ -197,10 +197,7 @@ export function BlueprintsPanel({ active }: BlueprintsPanelProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">
-          Reusable recipes for creating a new app in any workspace.
-        </p>
+      <div className="flex flex-wrap items-center justify-end gap-2">
         {draft ? null : (
           <Button onClick={() => startEdit(null)}>
             <PlusIcon data-icon="inline-start" />

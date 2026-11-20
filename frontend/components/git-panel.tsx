@@ -42,9 +42,6 @@ export function GitPanel(props: GitPanelProps) {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-sm font-medium">Remotes</p>
-              <p className="text-sm text-muted-foreground">
-                Fetch every remote and prune branches deleted upstream.
-              </p>
             </div>
             <Button disabled={fetching} onClick={() => void handleFetch()}>
               <DownloadCloudIcon data-icon="inline-start" />

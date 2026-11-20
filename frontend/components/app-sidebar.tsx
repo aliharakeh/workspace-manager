@@ -299,10 +299,13 @@ export function AppSidebar({
                           />
                         ) : null}
                         {runningInWorkspace > 0 ? (
-                          <AppStatusDot
-                            running
-                            className="group-data-[collapsible=icon]:hidden"
-                          />
+                          <span
+                            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 text-[0.7rem] font-medium text-emerald-700 tabular-nums group-data-[collapsible=icon]:hidden dark:text-emerald-400"
+                            title={`${runningInWorkspace} running`}
+                          >
+                            <AppStatusDot running />
+                            {runningInWorkspace}
+                          </span>
                         ) : null}
                       </SidebarMenuButton>
                       <SidebarMenuAction
@@ -410,7 +413,19 @@ export function AppSidebar({
                                       onSelectApp(workspace.id, app.id)
                                     }
                                   >
-                                    <span className="truncate">{app.name}</span>
+                                    <AppStatusDot
+                                      running={running}
+                                      kind={kind}
+                                      error={statusByAppId[app.id]?.error}
+                                    />
+                                    <span
+                                      className={cn(
+                                        "truncate",
+                                        running && "font-medium"
+                                      )}
+                                    >
+                                      {app.name}
+                                    </span>
                                   </SidebarMenuSubButton>
                                   <AppRunControls
                                     className="shrink-0"

@@ -36,10 +36,6 @@ export function KeyboardShortcutsPanel() {
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium">Keyboard shortcuts</p>
-        <p className="text-sm text-muted-foreground">
-          Click a shortcut to record a new key combination. Shortcuts must
-          include at least one modifier key (Ctrl, Alt, Shift, or ⌘).
-        </p>
       </div>
 
       <ul className="divide-y overflow-hidden rounded-lg border">
