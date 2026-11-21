@@ -260,7 +260,7 @@ export function WorkspaceDetail({
           items={apps.map((app) => app.id)}
           strategy={rectSortingStrategy}
         >
-          <ul className="grid grid-cols-2 gap-4">
+          <ul className="mt-4 grid grid-cols-2 gap-4">
             {apps.map((app) => (
               <SortableAppCard
                 key={app.id}
@@ -322,15 +322,12 @@ function SortableAppCard({
       <div
         className={cn(
           "relative flex h-full flex-col gap-3 overflow-hidden rounded-xl bg-background p-4",
-          // A colored edge on the left plus a tinted ring and fill make the
-          // state readable at a glance across the grid.
-          "before:absolute before:inset-y-0 before:left-0 before:w-1",
+          // A tinted 2px ring (even on every side) and fill make the state
+          // readable at a glance across the grid.
           state === "running" &&
-            "bg-emerald-500/[0.04] ring-2 ring-emerald-500 before:bg-emerald-500",
-          state === "task" &&
-            "bg-amber-500/[0.04] ring-2 ring-amber-500 before:bg-amber-500",
-          state === "failed" &&
-            "bg-red-500/[0.04] ring-2 ring-red-500/70 before:bg-red-500",
+            "bg-emerald-500/[0.04] ring-2 ring-emerald-500",
+          state === "task" && "bg-amber-500/[0.04] ring-2 ring-amber-500",
+          state === "failed" && "bg-red-500/[0.04] ring-2 ring-red-500/70",
           state === "idle" && "ring-1 ring-foreground/10",
           isDragging && "shadow-lg"
         )}

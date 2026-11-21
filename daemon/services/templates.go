@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/aymerick/raymond"
 
@@ -268,7 +269,23 @@ func RestoreTemplates(ctx context.Context, d *db.DB, appID, setID int64, dir, se
 		}
 	}
 	_ = os.Remove(createdManifest(backupDir))
-	return os.RemoveAll(backupDir)
+	// The originals are back in place by now; the backup folder is only
+	// clean-up. On Windows a scanner or indexer can hold a just-read file for
+	// a moment, so retry briefly and otherwise leave the folder: a stale backup
+	// is harmless and must not turn a manual stop into a failed run.
+	removeAllRetry(backupDir)
+	return nil
+}
+
+func removeAllRetry(dir string) {
+	delay := 50 * time.Millisecond
+	for attempt := 0; attempt < 5; attempt++ {
+		if os.RemoveAll(dir) == nil {
+			return
+		}
+		time.Sleep(delay)
+		delay *= 2
+	}
 }
 
 // RenderTemplate renders template content with a config set's env vars, the

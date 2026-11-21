@@ -66,6 +66,9 @@ export function AppRunControls({
     : selected
       ? `Run ${selected.name}`
       : "Add a run configuration first"
+  // Stop, and Run with no configuration to run, are icon-only; only a
+  // runnable configuration shows its name next to the play icon.
+  const iconOnly = compact || running || !selected
   return (
     <div
       className={cn("flex items-center gap-1", className)}
@@ -75,7 +78,7 @@ export function AppRunControls({
       <Button
         type="button"
         variant={running ? "stop" : compact ? "ghost" : "run"}
-        size={compact ? "icon-xs" : "sm"}
+        size={compact ? "icon-xs" : iconOnly ? "icon-sm" : "sm"}
         className={cn(
           // In the sidebar an idle app keeps a quiet button with a green icon,
           // so a list of apps does not turn into a wall of green.
@@ -95,7 +98,7 @@ export function AppRunControls({
         ) : (
           <PlayIcon data-icon="inline-start" className="fill-current" />
         )}
-        {compact ? null : running ? "Stop" : (selected?.name ?? "Run")}
+        {iconOnly ? null : selected?.name}
       </Button>
       {!running && configs.length > 0 ? (
         <DropdownMenu>
@@ -193,7 +196,7 @@ const BADGE_STYLE: Record<AppVisualState, string> = {
   idle: "border-border bg-muted text-muted-foreground",
 }
 
-/** A colored pill with a status dot: Running …, Building, Failed or Idle. */
+/** A colored pill with a status dot: the running configuration's name, Building, Failed or Idle. */
 export function AppStateBadge({
   running,
   kind,
@@ -212,12 +215,18 @@ export function AppStateBadge({
     state === "failed"
       ? "Failed"
       : state === "running" && configName
-        ? `Running ${configName}`
+        ? configName
         : appStateLabel(running, kind)
+  const title =
+    state === "failed"
+      ? error
+      : state === "running" && configName
+        ? `Running ${configName}`
+        : label
   return (
     <span
       role="status"
-      title={state === "failed" ? error : label}
+      title={title}
       className={cn(
         "inline-flex h-5 w-fit shrink-0 items-center gap-1.5 rounded-4xl border px-2 text-xs font-medium whitespace-nowrap",
         BADGE_STYLE[state],

@@ -331,7 +331,7 @@ export function AppSidebar({
                       </SidebarMenuAction>
                       <DropdownMenu>
                         <DropdownMenuTrigger
-                          render={<SidebarMenuAction showOnHover style={colorStyle} />}
+                          render={<SidebarMenuAction style={colorStyle} />}
                         >
                           <MoreHorizontalIcon />
                           <span className="sr-only">Workspace menu</span>
