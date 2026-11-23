@@ -10,7 +10,7 @@ import (
 
 func workspaceFrom(row Workspace) types.Workspace {
 	return types.Workspace{
-		ID: row.ID, Name: row.Name, Icon: row.Icon, Color: row.Color, Pinned: row.Pinned != 0,
+		ID: row.ID, Name: row.Name, Color: row.Color, LogoPath: LogoPath(row.Icon), Pinned: row.Pinned != 0,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
 }
@@ -38,29 +38,32 @@ func (d *DB) GetWorkspaceT(ctx context.Context, id int64) (types.Workspace, erro
 	return workspaceFrom(row), nil
 }
 
-func (d *DB) CreateWorkspaceT(ctx context.Context, name string, icon, color *string) (types.Workspace, error) {
-	row, err := d.CreateWorkspace(ctx, CreateWorkspaceParams{Name: name, Icon: icon, Color: color})
+// CreateWorkspaceT creates a workspace; logo is a stored logo's file name or nil.
+func (d *DB) CreateWorkspaceT(ctx context.Context, name string, logo, color *string) (types.Workspace, error) {
+	row, err := d.CreateWorkspace(ctx, CreateWorkspaceParams{Name: name, Icon: logo, Color: color})
 	if err != nil {
 		return types.Workspace{}, err
 	}
 	return workspaceFrom(row), nil
 }
 
-func (d *DB) UpdateWorkspaceT(ctx context.Context, id int64, name *string, icon *string, iconSet bool, color *string, colorSet bool) (types.Workspace, error) {
+// UpdateWorkspaceT changes the fields that are set; logo is a stored logo's
+// file name or nil. It returns the logo file name the workspace had before.
+func (d *DB) UpdateWorkspaceT(ctx context.Context, id int64, name *string, logo *string, logoSet bool, color *string, colorSet bool) (types.Workspace, *string, error) {
 	existing, err := d.GetWorkspace(ctx, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return types.Workspace{}, fmt.Errorf("Workspace not found")
+			return types.Workspace{}, nil, fmt.Errorf("Workspace not found")
 		}
-		return types.Workspace{}, err
+		return types.Workspace{}, nil, err
 	}
 	nextName := existing.Name
 	if name != nil {
 		nextName = *name
 	}
 	nextIcon := existing.Icon
-	if iconSet {
-		nextIcon = icon
+	if logoSet {
+		nextIcon = logo
 	}
 	nextColor := existing.Color
 	if colorSet {
@@ -68,9 +71,9 @@ func (d *DB) UpdateWorkspaceT(ctx context.Context, id int64, name *string, icon 
 	}
 	row, err := d.UpdateWorkspace(ctx, UpdateWorkspaceParams{Name: nextName, Icon: nextIcon, Color: nextColor, ID: id})
 	if err != nil {
-		return types.Workspace{}, err
+		return types.Workspace{}, nil, err
 	}
-	return workspaceFrom(row), nil
+	return workspaceFrom(row), existing.Icon, nil
 }
 
 // ReorderWorkspacesT stores the order of the workspaces: ids lists every
@@ -121,4 +124,20 @@ func (d *DB) SetWorkspacePinnedT(ctx context.Context, id int64, pinned bool) (ty
 		return types.Workspace{}, fmt.Errorf("Workspace not found")
 	}
 	return d.GetWorkspaceT(ctx, id)
+}
+
+// WorkspaceLogoName returns the file name of the workspace's stored logo, or
+// nil when it has none.
+func (d *DB) WorkspaceLogoName(ctx context.Context, id int64) (*string, error) {
+	row, err := d.GetWorkspace(ctx, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("Workspace not found")
+		}
+		return nil, err
+	}
+	if row.Icon == nil || !IsLogoName(*row.Icon) {
+		return nil, nil
+	}
+	return row.Icon, nil
 }

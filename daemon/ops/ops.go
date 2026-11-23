@@ -26,6 +26,7 @@ type Publisher interface {
 // Ops is the server-side API surface.
 type Ops struct {
 	notesMu    sync.Mutex
+	logosMu    sync.Mutex // logo files and workspaces.icon change together
 	DB         *db.DB
 	Runner     *services.Runner
 	Blueprints *services.BlueprintRunner

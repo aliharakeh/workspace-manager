@@ -55,6 +55,9 @@ func applySchema(sqlDB *sql.DB) error {
 	if err := restoreBlueprints(sqlDB); err != nil {
 		return err
 	}
+	if err := moveWorkspaceLogosToFiles(sqlDB); err != nil {
+		return err
+	}
 	return addBlueprintSampleName(sqlDB)
 }
 

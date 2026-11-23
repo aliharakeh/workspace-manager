@@ -29,6 +29,11 @@ func (a *App) WorkspacesUpdate(id int64, body types.WorkspaceUpdateInput) (types
 	return call[types.Workspace](a.link, api.MethodWorkspacesUpdate, m{"id": id, "body": body})
 }
 
+// WorkspacesLogo returns the workspace's logo image as a data URL ("" for none).
+func (a *App) WorkspacesLogo(id int64) (string, error) {
+	return call[string](a.link, api.MethodWorkspacesLogo, m{"id": id})
+}
+
 func (a *App) WorkspacesDelete(id int64) (types.Ok, error) {
 	return call[types.Ok](a.link, api.MethodWorkspacesDelete, m{"id": id})
 }

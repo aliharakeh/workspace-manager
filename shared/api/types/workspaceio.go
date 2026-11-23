@@ -56,6 +56,8 @@ type WorkspaceBundle struct {
 
 type BundleWorkspace struct {
 	Name  string  `json:"name"`
+	// Icon is the workspace logo as a data URL, so a bundle carries the image
+	// itself rather than a path on the exporting machine.
 	Icon  *string `json:"icon"`
 	Color *string `json:"color"`
 	// SharedSets are the workspace's shared config sets (bundle version 2).

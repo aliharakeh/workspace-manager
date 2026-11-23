@@ -40,6 +40,7 @@ import {
 import type { App, StatusEvent, Workspace } from "@/lib/types"
 import { AppRunControls, AppStatusDot } from "@/components/app-run-controls"
 import { useTheme } from "@/components/theme-provider"
+import { WorkspaceLogo } from "@/components/workspace-logo"
 import { cn } from "@/lib/utils"
 import { workspaceTint } from "@/lib/workspace-colors"
 import {
@@ -290,7 +291,7 @@ export function AppSidebar({
                         )}
                         onClick={() => onSelectWorkspace(workspace.id)}
                       >
-                        <FolderIcon style={colorStyle} />
+                        <WorkspaceLogo workspace={workspace} className="size-4" />
                         <span>{workspace.name}</span>
                         {isPinned ? (
                           <PinIcon

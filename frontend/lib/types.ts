@@ -1,8 +1,9 @@
 export type Workspace = {
     id: number
     name: string
-    icon: string | null
     color: string | null
+    /** Full path of the logo file in the data folder's logos directory, "" for none. */
+    logo_path: string
     /** Pinned workspaces are listed first; stored by the daemon. */
     pinned: boolean
     created_at: string
@@ -450,6 +451,7 @@ export type WorkspaceBundle = {
     source_root: string
     workspace: {
         name: string
+        /** The logo image as a data URL. */
         icon: string | null
         color: string | null
         shared_sets?: { name: string; vars: BundleEnvVar[]; env_provider?: EnvProvider }[]

@@ -1,10 +1,13 @@
 package ops
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 
+	"workspace-manager/daemon/db"
+	"workspace-manager/shared/api"
 	"workspace-manager/shared/api/lib"
 	"workspace-manager/shared/api/types"
 	"workspace-manager/shared/native"
@@ -30,6 +33,34 @@ func normalizeWorkspaceColor(color *string) (*string, error) {
 	return &c, nil
 }
 
+// storeLogoData writes the logo an input carries and returns its file name:
+// nil data means "keep" (set is false), "" means "remove" (nil name).
+func storeLogoData(data *string) (name *string, set bool, err error) {
+	if data == nil {
+		return nil, false, nil
+	}
+	if *data == "" {
+		return nil, true, nil
+	}
+	raw, err := db.DecodeLogoData(*data)
+	if err != nil {
+		return nil, false, err
+	}
+	stored, err := db.StoreLogo(raw)
+	if err != nil {
+		return nil, false, err
+	}
+	return &stored, true, nil
+}
+
+// dropLogo removes a logo file a failed write had already stored.
+func dropLogo(name *string, err error) error {
+	if name != nil {
+		err = errors.Join(err, db.RemoveLogo(*name))
+	}
+	return err
+}
+
 func (o *Ops) WorkspacesCreate(body types.WorkspaceCreateInput) (types.Workspace, error) {
 	name := strings.TrimSpace(body.Name)
 	if name == "" {
@@ -39,11 +70,18 @@ func (o *Ops) WorkspacesCreate(body types.WorkspaceCreateInput) (types.Workspace
 	if err != nil {
 		return types.Workspace{}, err
 	}
-	ws, err := o.DB.CreateWorkspaceT(o.Ctx(), name, body.Icon, color)
-	if err == nil {
-		o.changed("workspace", ws.ID)
+	o.logosMu.Lock()
+	defer o.logosMu.Unlock()
+	logo, _, err := storeLogoData(body.LogoData)
+	if err != nil {
+		return types.Workspace{}, err
 	}
-	return ws, err
+	ws, err := o.DB.CreateWorkspaceT(o.Ctx(), name, logo, color)
+	if err != nil {
+		return types.Workspace{}, dropLogo(logo, err)
+	}
+	o.changed("workspace", ws.ID)
+	return ws, nil
 }
 
 func (o *Ops) WorkspacesUpdate(id int64, body types.WorkspaceUpdateInput) (types.Workspace, error) {
@@ -59,16 +97,46 @@ func (o *Ops) WorkspacesUpdate(id int64, body types.WorkspaceUpdateInput) (types
 		n := strings.TrimSpace(*body.Name)
 		name = &n
 	}
-	ws, err := o.DB.UpdateWorkspaceT(o.Ctx(), id, name, body.Icon, body.Icon != nil, color, body.Color != nil)
-	if err == nil {
-		o.changed("workspace", ws.ID)
+	o.logosMu.Lock()
+	defer o.logosMu.Unlock()
+	logo, logoSet, err := storeLogoData(body.LogoData)
+	if err != nil {
+		return types.Workspace{}, err
 	}
-	return ws, err
+	ws, old, err := o.DB.UpdateWorkspaceT(o.Ctx(), id, name, logo, logoSet, color, body.Color != nil)
+	if err != nil {
+		return types.Workspace{}, dropLogo(logo, err)
+	}
+	o.changed("workspace", ws.ID)
+	if logoSet && old != nil && db.IsLogoName(*old) {
+		if err := db.RemoveLogo(*old); err != nil {
+			return ws, fmt.Errorf("workspace saved but old logo cleanup failed: %w", err)
+		}
+	}
+	return ws, nil
+}
+
+// WorkspacesLogo returns the workspace's logo as a data URL ("" for none). It
+// reads by workspace id, never by a caller-supplied path.
+func (o *Ops) WorkspacesLogo(id int64) (string, error) {
+	o.logosMu.Lock()
+	defer o.logosMu.Unlock()
+	name, err := o.DB.WorkspaceLogoName(o.Ctx(), id)
+	if err != nil {
+		return "", api.Errf(api.KindNotFound, "%v", err)
+	}
+	return db.ReadLogoDataURL(name)
 }
 
 func (o *Ops) WorkspacesDelete(id int64) (types.Ok, error) {
 	o.notesMu.Lock()
 	defer o.notesMu.Unlock()
+	o.logosMu.Lock()
+	defer o.logosMu.Unlock()
+	logo, err := o.DB.WorkspaceLogoName(o.Ctx(), id)
+	if err != nil {
+		return types.Ok{}, err
+	}
 	apps, err := o.DB.ListAppsByWorkspaceT(o.Ctx(), id)
 	if err != nil {
 		return types.Ok{}, err
@@ -91,6 +159,11 @@ func (o *Ops) WorkspacesDelete(id int64) (types.Ok, error) {
 	o.changed("workspace", id)
 	if err := removeNoteImages(images); err != nil {
 		return types.Ok{}, fmt.Errorf("workspace deleted but note image cleanup failed: %w", err)
+	}
+	if logo != nil {
+		if err := db.RemoveLogo(*logo); err != nil {
+			return types.Ok{}, fmt.Errorf("workspace deleted but logo cleanup failed: %w", err)
+		}
 	}
 	return types.Ok{Ok: true}, nil
 }

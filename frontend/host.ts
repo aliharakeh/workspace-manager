@@ -103,13 +103,16 @@ export const api = {
     },
     workspaces: {
         list: () => call(() => Go.WorkspacesList()),
-        create: (body: { name: string; icon?: string | null; color?: string | null }) =>
+        /** `logo_data`: base64 image or data URL; "" removes the logo, omitted keeps it. */
+        create: (body: { name: string; color?: string | null; logo_data?: string }) =>
             call(() => Go.WorkspacesCreate(types.WorkspaceCreateInput.createFrom(body))),
         update: (
             id: number,
-            body: { name?: string; icon?: string | null; color?: string | null },
+            body: { name?: string; color?: string | null; logo_data?: string },
         ) => call(() => Go.WorkspacesUpdate(id, types.WorkspaceUpdateInput.createFrom(body))),
         delete: (id: number) => call(() => Go.WorkspacesDelete(id)),
+        /** The workspace's logo as a data URL ("" for none). */
+        logo: (id: number) => call(() => Go.WorkspacesLogo(id)),
         /** Shows a save dialog and writes the workspace bundle to the chosen file. */
         exportToFile: (id: number, options: WorkspaceExportOptions) =>
             call(() => Go.WorkspaceExportToFile(id, options) as Promise<WorkspaceExportFileResult>),

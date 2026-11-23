@@ -1,13 +1,15 @@
 package types
 
 type Workspace struct {
-	ID        int64   `json:"id"`
-	Name      string  `json:"name"`
-	Icon      *string `json:"icon"`
-	Color     *string `json:"color"`
-	Pinned    bool    `json:"pinned"`
-	CreatedAt string  `json:"created_at"`
-	UpdatedAt string  `json:"updated_at"`
+	ID    int64   `json:"id"`
+	Name  string  `json:"name"`
+	Color *string `json:"color"`
+	// LogoPath is the full path of the workspace's logo file in the data
+	// folder's logos directory, or "" for none. Read it with workspaces.logo.
+	LogoPath  string `json:"logo_path"`
+	Pinned    bool   `json:"pinned"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 type App struct {
@@ -274,16 +276,18 @@ type RunCommandInput struct {
 }
 
 // Color is a "#rrggbb" hex string. On update, an empty string clears it.
+// LogoData is a PNG, JPEG or GIF image as base64 (bare or a data URL): omitted
+// keeps the current logo, an empty string removes it, data replaces it.
 type WorkspaceCreateInput struct {
-	Name  string  `json:"name"`
-	Icon  *string `json:"icon"`
-	Color *string `json:"color"`
+	Name     string  `json:"name"`
+	Color    *string `json:"color"`
+	LogoData *string `json:"logo_data,omitempty"`
 }
 
 type WorkspaceUpdateInput struct {
-	Name  *string `json:"name"`
-	Icon  *string `json:"icon"`
-	Color *string `json:"color"`
+	Name     *string `json:"name"`
+	Color    *string `json:"color"`
+	LogoData *string `json:"logo_data,omitempty"`
 }
 
 type AppCreateInput struct {

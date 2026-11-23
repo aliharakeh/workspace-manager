@@ -46,12 +46,18 @@ func (o *Ops) WorkspacesExport(id int64, opts types.WorkspaceExportOptions, trus
 		paths[i] = a.ProjectPath
 	}
 	root := commonRoot(paths)
+	// The bundle carries the logo image itself; a logo file that has gone
+	// missing is left out rather than failing the export.
+	var logo *string
+	if dataURL, err := o.WorkspacesLogo(id); err == nil && dataURL != "" {
+		logo = &dataURL
+	}
 	bundle := types.WorkspaceBundle{
 		Format: types.WorkspaceBundleFormat, Version: types.WorkspaceBundleBaseVersion,
 		ExportedAt: time.Now().UTC().Format(time.RFC3339),
 		Secrets:    mode,
 		SourceRoot: filepath.ToSlash(root),
-		Workspace:  types.BundleWorkspace{Name: ws.Name, Icon: ws.Icon, Color: ws.Color},
+		Workspace:  types.BundleWorkspace{Name: ws.Name, Icon: logo, Color: ws.Color},
 		Apps:       []types.BundleApp{},
 	}
 	sharedSets, err := o.DB.ListWorkspaceConfigSets(o.Ctx(), id)
@@ -283,6 +289,24 @@ func (o *Ops) WorkspacesImport(bundle types.WorkspaceBundle, opts types.Workspac
 		return result, nil
 	}
 
+	// A bundle may come from anywhere (or an older build that stored other
+	// values in icon): an unusable logo is dropped, not an error. A stored
+	// file is removed again unless the import commits.
+	o.logosMu.Lock()
+	defer o.logosMu.Unlock()
+	var logo *string
+	if bundle.Workspace.Icon != nil && *bundle.Workspace.Icon != "" {
+		if stored, _, err := storeLogoData(bundle.Workspace.Icon); err == nil {
+			logo = stored
+		}
+	}
+	committed := false
+	defer func() {
+		if !committed && logo != nil {
+			_ = db.RemoveLogo(*logo)
+		}
+	}()
+
 	ctx := o.Ctx()
 	tx, err := o.DB.SQL.BeginTx(ctx, nil)
 	if err != nil {
@@ -290,7 +314,7 @@ func (o *Ops) WorkspacesImport(bundle types.WorkspaceBundle, opts types.Workspac
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := o.DB.WithTx(tx)
-	ws, err := q.CreateWorkspace(ctx, db.CreateWorkspaceParams{Name: name, Icon: bundle.Workspace.Icon, Color: color})
+	ws, err := q.CreateWorkspace(ctx, db.CreateWorkspaceParams{Name: name, Icon: logo, Color: color})
 	if err != nil {
 		return result, err
 	}
@@ -342,6 +366,7 @@ func (o *Ops) WorkspacesImport(bundle types.WorkspaceBundle, opts types.Workspac
 	if err := tx.Commit(); err != nil {
 		return result, err
 	}
+	committed = true
 	result.WorkspaceID = ws.ID
 	o.changed("workspace", ws.ID)
 	o.changed("app", result.AppIDs...)

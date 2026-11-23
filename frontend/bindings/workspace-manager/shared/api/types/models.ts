@@ -636,6 +636,11 @@ export class BundleTemplate {
 
 export class BundleWorkspace {
     "name": string;
+
+    /**
+     * Icon is the workspace logo as a data URL, so a bundle carries the image
+     * itself rather than a path on the exporting machine.
+     */
     "icon": string | null;
     "color": string | null;
 
@@ -3209,8 +3214,13 @@ export class ValidatePathResult {
 export class Workspace {
     "id": number;
     "name": string;
-    "icon": string | null;
     "color": string | null;
+
+    /**
+     * LogoPath is the full path of the workspace's logo file in the data
+     * folder's logos directory, or "" for none. Read it with workspaces.logo.
+     */
+    "logo_path": string;
     "pinned": boolean;
     "created_at": string;
     "updated_at": string;
@@ -3223,11 +3233,11 @@ export class Workspace {
         if (!("name" in $$source)) {
             this["name"] = "";
         }
-        if (!("icon" in $$source)) {
-            this["icon"] = null;
-        }
         if (!("color" in $$source)) {
             this["color"] = null;
+        }
+        if (!("logo_path" in $$source)) {
+            this["logo_path"] = "";
         }
         if (!("pinned" in $$source)) {
             this["pinned"] = false;
@@ -3356,19 +3366,18 @@ export class WorkspaceBundleFileResult {
 
 /**
  * Color is a "#rrggbb" hex string. On update, an empty string clears it.
+ * LogoData is a PNG, JPEG or GIF image as base64 (bare or a data URL): omitted
+ * keeps the current logo, an empty string removes it, data replaces it.
  */
 export class WorkspaceCreateInput {
     "name": string;
-    "icon": string | null;
     "color": string | null;
+    "logo_data"?: string | null;
 
     /** Creates a new WorkspaceCreateInput instance. */
     constructor($$source: Partial<WorkspaceCreateInput> = {}) {
         if (!("name" in $$source)) {
             this["name"] = "";
-        }
-        if (!("icon" in $$source)) {
-            this["icon"] = null;
         }
         if (!("color" in $$source)) {
             this["color"] = null;
@@ -3680,16 +3689,13 @@ export class WorkspaceRunResult {
 
 export class WorkspaceUpdateInput {
     "name": string | null;
-    "icon": string | null;
     "color": string | null;
+    "logo_data"?: string | null;
 
     /** Creates a new WorkspaceUpdateInput instance. */
     constructor($$source: Partial<WorkspaceUpdateInput> = {}) {
         if (!("name" in $$source)) {
             this["name"] = null;
-        }
-        if (!("icon" in $$source)) {
-            this["icon"] = null;
         }
         if (!("color" in $$source)) {
             this["color"] = null;

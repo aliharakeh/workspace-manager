@@ -24,6 +24,7 @@ const (
 	MethodWorkspacesCreate = "workspaces.create"
 	MethodWorkspacesUpdate = "workspaces.update"
 	MethodWorkspacesDelete = "workspaces.delete"
+	MethodWorkspacesLogo   = "workspaces.logo"
 
 	// Apps.
 	// Workspace order and pins.
@@ -175,6 +176,7 @@ var Methods = []Method{
 	{Name: MethodWorkspacesCreate, Agent: true},
 	{Name: MethodWorkspacesUpdate, Agent: true},
 	{Name: MethodWorkspacesDelete, Agent: true},
+	{Name: MethodWorkspacesLogo, Agent: true},
 
 	// Export hides private values from agents and refuses them "include".
 	{Name: MethodWorkspacesExport, Agent: true},

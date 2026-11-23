@@ -20,6 +20,7 @@ import {
   AppWindowIcon,
   ExternalLinkIcon,
   GripVerticalIcon,
+  ImageUpIcon,
   Link2Icon,
   LayoutTemplateIcon,
   PlusIcon,
@@ -35,6 +36,8 @@ import { OpenEditorButton } from "@/components/open-editor-button"
 import { OpenFolderButton } from "@/components/open-folder-button"
 import { SharedConfigDialog } from "@/components/shared-config-dialog"
 import { WorkspaceColorPicker } from "@/components/workspace-color-picker"
+import { WorkspaceLogo } from "@/components/workspace-logo"
+import { useLogoUpload } from "@/hooks/use-logo-upload"
 import { WorkspaceRunControls } from "@/components/workspace-run-controls"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -99,6 +102,45 @@ export function WorkspaceDetail({
       setSavingColor(false)
     }
   }
+
+  const [savingLogo, setSavingLogo] = useState(false)
+  const logoUpload = useLogoUpload(async (logo) => {
+    setSavingLogo(true)
+    try {
+      onWorkspaceChange(await api.workspaces.update(workspace.id, { logo_data: logo }))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save logo")
+    } finally {
+      setSavingLogo(false)
+    }
+  })
+  const hasLogo = !!workspace.logo_path
+  const logoButton = (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            disabled={savingLogo}
+            onClick={logoUpload.open}
+            aria-label={hasLogo ? "Change logo" : "Upload logo"}
+            className={cn(
+              "flex size-9 shrink-0 items-center justify-center rounded-lg outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
+              !hasLogo && "border border-dashed"
+            )}
+          />
+        }
+      >
+        <WorkspaceLogo
+          workspace={workspace}
+          className={hasLogo ? "size-8" : "size-4 opacity-70"}
+        />
+      </TooltipTrigger>
+      <TooltipContent>
+        {hasLogo ? "Change logo (remove it in Edit)" : "Upload logo"}
+      </TooltipContent>
+    </Tooltip>
+  )
 
   const colorPicker = (compact: boolean) => (
     <WorkspaceColorPicker
@@ -165,9 +207,15 @@ export function WorkspaceDetail({
       <div className="flex flex-1 items-center justify-center p-6">
         <Empty className="max-w-md border">
           <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <AppWindowIcon />
-            </EmptyMedia>
+            {hasLogo ? (
+              <EmptyMedia>
+                <WorkspaceLogo workspace={workspace} className="size-12" />
+              </EmptyMedia>
+            ) : (
+              <EmptyMedia variant="icon">
+                <AppWindowIcon />
+              </EmptyMedia>
+            )}
             <EmptyTitle>{workspace.name}</EmptyTitle>
             <EmptyDescription>
               This workspace has no apps yet. Add one to configure env,
@@ -186,6 +234,11 @@ export function WorkspaceDetail({
           </EmptyContent>
           {sharedButton}
           {colorPicker(false)}
+          <Button variant="ghost" size="sm" disabled={savingLogo} onClick={logoUpload.open}>
+            <ImageUpIcon data-icon="inline-start" />
+            {hasLogo ? "Change logo…" : "Upload logo…"}
+          </Button>
+          {logoUpload.input}
           {sharedDialog}
         </Empty>
       </div>
@@ -195,8 +248,10 @@ export function WorkspaceDetail({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 md:p-6">
       <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 items-center gap-3">
+          {logoButton}
+          {logoUpload.input}
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h1 className="truncate text-xl font-medium tracking-tight">
               {workspace.name}
             </h1>

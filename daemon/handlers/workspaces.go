@@ -20,6 +20,11 @@ func (r *Registry) workspaces() {
 	}) (types.Workspace, error) {
 		return o.WorkspacesUpdate(in.ID, in.Body)
 	}))
+	r.handle(api.MethodWorkspacesLogo, typed(func(in struct {
+		ID int64 `json:"id"`
+	}) (string, error) {
+		return o.WorkspacesLogo(in.ID)
+	}))
 	r.handle(api.MethodWorkspacesReorder, typed(func(in struct {
 		IDs []int64 `json:"ids"`
 	}) (types.Ok, error) {

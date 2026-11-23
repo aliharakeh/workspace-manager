@@ -27,8 +27,8 @@ func seedWorkspace(t *testing.T) (*ops.Ops, *recorder, types.Workspace, string) 
 	o.Pub = rec
 
 	root := t.TempDir()
-	icon := "rocket"
-	ws, err := o.WorkspacesCreate(types.WorkspaceCreateInput{Name: "Shop", Icon: &icon})
+	logo := testLogo
+	ws, err := o.WorkspacesCreate(types.WorkspaceCreateInput{Name: "Shop", LogoData: &logo})
 	must(t, err)
 	hidden, shown := true, true
 	public := false

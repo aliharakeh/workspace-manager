@@ -157,6 +157,12 @@ screen. The React frontend lives in `frontend/`.
 - Apps are listed by `apps.sort_order` (per workspace), not by name: new apps
   go last and `apps.reorder` rewrites the order. The UI must not re-sort apps
   by name.
+- Workspace logos are files, like note images: the daemon writes them to
+  `<data folder>/logos/logo-*.{png,jpeg,gif}` (`daemon/db/logos.go`) and
+  `workspaces.icon` holds only the file name. Clients send `logo_data`
+  (base64 or a data URL; `""` removes, omitted keeps), get `logo_path`, and read
+  the image with `workspaces.logo`. Writes and deletes remove the old file. A
+  bundle carries the image as a data URL in `workspace.icon`.
 - Workspaces are listed by `workspaces.sort_order` (new ones go last, `workspaces.reorder`
   rewrites the order) and carry a `pinned` flag (`workspaces.setPinned`); clients show
   pinned first, then the saved order, and must not re-sort by name. Collapse state in

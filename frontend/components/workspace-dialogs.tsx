@@ -3,6 +3,8 @@ import { toast } from "sonner"
 import { api } from "@/lib/api"
 import type { Workspace } from "@/lib/types"
 import { WorkspaceColorPicker } from "@/components/workspace-color-picker"
+import { WorkspaceLogoPicker } from "@/components/workspace-logo"
+import { useWorkspaceLogo } from "@/hooks/use-workspace-logo"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -40,6 +42,9 @@ export function WorkspaceDialog({
 }: WorkspaceDialogProps) {
   const [name, setName] = useState(workspace?.name ?? "")
   const [color, setColor] = useState<string | null>(workspace?.color ?? null)
+  // undefined: keep the saved logo; null: remove it; a data URL: the new one.
+  const [logo, setLogo] = useState<string | null | undefined>(undefined)
+  const savedLogo = useWorkspaceLogo(workspace)
   const [saving, setSaving] = useState(false)
   const isEdit = !!workspace
 
@@ -51,6 +56,7 @@ export function WorkspaceDialog({
     if (open) {
       setName(workspace?.name ?? "")
       setColor(workspace?.color ?? null)
+      setLogo(undefined)
     }
   }
 
@@ -65,8 +71,13 @@ export function WorkspaceDialog({
         ? await api.workspaces.update(workspace.id, {
             name: name.trim(),
             color: color ?? "", // "" clears it
+            ...(logo === undefined ? {} : { logo_data: logo ?? "" }), // "" removes it
           })
-        : await api.workspaces.create({ name: name.trim(), color })
+        : await api.workspaces.create({
+            name: name.trim(),
+            color,
+            ...(logo ? { logo_data: logo } : {}),
+          })
       onSaved(saved)
       onOpenChange(false)
       toast.success(isEdit ? "Workspace updated" : "Workspace created")
@@ -103,6 +114,15 @@ export function WorkspaceDialog({
           <Field>
             <FieldLabel>Color</FieldLabel>
             <WorkspaceColorPicker value={color} onChange={setColor} />
+          </Field>
+          <Field>
+            <FieldLabel>Logo</FieldLabel>
+            <WorkspaceLogoPicker
+              value={logo === undefined ? savedLogo : logo}
+              color={color}
+              onChange={setLogo}
+              disabled={saving}
+            />
           </Field>
         </FieldGroup>
         <DialogFooter>

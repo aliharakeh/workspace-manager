@@ -820,6 +820,13 @@ export function WorkspacesList(): $CancellablePromise<types$0.Workspace[]> {
 }
 
 /**
+ * WorkspacesLogo returns the workspace's logo image as a data URL ("" for none).
+ */
+export function WorkspacesLogo(id: number): $CancellablePromise<string> {
+    return $Call.ByID(1191470744, id);
+}
+
+/**
  * WorkspacesReorder saves the order of the workspaces; ids lists all of them.
  */
 export function WorkspacesReorder(ids: number[]): $CancellablePromise<types$0.Ok> {
